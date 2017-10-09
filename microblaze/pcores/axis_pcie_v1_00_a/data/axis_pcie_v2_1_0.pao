@@ -1,0 +1,22 @@
+##############################################################################
+## Filename:          Z:\Documents\Xilinx\s6_pcie_microblaze\microblaze\pcores/axis_pcie_v1_00_a/data/axis_pcie_v2_1_0.pao
+## Description:       Peripheral Analysis Order
+## Date:              Thu Sep 28 06:07:44 2017 (by Create and Import Peripheral Wizard)
+##############################################################################
+
+lib axis_pcie_v1_00_a pcie_bram_s6 verilog
+lib axis_pcie_v1_00_a axi_basic_tx_thrtl_ctl verilog
+lib axis_pcie_v1_00_a axi_basic_tx_pipeline verilog
+lib axis_pcie_v1_00_a axi_basic_rx_pipeline verilog
+lib axis_pcie_v1_00_a axi_basic_rx_null_gen verilog
+lib axis_pcie_v1_00_a pcie_brams_s6 verilog
+lib axis_pcie_v1_00_a gtpa1_dual_wrapper_tile verilog
+lib axis_pcie_v1_00_a axi_basic_tx verilog
+lib axis_pcie_v1_00_a axi_basic_rx verilog
+lib axis_pcie_v1_00_a pcie_bram_top_s6 verilog
+lib axis_pcie_v1_00_a gtpa1_dual_wrapper verilog
+lib axis_pcie_v1_00_a axi_basic_top verilog
+lib axis_pcie_v1_00_a s6_pcie_v2_4 verilog
+lib axis_pcie_v1_00_a application verilog
+lib axis_pcie_v1_00_a axis_pcie verilog
+lib axis_pcie_v1_00_a fifo_generator_v8_4 verilog

@@ -1,0 +1,114 @@
+
+#
+# pin constraints
+#
+NET CLK_N LOC = "K22"  |  DIFF_TERM = "TRUE"  |  IOSTANDARD = "LVDS_25";
+NET CLK_P LOC = "K21"  |  DIFF_TERM = "TRUE"  |  IOSTANDARD = "LVDS_25";
+NET DIP_Switches_4Bits_TRI_I[0] LOC = "C18"  |  IOSTANDARD = "LVCMOS25";
+NET DIP_Switches_4Bits_TRI_I[1] LOC = "Y6"  |  IOSTANDARD = "LVCMOS25";
+NET DIP_Switches_4Bits_TRI_I[2] LOC = "W6"  |  IOSTANDARD = "LVCMOS25";
+NET DIP_Switches_4Bits_TRI_I[3] LOC = "E4"  |  IOSTANDARD = "LVCMOS25";
+NET Ethernet_Lite_COL LOC = "M16"  |  IOSTANDARD = "LVCMOS25";
+NET Ethernet_Lite_CRS LOC = "N15"  |  IOSTANDARD = "LVCMOS25";
+NET Ethernet_Lite_MDC LOC = "R19"  |  IOSTANDARD = "LVCMOS25";
+NET Ethernet_Lite_MDIO LOC = "V20"  |  IOSTANDARD = "LVCMOS25";
+NET Ethernet_Lite_PHY_RST_N LOC = "J22"  |  IOSTANDARD = "LVCMOS25"  |  TIG;
+NET Ethernet_Lite_RXD[0] LOC = "P19"  |  IOSTANDARD = "LVCMOS25";
+NET Ethernet_Lite_RXD[1] LOC = "Y22"  |  IOSTANDARD = "LVCMOS25";
+NET Ethernet_Lite_RXD[2] LOC = "Y21"  |  IOSTANDARD = "LVCMOS25";
+NET Ethernet_Lite_RXD[3] LOC = "W22"  |  IOSTANDARD = "LVCMOS25";
+NET Ethernet_Lite_RX_CLK LOC = "P20"  |  IOSTANDARD = "LVCMOS25";
+NET Ethernet_Lite_RX_DV LOC = "T22"  |  IOSTANDARD = "LVCMOS25";
+NET Ethernet_Lite_RX_ER LOC = "U20"  |  IOSTANDARD = "LVCMOS25";
+NET Ethernet_Lite_TXD[0] LOC = "U10"  |  IOSTANDARD = "LVCMOS25";
+NET Ethernet_Lite_TXD[1] LOC = "T10"  |  IOSTANDARD = "LVCMOS25";
+NET Ethernet_Lite_TXD[2] LOC = "AB8"  |  IOSTANDARD = "LVCMOS25";
+NET Ethernet_Lite_TXD[3] LOC = "AA8"  |  IOSTANDARD = "LVCMOS25";
+NET Ethernet_Lite_TX_CLK LOC = "L20"  |  IOSTANDARD = "LVCMOS25";
+NET Ethernet_Lite_TX_EN LOC = "T8"  |  IOSTANDARD = "LVCMOS25";
+NET Linear_Flash_address[0] LOC = "G19"  |  IOSTANDARD = "LVCMOS25";
+NET Linear_Flash_address[10] LOC = "K19"  |  IOSTANDARD = "LVCMOS25";
+NET Linear_Flash_address[11] LOC = "K18"  |  IOSTANDARD = "LVCMOS25";
+NET Linear_Flash_address[12] LOC = "G20"  |  IOSTANDARD = "LVCMOS25";
+NET Linear_Flash_address[13] LOC = "G22"  |  IOSTANDARD = "LVCMOS25";
+NET Linear_Flash_address[14] LOC = "K17"  |  IOSTANDARD = "LVCMOS25";
+NET Linear_Flash_address[15] LOC = "L17"  |  IOSTANDARD = "LVCMOS25";
+NET Linear_Flash_address[16] LOC = "H21"  |  IOSTANDARD = "LVCMOS25";
+NET Linear_Flash_address[17] LOC = "H22"  |  IOSTANDARD = "LVCMOS25";
+NET Linear_Flash_address[18] LOC = "K20"  |  IOSTANDARD = "LVCMOS25";
+NET Linear_Flash_address[19] LOC = "L19"  |  IOSTANDARD = "LVCMOS25";
+NET Linear_Flash_address[1] LOC = "F20"  |  IOSTANDARD = "LVCMOS25";
+NET Linear_Flash_address[20] LOC = "M21"  |  IOSTANDARD = "LVCMOS25";
+NET Linear_Flash_address[21] LOC = "M22"  |  IOSTANDARD = "LVCMOS25";
+NET Linear_Flash_address[22] LOC = "N20"  |  IOSTANDARD = "LVCMOS25";
+NET Linear_Flash_address[23] LOC = "N22"  |  IOSTANDARD = "LVCMOS25";
+NET Linear_Flash_address[2] LOC = "H18"  |  IOSTANDARD = "LVCMOS25";
+NET Linear_Flash_address[3] LOC = "H19"  |  IOSTANDARD = "LVCMOS25";
+NET Linear_Flash_address[4] LOC = "F21"  |  IOSTANDARD = "LVCMOS25";
+NET Linear_Flash_address[5] LOC = "F22"  |  IOSTANDARD = "LVCMOS25";
+NET Linear_Flash_address[6] LOC = "E20"  |  IOSTANDARD = "LVCMOS25";
+NET Linear_Flash_address[7] LOC = "E22"  |  IOSTANDARD = "LVCMOS25";
+NET Linear_Flash_address[8] LOC = "J19"  |  IOSTANDARD = "LVCMOS25";
+NET Linear_Flash_address[9] LOC = "H20"  |  IOSTANDARD = "LVCMOS25";
+NET Linear_Flash_adv_n LOC = "T19"  |  IOSTANDARD = "LVCMOS25";
+NET Linear_Flash_ce_n LOC = "P21"  |  IOSTANDARD = "LVCMOS25";
+NET Linear_Flash_data[0] LOC = "AB12"  |  IOSTANDARD = "LVCMOS25";
+NET Linear_Flash_data[10] LOC = "Y5"  |  IOSTANDARD = "LVCMOS25";
+NET Linear_Flash_data[11] LOC = "AB6"  |  IOSTANDARD = "LVCMOS25";
+NET Linear_Flash_data[12] LOC = "AA6"  |  IOSTANDARD = "LVCMOS25";
+NET Linear_Flash_data[13] LOC = "T14"  |  IOSTANDARD = "LVCMOS25";
+NET Linear_Flash_data[14] LOC = "R13"  |  IOSTANDARD = "LVCMOS25";
+NET Linear_Flash_data[15] LOC = "AA20"  |  IOSTANDARD = "LVCMOS25";
+NET Linear_Flash_data[1] LOC = "AA12"  |  IOSTANDARD = "LVCMOS25";
+NET Linear_Flash_data[2] LOC = "Y13"  |  IOSTANDARD = "LVCMOS25";
+NET Linear_Flash_data[3] LOC = "AB18"  |  IOSTANDARD = "LVCMOS25";
+NET Linear_Flash_data[4] LOC = "AA18"  |  IOSTANDARD = "LVCMOS25";
+NET Linear_Flash_data[5] LOC = "AB19"  |  IOSTANDARD = "LVCMOS25";
+NET Linear_Flash_data[6] LOC = "U6"  |  IOSTANDARD = "LVCMOS25";
+NET Linear_Flash_data[7] LOC = "T7"  |  IOSTANDARD = "LVCMOS25";
+NET Linear_Flash_data[8] LOC = "W9"  |  IOSTANDARD = "LVCMOS25";
+NET Linear_Flash_data[9] LOC = "AB5"  |  IOSTANDARD = "LVCMOS25";
+NET Linear_Flash_oe_n LOC = "P22"  |  IOSTANDARD = "LVCMOS25";
+NET Linear_Flash_reset LOC = "V13"  |  IOSTANDARD = "LVCMOS25";
+NET Linear_Flash_we_n LOC = "R20"  |  IOSTANDARD = "LVCMOS25";
+NET Push_Buttons_4Bits_TRI_I[0] LOC = "F3"  |  IOSTANDARD = "LVCMOS25";
+NET Push_Buttons_4Bits_TRI_I[1] LOC = "G6"  |  IOSTANDARD = "LVCMOS25";
+NET Push_Buttons_4Bits_TRI_I[2] LOC = "F5"  |  IOSTANDARD = "LVCMOS25";
+NET Push_Buttons_4Bits_TRI_I[3] LOC = "C1"  |  IOSTANDARD = "LVCMOS25";
+NET RESET LOC = "H8"  |  IOSTANDARD = "LVCMOS15"  |  TIG;
+NET RS232_Uart_1_sin LOC = "H17"  |  IOSTANDARD = "LVCMOS25";
+NET RS232_Uart_1_sout LOC = "B21"  |  IOSTANDARD = "LVCMOS25";
+NET LEDs_4Bits[0] LOC = "D17"  |  IOSTANDARD = "LVCMOS25";
+NET LEDs_4Bits[1] LOC = "AB4"  |  IOSTANDARD = "LVCMOS25";
+NET LEDs_4Bits[2] LOC = "D21"  |  IOSTANDARD = "LVCMOS25";
+NET LEDs_4Bits[3] LOC = "W15"  |  IOSTANDARD = "LVCMOS25";
+
+#
+# SYS clock 100 or 125 MHz (input) signal from PCI-E interface
+#
+NET pcie_clk_n LOC = B10;
+NET pcie_clk_p LOC = A10;
+
+#
+# Transceiver instance placement
+#
+INST s6_pcie_v2_4_i/GT_i/tile0_gtpa1_dual_wrapper_i/gtpa1_dual_i LOC = GTPA1_DUAL_X0Y0;
+NET pcie_txp LOC = B6;
+NET pcie_txn LOC = A6;
+NET pcie_rxp LOC = D7;
+NET pcie_rxn LOC = C7;
+
+#
+# Timing requirements and related constraints.
+#
+NET pcie_clk_c PERIOD = 8ns;
+
+NET s6_pcie_v2_4_i/gt_refclk_out(0) TNM_NET = GT_REFCLK_OUT;
+TIMESPEC TS_GT_REFCLK_OUT = PERIOD GT_REFCLK_OUT 8ns HIGH 50 %;
+
+#
+# additional constraints
+#
+NET "CLK" TNM_NET = sys_clk_pin;
+TIMESPEC TS_sys_clk_pin = PERIOD sys_clk_pin 200000 kHz;
+
