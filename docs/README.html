@@ -63,7 +63,7 @@
               
                 <h3>
                   <span class="octicon octicon-book"></span>
-                  README.md
+                  README
                 </h3>
               
               <article class="markdown-body entry-content" itemprop="text" id="grip-content">
@@ -299,6 +299,12 @@ TLP RX: size = 0x04, source = 00:00.0, type = CplD
 <p><code>TARGET_ADDR</code> − <code>&lt;address&gt;:&lt;port&gt;</code> string to override IP address of the board specified in <code>python/pcie_lib_config.py</code> file.</p>
 </li>
 </ul>
+<h2>
+<a id="user-content-using-with-pcileech" class="anchor" href="#using-with-pcileech" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Using with PCILeech</h2>
+<p><a href="https://github.com/ufrisk/pcileech">PCILeech</a> is a powerful DMA attack software developed by <a href="http://twitter.com/UlfFrisk">@UlfFrisk</a>, at this moment it supports Xilinx SP605 in USB 3 mode with <a href="https://github.com/ufrisk/pcileech-fpga">custom bitstream</a> and TCP mode with MicroBlaze based bitstream located in this repository. To use PCILeech with MicroBlaze based design you need to pass <code>SP605_TCP</code> value for <code>-device</code> option and specify device address with <code>-device-addr</code> and <code>-device-port</code> options.</p>
+<p>Example:</p>
+<pre><code>&gt; pcileech.exe dump -device sp605_tcp -device-addr 192.168.2.247 -device-port 28472 -max 0x1000
+</code></pre>
 <h2>
 <a id="user-content-using-python-api" class="anchor" href="#using-python-api" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Using Python API</h2>
 <p>Python library <code>pcie_lib.py</code> provides low level API to send and receive PCE-E TLP (Transaction Level Packet) requests, abstractions for different TLP types and high level physical memory access API.</p>
@@ -628,9 +634,6 @@ EPT PDPTE 0x145f9000[0x0]: 0x14612007
 <h2>
 <a id="user-content-todo" class="anchor" href="#todo" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>TODO</h2>
 <ul>
-<li>
-<p><a href="https://github.com/ufrisk/pcileech">PCILeech</a> support.</p>
-</li>
 <li>
 <p>Use Xilinx AXI DMA core for more fast data transfer between DDR3 memory of MicroBlaze and PCI-E hard IP block.</p>
 </li>

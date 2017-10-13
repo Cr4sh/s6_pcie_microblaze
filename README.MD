@@ -233,6 +233,17 @@ Provided Python software uses some environment variables to override values of c
 * `TARGET_ADDR` &minus; `<address>:<port>` string to override IP address of the board specified in `python/pcie_lib_config.py` file.
 
 
+## Using with PCILeech
+
+[PCILeech](https://github.com/ufrisk/pcileech) is a powerful DMA attack software developed by [@UlfFrisk](http://twitter.com/UlfFrisk), at this moment it supports Xilinx SP605 in USB 3 mode with [custom bitstream](https://github.com/ufrisk/pcileech-fpga) and TCP mode with MicroBlaze based bitstream located in this repository. To use PCILeech with MicroBlaze based design you need to pass `SP605_TCP` value for `-device` option and specify device address with `-device-addr` and `-device-port` options.
+
+Example:
+
+```
+> pcileech.exe dump -device sp605_tcp -device-addr 192.168.2.247 -device-port 28472 -max 0x1000
+```
+
+
 ## Using Python API
 
 Python library `pcie_lib.py` provides low level API to send and receive PCE-E TLP (Transaction Level Packet) requests, abstractions for different TLP types and high level physical memory access API.
@@ -594,8 +605,6 @@ PCI Express is very complicated high speed bus so there's a lot of things that c
 
 
 ## TODO
-
-* [PCILeech](https://github.com/ufrisk/pcileech) support.
 
 * Use Xilinx AXI DMA core for more fast data transfer between DDR3 memory of MicroBlaze and PCI-E hard IP block.
 

