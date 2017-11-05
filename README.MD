@@ -132,7 +132,7 @@ JTAG related notes: SP605 has onboard USB to JTAG interface compatible with iMPA
 
 Xilinx SP605 board is also can be connected to the Thunderbolt 2/3 external port of the target computer using [Thunderbolt to PCI-E expansion chassis](https://www.amazon.com/s/ref?field-keywords=thunderbolt+to+pcie). Please note, that SP605 is [relatively large board](https://www.xilinx.com/support/answers/53808.html) so it might not fit into some of the chassis. For example, I'm using [HighPoint RocketStor 6361A](http://www.highpoint-tech.com/USA_new/series_RS6361A_overview.htm) Thunderbolt 2 enclosure which works fine with my MacBook Pro:
 
-<img src="https://raw.githubusercontent.com/Cr4sh/s6_pcie_microblaze/master/docs/images/mbp_thunderbolt.jpg" width="727" height="563">
+<img src="https://raw.githubusercontent.com/Cr4sh/s6_pcie_microblaze/master/docs/images/mbp_thunderbolt.jpg" width="666" height="516">
 
 
 ## Software configuration
@@ -580,7 +580,7 @@ EPT PDPTE 0x145f9000[0x0]: 0x14612007
 
 Also, `backdoor_client.exe` can inject dummy driver located in `payloads/DmaBackdoorHv/backdoor_driver.sys` from guest Hyper-V partition to host Hyper-V partition:
 
-<img src="images/backdoor_vm_inject.png" width="749" height="498">
+<img src="https://raw.githubusercontent.com/Cr4sh/s6_pcie_microblaze/master/docs/images/backdoor_vm_inject.png" width="749" height="498">
 
 
 ## Troubleshooting

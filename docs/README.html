@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>PCI Express DIY hacking toolkit</title>
+  <title>PCI Express DIY hacking toolkit - README</title>
   <style>
     /*!
  * GitHub Light v0.4.1
@@ -208,7 +208,7 @@ start_application(): TCP server is started at port 28472
 </li>
 </ul>
 <p>Xilinx SP605 board is also can be connected to the Thunderbolt 2/3 external port of the target computer using <a href="https://www.amazon.com/s/ref?field-keywords=thunderbolt+to+pcie">Thunderbolt to PCI-E expansion chassis</a>. Please note, that SP605 is <a href="https://www.xilinx.com/support/answers/53808.html">relatively large board</a> so it might not fit into some of the chassis. For example, I'm using <a href="http://www.highpoint-tech.com/USA_new/series_RS6361A_overview.htm">HighPoint RocketStor 6361A</a> Thunderbolt 2 enclosure which works fine with my MacBook Pro:</p>
-<p><a href="https://raw.githubusercontent.com/Cr4sh/s6_pcie_microblaze/master/docs/images/mbp_thunderbolt.jpg" target="_blank"><img src="https://raw.githubusercontent.com/Cr4sh/s6_pcie_microblaze/master/docs/images/mbp_thunderbolt.jpg" width="727" height="563" style="max-width:100%;"></a></p>
+<p><a href="https://raw.githubusercontent.com/Cr4sh/s6_pcie_microblaze/master/docs/images/mbp_thunderbolt.jpg" target="_blank"><img src="https://raw.githubusercontent.com/Cr4sh/s6_pcie_microblaze/master/docs/images/mbp_thunderbolt.jpg" width="666" height="516" style="max-width:100%;"></a></p>
 <h2>
 <a id="user-content-software-configuration" class="anchor" href="#software-configuration" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Software configuration</h2>
 <p>Python tools to interact with the board and tiny implementation of PCI-E link layer are located in <code>python</code> folder. Because main MicroBlaze program uses TCP to transfer TLP packets no any drivers or 3rd party dependencies needed, you can use provided Python code on any operating system.</p>
@@ -592,7 +592,7 @@ EPT PDPTE 0x145f9000[0x0]: 0x14612007
 0xfffff8017d1d5000 -&gt; 0x00000000033d5000
 </code></pre>
 <p>Also, <code>backdoor_client.exe</code> can inject dummy driver located in <code>payloads/DmaBackdoorHv/backdoor_driver.sys</code> from guest Hyper-V partition to host Hyper-V partition:</p>
-<p><a href="images/backdoor_vm_inject.png" target="_blank"><img src="images/backdoor_vm_inject.png" width="749" height="498" style="max-width:100%;"></a></p>
+<p><a href="https://raw.githubusercontent.com/Cr4sh/s6_pcie_microblaze/master/docs/images/backdoor_vm_inject.png" target="_blank"><img src="https://raw.githubusercontent.com/Cr4sh/s6_pcie_microblaze/master/docs/images/backdoor_vm_inject.png" width="749" height="498" style="max-width:100%;"></a></p>
 <h2>
 <a id="user-content-troubleshooting" class="anchor" href="#troubleshooting" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Troubleshooting</h2>
 <p>PCI Express is very complicated high speed bus so there's a lot of things that can go wrong. If DMA attack is not working on your setup you might check the following things to determine the exact problem:</p>
