@@ -458,7 +458,6 @@ VOID new_HvlpTransferToHypervisor(VOID *HvPageTable, VOID *HvEntry, VOID *HvlpLo
         if (m)
         {
             UINT8 *Buff = Below1MbPage + VM_EXIT_HANDLER_OLD;
-            //UINTN i = 0;            
 
             __writecr3(HvPageTable);
 
