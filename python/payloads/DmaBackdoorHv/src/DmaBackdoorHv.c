@@ -11,7 +11,7 @@
   by calling winload!HvlpTransferToHypervisor().
   
   To transfer execution to Hyper-V winload.efi uses a special stub
-  winload!HvlpLowMemoryStub() copied to reserved memory page at constant
+  hvloader!HvlpLowMemoryStub() copied to reserved memory page at constant
   address 0x2000. During runtime phase this memory page is visible to
   hypervisor core at the same virtual and physical address and has 
   executable permissions which makes it a perfect place to store our 
