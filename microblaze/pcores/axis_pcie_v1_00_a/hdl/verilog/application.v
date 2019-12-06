@@ -27,11 +27,23 @@ module application
   output           s_axis_mb1_tx_tlast,
   output           s_axis_mb1_tx_tvalid,
 
-  // not used
+  // info rx
   input  [31:0]    m_axis_mb1_rx_tdata,
   input            m_axis_mb1_rx_tlast,
   input            m_axis_mb1_rx_tvalid,
   output           m_axis_mb1_rx_tready,
+
+  // cfg tx
+  input            s_axis_mb2_tx_tready,
+  output  [31:0]   s_axis_mb2_tx_tdata,
+  output           s_axis_mb2_tx_tlast,
+  output           s_axis_mb2_tx_tvalid,
+
+  // cfg rx
+  input  [31:0]    m_axis_mb2_rx_tdata,
+  input            m_axis_mb2_rx_tlast,
+  input            m_axis_mb2_rx_tvalid,
+  output           m_axis_mb2_rx_tready,
 
   output           led,
 
@@ -244,6 +256,48 @@ module application
       
     end
   end
+
+  //
+  // Config space RX
+  //
+
+  reg s_axis_cfg_rx_tlast = 1'b1;
+
+  fifo_generator_v8_4 fifo_cfg_rx(
+    .m_aclk( clk ),
+    .s_aclk( user_clk ),
+    .s_aresetn( s_aresetn ),
+    .s_axis_tvalid( cfg_rd_wr_done ),
+    .s_axis_tdata( cfg_do ),
+    .s_axis_tlast( s_axis_cfg_rx_tlast ),
+    .m_axis_tvalid( s_axis_mb2_tx_tvalid ),
+    .m_axis_tready( s_axis_mb2_tx_tready ),
+    .m_axis_tdata( s_axis_mb2_tx_tdata ),
+    .m_axis_tlast( s_axis_mb2_tx_tlast )
+  );
+
+  //
+  // Config space TX
+  //
+
+  reg m_axis_cfg_tx_tready = 1'b1;  
+
+  wire [31:0] m_axis_cfg_tx_tdata;
+
+  assign cfg_dwaddr = m_axis_cfg_tx_tdata[9:0];
+
+  fifo_generator_v8_4 fifo_cfg_tx(
+    .m_aclk( user_clk ),
+    .s_aclk( clk ),
+    .s_aresetn( s_aresetn ),
+    .s_axis_tvalid( m_axis_mb2_rx_tvalid ),
+    .s_axis_tready( m_axis_mb2_rx_tready ),
+    .s_axis_tdata( m_axis_mb2_rx_tdata ),
+    .s_axis_tlast( m_axis_mb2_rx_tlast ),
+    .m_axis_tvalid( cfg_rd_en ),    
+    .m_axis_tdata( m_axis_cfg_tx_tdata ),
+    .m_axis_tready( m_axis_cfg_tx_tready )
+  );
   
 
 endmodule // application

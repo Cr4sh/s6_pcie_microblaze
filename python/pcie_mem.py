@@ -14,7 +14,7 @@ def main():
     addr = int(sys.argv[1], 16)
     size = int(sys.argv[2], 16)
     
-    # open uart
+    # open device
     dev = TransactionLayer()    
 
     assert dev_id_encode(*dev.bus_id) != 0
@@ -29,7 +29,7 @@ def main():
         # save data into the file
         with open(path, 'wb') as fd:
 
-            while ptr <= size:
+            while ptr < size:
 
                 print('[+] Reading 0x%x' % (addr + ptr))
                 

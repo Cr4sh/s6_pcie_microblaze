@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-import sys, os, time, socket, signal
+import sys, os, time, socket, signal, unittest
 from struct import pack, unpack
 from threading import Thread
 from multiprocessing.dummy import Pool as ThreadPool
@@ -56,57 +56,24 @@ def hexdump(data, width = 16, addr = 0):
     return ret
 
 
-class Watcher:
-    ''' This class solves two problems with multithreaded
-    programs in Python, (1) a signal might be delivered
-    to any thread (which is just a malfeature) and (2) if
-    the thread that gets the signal is waiting, the signal
-    is ignored (which is a bug). '''
-
-    def __init__(self):
-        ''' Creates a child thread, which returns.  The parent
-        thread waits for a KeyboardInterrupt and then kills
-        the child thread. '''
-
-        self.child = os.fork()
-
-        if self.child == 0: return
-        else: self.watch()
-
-    def watch(self):
-
-        try:
-
-            os.wait()
-
-        except KeyboardInterrupt:
-
-            print('\nEXIT')
-
-            self.kill()
-
-        sys.exit(0)
-
-    def kill(self):
-
-        try: os.kill(self.child, signal.SIGKILL)
-        except OSError: pass
-
-
 class Socket(object):
 
     def __init__(self, addr):
+
+        assert addr is not None
 
         self.addr = addr
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         
         self.sock.connect(addr)
 
-    def read(self, size):
+    def read(self, size, timeout = None):
 
         ret = ''
 
         assert self.sock is not None
+
+        self.sock.settimeout(timeout)
 
         while len(ret) < size:
             
@@ -115,11 +82,15 @@ class Socket(object):
 
             ret += data
 
+        if timeout is not None:
+
+            self.sock.settimeout(None)
+
         return ret
 
     def write(self, data):
 
-        assert self.sock is not None
+        assert self.sock is not None        
 
         self.sock.sendall(data)
 
@@ -128,19 +99,94 @@ class Socket(object):
         if self.sock is not None:
 
             self.sock.close()
-            self.sock = None
+            self.sock = None    
 
 
 class LinkLayer(Socket):
 
     env_target_addr = 'TARGET_ADDR'
 
-    F_HAS_DATA     = 0x01
-    F_RECV_REPLY   = 0x02
-    F_TLAST        = 0x04
-    F_TIMEOUT      = 0x08
-    F_ERROR        = 0x10
-    F_STATUS       = 0x20
+    #
+    # protocol control codes
+    #
+    CTL_PING                = 0
+    CTL_RESET               = 1
+    CTL_STATUS              = 2
+    CTL_TLP_SEND            = 3
+    CTL_TLP_RECV            = 4
+    CTL_SUCCESS             = 5
+    CTL_ERROR_FAILED        = 6
+    CTL_ERROR_TIMEOUT       = 7
+    CTL_CONFIG              = 8
+    CTL_TEST                = 9
+    CTL_RESIDENT_ON         = 10 
+    CTL_RESIDENT_OFF        = 11
+    CTL_ROM_WRITE           = 12
+    CTL_ROM_ERASE           = 13
+    CTL_ROM_LOG_ON          = 14
+    CTL_ROM_LOG_OFF         = 15
+
+    #
+    # configuration space registers
+    #
+    CFG_VENDOR_ID           = 0x00
+    CFG_DEVICE_ID           = 0x02
+    CFG_COMMAND             = 0x04
+    CFG_STATUS              = 0x06
+    CFG_REVISION            = 0x08
+    CFG_CLASS_PROG          = 0x09
+    CFG_CLASS_DEVICE        = 0x0a
+    CFG_CACHE_LINE_SIZE     = 0x0c
+    CFG_LATENCY_TIMER       = 0x0d
+    CFG_HEADER_TYPE         = 0x0e
+    CFG_BIST                = 0x0f
+    CFG_BASE_ADDRESS_0      = 0x10
+    CFG_BASE_ADDRESS_1      = 0x14
+    CFG_BASE_ADDRESS_2      = 0x18
+    CFG_BASE_ADDRESS_3      = 0x1c
+    CFG_BASE_ADDRESS_4      = 0x20
+    CFG_BASE_ADDRESS_5      = 0x24
+    CFG_CARDBUS_CIS         = 0x28
+    CFG_SUBSYSTEM_VENDOR_ID = 0x2c
+    CFG_SUBSYSTEM_ID        = 0x2e
+    CFG_ROM_ADDRESS         = 0x30
+    CFG_INTERRUPT_LINE      = 0x3c
+    CFG_INTERRUPT_PIN       = 0x3d
+    CFG_MIN_GNT             = 0x3e
+    CFG_MAX_LAT             = 0x3f
+
+    cfg_regs = {
+
+                CFG_VENDOR_ID: ( 2, 'VENDOR_ID'           ),
+                CFG_DEVICE_ID: ( 2, 'DEVICE_ID'           ),
+                  CFG_COMMAND: ( 2, 'COMMAND'             ),
+                   CFG_STATUS: ( 2, 'STATUS'              ),
+                 CFG_REVISION: ( 1, 'REVISION'            ),
+               CFG_CLASS_PROG: ( 1, 'CLASS_PROG'          ),
+             CFG_CLASS_DEVICE: ( 2, 'CLASS_DEVICE'        ),
+          CFG_CACHE_LINE_SIZE: ( 1, 'CACHE_LINE_SIZE'     ),
+            CFG_LATENCY_TIMER: ( 1, 'LATENCY_TIMER'       ),
+              CFG_HEADER_TYPE: ( 1, 'HEADER_TYPE'         ),
+                     CFG_BIST: ( 1, 'BIST'                ),
+           CFG_BASE_ADDRESS_0: ( 4, 'BASE_ADDRESS_0'      ),
+           CFG_BASE_ADDRESS_1: ( 4, 'BASE_ADDRESS_1'      ),
+           CFG_BASE_ADDRESS_2: ( 4, 'BASE_ADDRESS_2'      ),
+           CFG_BASE_ADDRESS_3: ( 4, 'BASE_ADDRESS_3'      ),
+           CFG_BASE_ADDRESS_4: ( 4, 'BASE_ADDRESS_4'      ),
+           CFG_BASE_ADDRESS_5: ( 4, 'BASE_ADDRESS_5'      ),
+              CFG_CARDBUS_CIS: ( 4, 'CARDBUS_CIS'         ),
+      CFG_SUBSYSTEM_VENDOR_ID: ( 2, 'SUBSYSTEM_VENDOR_ID' ),
+             CFG_SUBSYSTEM_ID: ( 2, 'SUBSYSTEM_ID'        ),
+              CFG_ROM_ADDRESS: ( 4, 'ROM_ADDRESS'         ),
+           CFG_INTERRUPT_LINE: ( 1, 'INTERRUPT_LINE'      ),
+            CFG_INTERRUPT_PIN: ( 1, 'INTERRUPT_PIN'       ),
+                  CFG_MIN_GNT: ( 1, 'MIN_GNT'             ),
+                  CFG_MAX_LAT: ( 1, 'MAX_LAT'             ) }
+
+    RECV_TIMEOUT = 3
+
+    OPTION_ROM_MAX_SIZE = 0x80000
+    OPTION_ROM_CHUNK_LEN = 0x20
 
     status_bus_id = lambda self, s: (s >> 0) & 0xffff
 
@@ -148,97 +194,256 @@ class LinkLayer(Socket):
 
     class ErrorTimeout(Exception): pass
 
-    def __init__(self, addr = None, bus_id = None, verbose = False):
+    def __init__(self, addr = None, bus_id = None, verbose = False, force = False, timeout = None):
 
-        self.bus_id, self.verbose = bus_id, verbose        
+        self.bus_id, self.verbose = bus_id, verbose
+        self.timeout = self.RECV_TIMEOUT if timeout is None else timeout
 
         if addr is None:
 
             try:
 
                 host, port = os.getenv(self.env_target_addr).strip().split(':')
-                addr = (host, int(port))
+                addr = ( host, int(port) )
 
             except: pass
 
         super(LinkLayer, self).__init__(addr = Conf.PCIE_TO_TCP_ADDR if addr is None else addr)
-
+        
         if self.bus_id is None:
 
+            # obtain bus id from the device
             bus_id = self.get_bus_id()
-            if bus_id == 0:
+            if bus_id != 0:
 
-                raise(self.ErrorNotReady('PCI-E endpoint is not configured by root complex yet'))
+                self.bus_id = dev_id_decode(bus_id)
 
-            self.bus_id = dev_id_decode(bus_id)
+            elif not force:
 
-    def _read(self):
+                raise(self.ErrorNotReady('PCI-E endpoint is not configured by root complex yet'))            
+        
+    def _read(self, timeout = None):
 
-        return unpack('=BI', super(LinkLayer, self).read(1 + 4))
+        return unpack('=BB', super(LinkLayer, self).read(1 + 1, timeout = timeout))
 
     def _write(self, *args):
 
-        super(LinkLayer, self).write(pack('=BI', *args))
+        super(LinkLayer, self).write(pack('=BB', *args))
+
+    def set_timeout(self, timeout):
+
+        self.timeout = timeout
+
+    def set_resident(self, on):
+
+        # send resident mode configuration request
+        self._write(self.CTL_RESIDENT_ON if on else self.CTL_RESIDENT_OFF, 0)
+
+    def set_rom_log(self, on):
+
+        # send option ROM access log configuration request
+        self._write(self.CTL_ROM_LOG_ON if on else self.CTL_ROM_LOG_OFF, 0)
+
+    def test(self, test_size):
+
+        # send test request
+        self._write(self.CTL_TEST, test_size)
+
+        # receive reply
+        code, size = self._read()
+
+        assert code == self.CTL_SUCCESS and size == test_size
+
+        # receive reply data
+        return super(LinkLayer, self).read(size)
+
+    def ping(self):
+
+        # send ping request
+        self._write(self.CTL_PING, 0)
+
+        # receive reply
+        code, size = self._read()
+
+        assert code == self.CTL_SUCCESS and size == 0
+
+    def reset(self):
+
+        # send reset request
+        self._write(self.CTL_RESET, 0)
+
+        # receive reply
+        code, size = self._read()
+
+        assert code == self.CTL_SUCCESS and size == 0
+
+    def get_status(self):
+
+        # send get status request
+        self._write(self.CTL_STATUS, 0)
+
+        # receive reply
+        code, size = self._read()
+
+        assert code == self.CTL_SUCCESS and size == 4
+
+        # receive reply data
+        return unpack('<I', super(LinkLayer, self).read(size))[0]
 
     def get_bus_id(self):
 
-        return self.status_bus_id(self._get_status())
-
-    def _get_status(self):
-
-        self._write(self.F_STATUS, 0)    
-        
-        flags, data = self._read()
-
-        assert (flags & self.F_STATUS) != 0
-        assert (flags & self.F_HAS_DATA) != 0        
-
-        return data    
+        return self.status_bus_id(self.get_status()) 
 
     def read(self):
 
         ret = []
 
-        self._write(self.F_RECV_REPLY | self.F_TIMEOUT, 0)
+        # send read TLP request
+        self._write(self.CTL_TLP_RECV, 0)
 
-        while True:
+        try:
 
-            # read status dword and TLP dword
-            flags, data = self._read()
+            # receive reply
+            code, size = self._read(timeout = self.timeout)
 
-            if self.verbose: print('RX: flags = 0x%.2x, data = 0x%.8x' % (flags, data))
+        except socket.timeout:
 
-            if (flags & self.F_ERROR) != 0 and (flags & self.F_TIMEOUT) != 0:
+            raise(self.ErrorTimeout('TLP read timeout occured'))
 
-                raise(self.ErrorTimeout('TLP read timeout occured'))
+        assert code == self.CTL_TLP_RECV
+        assert size > 8 and size % 4 == 0
 
-            # check flags
-            assert (flags & self.F_ERROR) == 0
-            assert (flags & self.F_HAS_DATA) != 0
+        # receive reply data
+        data = super(LinkLayer, self).read(size)
 
-            ret.append(data)
+        for i in range(0, size / 4):
 
-            # check for last dword in TLP status
-            if (flags & self.F_TLAST) != 0: break
-
-        if self.verbose: print('')
+            ret.append(unpack('<I', data[i * 4 : (i + 1) * 4])[0])        
 
         return ret
 
     def write(self, data):
 
-        for i in range(len(data)):
+        assert len(data) > 2
 
-            flags = self.F_HAS_DATA
+        # TLP send request
+        buff = pack('=BB', self.CTL_TLP_SEND, len(data) * 4)
 
-            # add flags for each TLP dword to carry tlast signal and other info
-            if i == len(data) - 1: flags |= self.F_TLAST
+        for i in range(0, len(data)):
 
-            if self.verbose: print('TX: flags = 0x%.2x, data = 0x%.8x' % (flags, data[i]))
+            # send request data
+            buff += pack('<I', data[i])
 
-            self._write(flags, data[i])
+        super(LinkLayer, self).write(buff)
 
-        if self.verbose: print('')
+        # receive reply
+        code, size = self._read()
+
+        assert code == self.CTL_SUCCESS and size == 0
+
+    cfg_read_1 = lambda self, cfg_addr: self.cfg_read(cfg_addr, cfg_size = 1)
+    cfg_read_2 = lambda self, cfg_addr: self.cfg_read(cfg_addr, cfg_size = 2)
+    cfg_read_4 = lambda self, cfg_addr: self.cfg_read(cfg_addr, cfg_size = 4)
+
+    def cfg_read(self, cfg_addr, cfg_size = 4):
+
+        assert cfg_size in [ 1, 2, 4 ]
+
+        # get register number from register address
+        reg_num = cfg_addr / 4
+        reg_off = cfg_addr % 4
+
+        data = ''
+
+        for i in range(0, 2):
+
+            # send config space read request
+            super(LinkLayer, self).write(pack('<BBI', self.CTL_CONFIG, 4, reg_num + i))
+
+            # receive reply
+            code, size = self._read()
+
+            assert code == self.CTL_SUCCESS and size == 4
+
+            # receive reply data
+            data += super(LinkLayer, self).read(size)
+
+        # get register value from readed data
+        data = data[reg_off : reg_off + cfg_size]
+
+        return unpack('<' + { 1: 'B', 2: 'H', 4: 'I' }[cfg_size], data)[0]
+
+    def cfg_reg(self, cfg_reg):
+
+        try:
+
+            # get register name and size
+            cfg_size, cfg_name = self.cfg_regs[cfg_reg]
+
+        except KeyError:
+
+            raise(Exception('Unknown configuration space register'))
+
+        # read register value
+        return self.cfg_read(cfg_reg, cfg_size = cfg_size)
+
+    def rom_load(self, data):
+
+        chunk_ptr = 0
+        chunk_len = self.OPTION_ROM_CHUNK_LEN
+
+        while len(data) > 0:
+            
+            chunk = data[: chunk_len]
+
+            # option ROM write request
+            buff = pack('<BBI', self.CTL_ROM_WRITE, len(chunk), chunk_ptr) + chunk
+
+            super(LinkLayer, self).write(buff)
+
+            # receive reply
+            code, size = self._read()
+
+            assert code == self.CTL_SUCCESS and size == 0
+
+            # go to the next chunk
+            data = data[chunk_len :]
+            chunk_ptr += chunk_len
+
+    def rom_erase(self):
+
+        # send option ROM erase request
+        self._write(self.CTL_ROM_ERASE, 0)
+
+        # receive reply
+        code, size = self._read()
+
+        assert code == self.CTL_SUCCESS and size == 0    
+
+
+class LinkLayerTest(unittest.TestCase):
+
+    TEST_ADDR = 0x1000
+
+    def test_link(self):
+
+        dev = LinkLayer()  
+
+        # MRd TLP        
+        tlp_tx = [ 0x20000001,
+                   0x000000ff | (dev.get_bus_id() << 16),                   
+                   0x00000000,
+                   self.TEST_ADDR ]    
+
+        to_str = lambda tlp: ' '.join(map(lambda dw: '0x%.8x' % dw, tlp))
+
+        print('TLP TX: %s\n' % to_str(tlp_tx))
+
+        dev.write(tlp_tx)
+
+        tlp_rx = dev.read()
+
+        print('TLP RX: %s\n' % to_str(tlp_rx))
 
 
 tlp_type_list = { 
@@ -269,8 +474,8 @@ class TransactionLayer(LinkLayer):
     #
     # Maximum bytes of data per each MWr and MRd TLP
     #
-    MEM_WR_TLP_LEN = 4
-    MEM_RD_TLP_LEN = 0x80
+    MEM_WR_TLP_LEN = 0x04
+    MEM_RD_TLP_LEN = 0x40
 
     # align all memory reads and writes by 4 byte boundary
     MEM_ALIGN = 4
@@ -363,14 +568,10 @@ class TransactionLayer(LinkLayer):
 
             if self.header_size == 3:
 
-                assert self.h_first_dw_be == 0xf
-
                 # 32-bit address
                 self.addr = (self.tlp[2] & 0xfffffffc)
 
             elif self.header_size == 4:
-
-                assert self.h_first_dw_be == 0xf and self.h_last_dw_be == 0xf            
 
                 # 64-bit address
                 self.addr = (self.tlp[3] & 0xfffffffc) | (self.tlp[2] << 32)
@@ -707,6 +908,8 @@ class TransactionLayer(LinkLayer):
         assert addr % self.MEM_ALIGN == 0  
         assert size % self.MEM_ALIGN == 0
 
+        assert self.bus_id is not None
+
         # read memory by blocks
         while ptr < size:
 
@@ -749,6 +952,8 @@ class TransactionLayer(LinkLayer):
 
         assert addr % self.MEM_ALIGN == 0  
         assert size % self.MEM_ALIGN == 0
+
+        assert self.bus_id is not None
 
         # read memory by blocks
         while ptr < size:
@@ -798,6 +1003,82 @@ class TransactionLayer(LinkLayer):
         
         # align memory write request by MEM_ALIGN byte boundary
         self._mem_write(write_addr, write_data[: ptr] + data + write_data[ptr + size :])
+
+
+class TransactionLayerTest(unittest.TestCase):
+
+    TEST_ADDR = 0x1000    
+
+    def test_tlp(self):
+
+        dev = TransactionLayer()
+
+        dev.write(dev.PacketMRd64(dev.bus_id, 0, 4))
+        dev.read()
+
+    def test_mem(self):
+
+        dev = TransactionLayer()
+
+        data = dev.mem_read(self.TEST_ADDR, 0x100)
+
+        dev.mem_write(self.TEST_ADDR, data)
+
+    def test_normal(self, addr = TEST_ADDR):
+
+        dev = TransactionLayer()
+
+        val = 0x0102030405060708
+
+        old = dev.mem_read_8(addr)
+
+        dev.mem_write_8(addr, val)
+
+        assert dev.mem_read_1(addr) == val & 0xff
+        assert dev.mem_read_2(addr) == val & 0xffff
+        assert dev.mem_read_4(addr) == val & 0xffffffff
+        assert dev.mem_read_8(addr) == val
+
+        dev.mem_write_8(addr, old)
+
+    def test_unaligned(self, addr = TEST_ADDR):
+
+        dev = TransactionLayer()
+
+        val = int(time.time())
+
+        old = dev.mem_read_8(addr)
+
+        dev.mem_write_8(addr, 0)
+        dev.mem_write_4(addr + 1, val)
+
+        assert dev.mem_read_8(addr) == val << 8
+
+        dev.mem_write_8(addr, 0)
+        dev.mem_write_4(addr + 2, val)
+
+        assert dev.mem_read_8(addr) == val << 16
+
+        dev.mem_write_8(addr, 0)
+        dev.mem_write_4(addr + 3, val)
+
+        assert dev.mem_read_8(addr) == val << 24
+
+        dev.mem_write_8(addr, old)
+
+    def test_cross_page(self):
+
+        self.test_normal(addr = self.TEST_ADDR - 1)
+        
+        self.test_unaligned(addr = self.TEST_ADDR - 2)
+
+        self.test_normal(addr = self.TEST_ADDR - 2)
+        
+        self.test_unaligned(addr = self.TEST_ADDR - 3)
+
+        self.test_normal(addr = self.TEST_ADDR - 3)
+        
+        self.test_unaligned(addr = self.TEST_ADDR - 4) 
 
 #
 # EoF

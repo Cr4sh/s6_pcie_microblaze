@@ -1,20 +1,23 @@
 #include <stdio.h>
+#include <stdbool.h>
 
-#include "xparameters.h"
-#include "netif/xadapter.h"
+#include <xstatus.h>
+#include <xparameters.h>
+#include <netif/xadapter.h>
+
 #include "platform.h"
 #include "platform_config.h"
-
 #include "config.h"
 #include "pcie_to_tcp.h"
+#include "axi_dma.h"
 
 // missing declaration in lwIP
 void lwip_init(void);
 
 void print_ip(char *msg, struct ip_addr *ip) 
 {
-    print(msg);
-    xil_printf("%d.%d.%d.%d\n\r", ip4_addr1(ip), ip4_addr2(ip), ip4_addr3(ip), ip4_addr4(ip));
+    xil_printf(msg);
+    xil_printf("%d.%d.%d.%d\n", ip4_addr1(ip), ip4_addr2(ip), ip4_addr3(ip), ip4_addr4(ip));
 }
 
 int main(void)
@@ -30,11 +33,13 @@ int main(void)
     netif = &server_netif;
     netcfg = (NET_CONFIG *)FLASH_IMAGE_BASEADDR;
 
-    init_platform();
+    init_platform();    
+
+    xil_printf("main()\n");
 
     if (netcfg->magic == NET_CONFIG_MAGIC)
     {
-    	xil_printf("Loading settings from flash...\r\n");
+    	xil_printf("Loading settings from flash...\n");
 
     	#define LOAD_ADDR(_a_, _b_) IP4_ADDR((_a_), (_b_)[0], (_b_)[1], (_b_)[2], (_b_)[3])
 
@@ -46,7 +51,7 @@ int main(void)
     }
     else
     {
-    	xil_printf("Loading default settings...\r\n");
+    	xil_printf("Loading default settings...\n");
 
     	// initliaze IP addresses to be used
 	    SERVER_ADDRESS(&ipaddr);
@@ -65,7 +70,7 @@ int main(void)
      // add network interface to the netif_list, and set it as default
     if (!xemac_add(netif, &ipaddr, &netmask, &gw, mac_ethernet_address, PLATFORM_EMAC_BASEADDR)) 
     {
-        xil_printf("xemac_add() ERROR\r\n");
+        xil_printf("xemac_add() ERROR\n");
         return -1;
     }
 
@@ -78,13 +83,14 @@ int main(void)
     netif_set_up(netif);
 
     // start the application
-    start_application(port);
-
-    // receive and process packets
-    while (1) 
+    if (start_application(port) == ERR_OK)
     {
-        xemacif_input(netif);
-        transfer_data();
+        // receive and process packets
+        while (true) 
+        {
+            xemacif_input(netif);
+            transfer_data();
+        }
     }
   
     // never reached

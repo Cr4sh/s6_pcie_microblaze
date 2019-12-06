@@ -5,16 +5,31 @@ import serial
 from struct import pack, unpack
 
 SERIAL_BAUDRATE = 115200
+SERIAL_TIMEOUT = 5 # in seconds
 
+# SREC image location
 FLASH_IMAGE_START = 0x100000
 FLASH_WRITE_MAX_BYTES = 0x100
 
-NET_CONFIG_MAGIC = 0x0c0c0c0c
+# NET_CONFIG structure location
+NET_CONFIG_ADDR = 0
+NET_CONFIG_MAGIC = 0x0C0C0C0C
 
-uart_open = lambda name: serial.Serial(name, SERIAL_BAUDRATE)
+# bootloader commands
+CTL_ERASE = 'e'
+CTL_WRITE = 'w'
+CTL_READ  = 'r'
+CTL_PING  = 'p'
+CTL_QUIT  = 'q'
+
+# bootloader status codes
+STATUS_SUCCESS = '\x00'
+STATUS_ERROR = '\xFF'
+
+uart_open = lambda name, timeout: serial.Serial(name, SERIAL_BAUDRATE, timeout = timeout)
 uart_close = lambda fd: fd.close()
 
-flash_mode_exit = lambda fd: fd.write('q')
+flash_mode_exit = lambda fd: fd.write(CTL_QUIT)
 
 def flash_erase(fd, addr, size):
 
@@ -24,23 +39,26 @@ def flash_erase(fd, addr, size):
 
     while ptr < size:
 
-        fd.write('e')
+        # send flash erase command
+        fd.write(CTL_ERASE)
         fd.write(pack('I', addr + ptr))
         fd.write(pack('I', 0x100))
 
-        assert fd.read(1) == '\0'
-        assert fd.read(1) == '\0'        
+        assert fd.read(1) == STATUS_SUCCESS
+        assert fd.read(1) == STATUS_SUCCESS
 
         ptr += 0x100
 
 def flash_read(fd, addr, size):
 
-    fd.write('r')
+    # send flash read command
+    fd.write(CTL_READ)
     fd.write(pack('I', addr))
     fd.write(pack('I', size))
 
-    assert fd.read(1) == '\0'
+    assert fd.read(1) == STATUS_SUCCESS
 
+    # read needed amount of data
     data = fd.read(size)
     assert len(data) == size
 
@@ -50,6 +68,7 @@ def flash_write(fd, addr, data):
 
     ptr = 0
 
+    # erase flash contents first
     flash_erase(fd, addr, len(data))
 
     while ptr < len(data):
@@ -58,15 +77,17 @@ def flash_write(fd, addr, data):
 
         print('Writing 0x%x bytes at 0x%.8x' % (len(temp), addr + ptr))
 
-        fd.write('w')
+        # send flash write command
+        fd.write(CTL_WRITE)
         fd.write(pack('I', addr + ptr))
         fd.write(pack('I', len(temp)))
 
-        assert fd.read(1) == '\0'
+        assert fd.read(1) == STATUS_SUCCESS
 
         fd.write(temp)
 
-        assert fd.read(1) == '\0'        
+        # verify written data
+        assert fd.read(1) == STATUS_SUCCESS
         assert fd.read(len(temp)) == temp        
 
         ptr += len(temp)    
@@ -75,6 +96,7 @@ def update_config(fd, address, netmask, gateway, port):
 
     parse_addr = lambda addr: map(lambda b: int(b), addr.split('.'))
 
+    # parse IP address strings
     address = parse_addr(address)
     netmask = parse_addr(netmask)
     gateway = parse_addr(gateway)    
@@ -92,9 +114,11 @@ def update_config(fd, address, netmask, gateway, port):
     print('    Port: %d' % port)
     print('')
     
+    # construct NET_CONFIG structure
     args = [ NET_CONFIG_MAGIC ] + address + netmask + gateway + [ port ]
 
-    flash_write(fd, 0, pack('=IBBBBBBBBBBBBH', *args))
+    # write NET_CONFIG into the flash
+    flash_write(fd, NET_CONFIG_ADDR, pack('=IBBBBBBBBBBBBH', *args))
 
 def help():
 
@@ -121,6 +145,7 @@ def main():
     elif len(sys.argv) > 3 and sys.argv[2] == '--config':
 
         net_config = sys.argv[3].split(':')
+
         assert len(net_config) == 4
 
     elif len(sys.argv) > 2 and sys.argv[2] == '--boot':
@@ -140,19 +165,23 @@ def main():
 
     if not console:
 
-        with serial.Serial(dev, SERIAL_BAUDRATE, timeout = 5) as fd:
+        # open serial port
+        with uart_open(dev, SERIAL_TIMEOUT) as fd:
 
-            fd.write('p')
+            fd.flush()
+            fd.write(CTL_PING)
 
-            if fd.read(1) != 'p':
+            # check for active flash update mode
+            if fd.read(1) != CTL_PING:
 
-                print('[!] Target currently is not in update mode')
+                print('ERROR: Target currently is not in update mode')
                 return -1
 
     if file_path is not None:
 
         with open(file_path, 'rb') as fd:
 
+            # read SREC image contents to flash
             data = fd.read()
 
         print('[+] Flasing %d bytes from "%s"...' % (len(data), file_path))
@@ -165,29 +194,37 @@ def main():
 
         print('[+] Exitting from update mode...')
 
-    with uart_open(dev) as fd:
+    # open serial port
+    with uart_open(dev, None) as fd:
+
+        fd.flush()
 
         if file_path is not None:
 
+            # write SREC image into the flash
             flash_write(fd, FLASH_IMAGE_START, data)
 
             print('[+] DONE')
 
         elif net_config is not None:
 
+            # write network configuration into the flash
             update_config(fd, *net_config)
 
             print('[+] DONE')
 
         elif boot:
         
+            # boot into the flashed SREC image
             flash_mode_exit(fd)   
 
         if boot or console:        
 
             try:
 
-                while True: sys.stdout.write(fd.read(1))
+                while True: 
+
+                    sys.stdout.write(fd.read(1))
 
             except KeyboardInterrupt:
 

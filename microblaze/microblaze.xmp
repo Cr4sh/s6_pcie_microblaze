@@ -1,6 +1,6 @@
 #Please do not modify this file by hand
-XmpVersion: 13.4
-VerMgmt: 13.4
+XmpVersion: 14.7
+VerMgmt: 14.7
 IntStyle: ise
 Flow: ise
 MHS File: microblaze.mhs
@@ -13,7 +13,7 @@ UserCmd1Type: 0
 UserCmd2: 
 UserCmd2Type: 0
 GenSimTB: 0
-SdkExportBmmBit: 1
+SdkExportBmmBit: 0
 SdkExportDir: SDK/SDK_Export
 InsertNoPads: 1
 WarnForEAArch: 1
@@ -23,6 +23,7 @@ ExternalMemSim: 0
 UcfFile: data/microblaze.ucf
 EnableParTimingError: 1
 ShowLicenseDialog: 1
+BInfo: 
 ICacheAddr: MCB_DDR3,C_S0_AXI_BASEADDR
 ICacheAddr: MCB_DDR3,C_S1_AXI_BASEADDR
 ICacheAddr: MCB_DDR3,C_S2_AXI_BASEADDR

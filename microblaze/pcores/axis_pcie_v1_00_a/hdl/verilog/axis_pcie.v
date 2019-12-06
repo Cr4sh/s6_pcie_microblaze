@@ -37,7 +37,17 @@ module axis_pcie #(
   output                 M1_AXIS_TVALID,
   output     [31 : 0]    M1_AXIS_TDATA,
   output                 M1_AXIS_TLAST,
-  input                  M1_AXIS_TREADY
+  input                  M1_AXIS_TREADY,
+
+  output                 S2_AXIS_TREADY,
+  input      [31 : 0]    S2_AXIS_TDATA,
+  input                  S2_AXIS_TLAST,
+  input                  S2_AXIS_TVALID,
+
+  output                 M2_AXIS_TVALID,
+  output     [31 : 0]    M2_AXIS_TDATA,
+  output                 M2_AXIS_TLAST,
+  input                  M2_AXIS_TREADY
 );
 
   //
@@ -167,17 +177,29 @@ module axis_pcie #(
     .m_axis_mb0_rx_tvalid( S0_AXIS_TVALID ),
     .m_axis_mb0_rx_tready( S0_AXIS_TREADY ),
 
-    // tx
+    // info tx
     .s_axis_mb1_tx_tready( M1_AXIS_TREADY ),
     .s_axis_mb1_tx_tdata( M1_AXIS_TDATA ),
     .s_axis_mb1_tx_tlast( M1_AXIS_TLAST ),
     .s_axis_mb1_tx_tvalid( M1_AXIS_TVALID ),
 
-    // rx  
+    // info rx  
     .m_axis_mb1_rx_tdata( S1_AXIS_TDATA ),
     .m_axis_mb1_rx_tlast( S1_AXIS_TLAST ),
     .m_axis_mb1_rx_tvalid( S1_AXIS_TVALID ),
     .m_axis_mb1_rx_tready( S1_AXIS_TREADY ),
+
+    // cfg tx
+    .s_axis_mb2_tx_tready( M2_AXIS_TREADY ),
+    .s_axis_mb2_tx_tdata( M2_AXIS_TDATA ),
+    .s_axis_mb2_tx_tlast( M2_AXIS_TLAST ),
+    .s_axis_mb2_tx_tvalid( M2_AXIS_TVALID ),
+
+    // cfg rx  
+    .m_axis_mb2_rx_tdata( S2_AXIS_TDATA ),
+    .m_axis_mb2_rx_tlast( S2_AXIS_TLAST ),
+    .m_axis_mb2_rx_tvalid( S2_AXIS_TVALID ),
+    .m_axis_mb2_rx_tready( S2_AXIS_TREADY ),
 
     .led(LED[3]),
   

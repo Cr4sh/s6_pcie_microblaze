@@ -14,7 +14,7 @@
 /* Defines */
 #define CR 13
 
-/* Comment the following line, if you want a smaller and faster bootloader which will be silent */
+/* Comment the following line, if you want a smaller and faster bootloader */
 #define VERBOSE
 
 /*
@@ -39,16 +39,35 @@
 /* Flash buffer width */
 #define FLASH_WRITE_MAX_BYTES 0x100
 
-/* Declarations */
+/* Bootloader commands */
+#define CTL_ERASE 'e'
+#define CTL_WRITE 'w'
+#define CTL_READ  'r'
+#define CTL_PING  'p'
+#define CTL_QUIT  'q'
+
+/* Bootloader status codes */
+#define STATUS_SUCCESS 0x00
+#define STATUS_ERROR   0xFF
+
+typedef void (* SR_ENTRY)(void);
+
+/* I/O declarations */
 static void led_on_off(uint32_t val);
 static uint32_t gpio_read(void);
+
+/* Flash declarations */
 static int32_t flash_mode(void);
 static uint32_t flash_read(uint32_t addr, uint8_t *buff, uint32_t size);
 static uint32_t flash_write(uint32_t addr, uint8_t *buff, uint32_t size);
+
+/* UART declarations */
 static uint8_t uart_recv(void);
 static void uart_send(uint8_t b);
 static void uart_read(uint8_t *buff, uint32_t size);
 static void uart_write(uint8_t *buff, uint32_t size);
+
+/* Other declarations */
 static uint8_t load_exec(void);
 static uint8_t flash_get_srec_line(uint8_t *buf);
 extern void init_stdout(void);
@@ -70,32 +89,45 @@ extern void outbyte(char c);
 #endif
 
 /* Data structures */
-static srec_info_t srinfo;
-static uint8_t fl_buf[FLASH_WRITE_MAX_BYTES];
-static uint8_t sr_buf[SREC_MAX_BYTES];
-static uint8_t sr_data_buf[SREC_DATA_MAX_BYTES];
-static uint8_t *flbuf;
+static srec_info_t sr_info;
+static uint8_t *fl_buff_ptr = NULL;
+static uint8_t fl_buff[FLASH_WRITE_MAX_BYTES];
+static uint8_t sr_buff[SREC_MAX_BYTES];
+static uint8_t sr_data_buff[SREC_DATA_MAX_BYTES];
 
 #ifdef VERBOSE
 
 static int8_t *errors[] = 
 { 
     "",
-    "Error while copying executable image into RAM\r\n",
-    "Error while reading an SREC line from flash\r\n",
-    "SREC line is corrupted\r\n",
-    "SREC has invalid checksum\r\n"
+    "Error while copying executable image into RAM\n",
+    "Error while reading an SREC line from flash\n",
+    "SREC line is corrupted\n",
+    "SREC has invalid checksum\n"
 };
 
 #endif // VERBOSE
 
-/* We don't use interrupts/exceptions. 
-   Dummy definitions to reduce code size on MicroBlaze */
+/*
+    We don't use interrupts/exceptions,
+    dummy definitions to reduce code size on MicroBlaze.
+*/
 #ifdef __MICROBLAZE__
 
-void _interrupt_handler(void) { }
-void _exception_handler(void) { }
-void _hw_exception_handler(void) { }
+void _interrupt_handler(void)
+{
+    // ...
+}
+
+void _exception_handler(void)
+{
+    // ...
+}
+
+void _hw_exception_handler(void)
+{
+    // ...
+}
 
 #endif // __MICROBLAZE__
 
@@ -105,16 +137,19 @@ int main()
 
     init_stdout();    
 
+    /* Turn on the LEDs */
     led_on_off(0xffffffff);
 
+    /* Check if push button is pressed */
     if (gpio_read() != 0)
     {        
+        /* Go to the flash update mode */
         if (flash_mode() != 0)
         {
 
 #ifdef VERBOSE
 
-            print("ERROR: flash_mode() fails\r\n");
+            print("ERROR: flash_mode() fails\n");
 #endif
             return 0;
         }        
@@ -122,14 +157,15 @@ int main()
 
 #ifdef VERBOSE    
 
-    print("\r\nSREC Bootloader\r\n");
+    print("\nSREC Bootloader\n");
     print("Loading SREC image from flash at address: ");    
     putnum(FLASH_IMAGE_BASEADDR);
-    print("\r\n");
+    print("\n");
 
 #endif // VERBOSE
 
-    flbuf = (uint8_t *)(FLASH_IMAGE_BASEADDR + FLASH_IMAGE_START);
+    /* Load SREC image from flash */
+    fl_buff_ptr = (uint8_t *)(FLASH_IMAGE_BASEADDR + FLASH_IMAGE_START);
     ret = load_exec();
 
     /* If we reach here, we are in error */
@@ -138,7 +174,7 @@ int main()
 
     print("ERROR in SREC line ");
     putnum(srec_line);
-    print("\r\n");
+    print("\n");
 
     print(errors[ret]);
 
@@ -149,7 +185,7 @@ int main()
 
 static void led_on_off(uint32_t val)
 {
-    putfslx(val, 1, FSL_DEFAULT);
+    putfslx(val, 0, FSL_DEFAULT);
 }
 
 static uint32_t gpio_read(void)
@@ -162,22 +198,22 @@ static uint32_t gpio_read(void)
         return 0;
     }
 
-    // set the direction for all signals to be inputs
-    XGpio_SetDataDirection(&GpioInput, 1, 0xFFFFFFFF);
+    /* Set the direction for all signals to be inputs */
+    XGpio_SetDataDirection(&GpioInput, 1, 0xF);
 
-    // read the state of the DIP switches
+    /* Read the state of the DIP switches */
     return XGpio_DiscreteRead(&GpioInput, 1);        
 }
 
 static int32_t flash_mode(void)
 {
-    while (1)
+    while (TRUE)
     {
         uint8_t cmd = uart_recv();
 
-        if (cmd == 'w')
+        if (cmd == CTL_WRITE)
         {
-            // flash write command
+            /* Flash write command */
             uint32_t size = -1, addr = -1;
 
             uart_read((uint8_t *)&addr, sizeof(addr));
@@ -185,32 +221,32 @@ static int32_t flash_mode(void)
 
             if (size > FLASH_WRITE_MAX_BYTES)
             {
-                uart_send(-1);
+                uart_send(STATUS_ERROR);
                 continue;
             }
 
             if (addr + size > XPAR_LINEAR_FLASH_S_AXI_MEM0_HIGHADDR - 
                               XPAR_LINEAR_FLASH_S_AXI_MEM0_BASEADDR)
             {
-                uart_send(-1);
+                uart_send(STATUS_ERROR);
                 continue;
             }
 
-            uart_send(0);
-            uart_read(fl_buf, size);
+            uart_send(STATUS_SUCCESS);
+            uart_read(fl_buff, size);
 
-            if (flash_write(addr, fl_buf, size) != XST_SUCCESS)
+            if (flash_write(addr, fl_buff, size) != XST_SUCCESS)
             {
-                uart_send(-1);
+                uart_send(STATUS_ERROR);
                 continue;
             }
 
-            uart_send(0);
+            uart_send(STATUS_SUCCESS);
             uart_write((uint8_t *)(FLASH_IMAGE_BASEADDR + addr), size);
         }
-        else if (cmd == 'e')
+        else if (cmd == CTL_ERASE)
         {
-            // flash erase command
+            /* Flash erase command */
             uint32_t size = -1, addr = -1;
 
             uart_read((uint8_t *)&addr, sizeof(addr));
@@ -218,30 +254,30 @@ static int32_t flash_mode(void)
 
             if (size > FLASH_WRITE_MAX_BYTES)
             {
-                uart_send(-1);
+                uart_send(STATUS_ERROR);
                 continue;
             }
 
             if (addr + size > XPAR_LINEAR_FLASH_S_AXI_MEM0_HIGHADDR - 
                               XPAR_LINEAR_FLASH_S_AXI_MEM0_BASEADDR)
             {
-                uart_send(-1);
+                uart_send(STATUS_ERROR);
                 continue;
             }
 
-            uart_send(0);
+            uart_send(STATUS_SUCCESS);
 
             if (flash_write(addr, NULL, size) != XST_SUCCESS)
             {
-                uart_send(-1);
+                uart_send(STATUS_ERROR);
                 continue;
             }
 
-            uart_send(0);
+            uart_send(STATUS_SUCCESS);
         }
-        else if (cmd == 'r')
+        else if (cmd == CTL_READ)
         {
-            // flash read command
+            /* Flash read command */
             uint32_t size = -1, addr = -1;
 
             uart_read((uint8_t *)&addr, sizeof(addr));
@@ -249,34 +285,34 @@ static int32_t flash_mode(void)
 
             if (size > FLASH_WRITE_MAX_BYTES)
             {
-                uart_send(-1);
+                uart_send(STATUS_ERROR);
                 continue;
             }
 
             if (addr + size > XPAR_LINEAR_FLASH_S_AXI_MEM0_HIGHADDR - 
                               XPAR_LINEAR_FLASH_S_AXI_MEM0_BASEADDR)
             {
-                uart_send(-2);
+                uart_send(STATUS_SUCCESS);
                 continue;
             }            
 
-            if (flash_read(addr, fl_buf, size) != XST_SUCCESS)
+            if (flash_read(addr, fl_buff, size) != XST_SUCCESS)
             {
-                uart_send(-3);
+                uart_send(STATUS_SUCCESS);
                 continue;
             }
 
-            uart_send(0);
-            uart_write(fl_buf, size);
+            uart_send(STATUS_SUCCESS);
+            uart_write(fl_buff, size);
         }
-        else if (cmd == 'p')
+        else if (cmd == CTL_PING)
         {
-            // ping command
-            uart_send('p');
+            /* Ping command */
+            uart_send(CTL_PING);
         }
-        else if (cmd == 'q')
+        else if (cmd == CTL_QUIT)
         {
-            // flash mode exit command
+            /* Flash update exit command */
             break;
         }
     }
@@ -289,21 +325,21 @@ static uint32_t flash_write(uint32_t addr, uint8_t *buff, uint32_t size)
     XFlash FlashInstance;
     uint32_t Status = XST_SUCCESS;
 
-    // Initialize the Flash Library
+    /* Initialize the Flash Library */
     Status = XFlash_Initialize(&FlashInstance, FLASH_IMAGE_BASEADDR, FLASH_MEM_WIDTH, 0);
     if (Status != XST_SUCCESS)
     {
         return Status;
     }
 
-    // Reset the Flash Device, this clears the Status registers and puts the device in Read mode
+    /* Reset the Flash Device, this clears the Status registers and puts the device in Read mode */
     Status = XFlash_Reset(&FlashInstance);
     if (Status != XST_SUCCESS)
     {
         return Status;
     }
 
-    // Perform an unlock operation before the erase operation
+    /* Perform an unlock operation before the erase operation */
     if ((FlashInstance.CommandSet == XFL_CMDSET_INTEL_STANDARD) ||
         (FlashInstance.CommandSet == XFL_CMDSET_INTEL_EXTENDED))
     {
@@ -324,7 +360,7 @@ static uint32_t flash_write(uint32_t addr, uint8_t *buff, uint32_t size)
     }
     else
     {
-        // Perform the Erase operation
+        /* Perform the Erase operation */
         Status = XFlash_Erase(&FlashInstance, addr, size);
         if (Status != XST_SUCCESS)
         {
@@ -340,14 +376,14 @@ static uint32_t flash_read(uint32_t addr, uint8_t *buff, uint32_t size)
     XFlash FlashInstance;
     uint32_t Status = XST_SUCCESS;
 
-    // Initialize the Flash Library
+    /* Initialize the Flash Library */
     Status = XFlash_Initialize(&FlashInstance, FLASH_IMAGE_BASEADDR, FLASH_MEM_WIDTH, 0);
     if (Status != XST_SUCCESS)
     {
         return Status;
     }
 
-    // Reset the Flash Device, this clears the Status registers and puts the device in Read mode
+    /* Reset the Flash Device, this clears the Status registers and puts the device in Read mode */
     Status = XFlash_Reset(&FlashInstance);
     if (Status != XST_SUCCESS)
     {
@@ -379,7 +415,7 @@ static void uart_read(uint8_t *buff, uint32_t size)
 
     for (i = 0; i < size; i += 1)
     {
-        // read one byte from uart
+        /* Read one byte from the UART */
         buff[i] = uart_recv();
     }
 }
@@ -390,33 +426,33 @@ static void uart_write(uint8_t *buff, uint32_t size)
 
     for (i = 0; i < size; i += 1)
     {
-        // write one byte to uart
+        /* write one byte to the UART */
         uart_send(buff[i]);
     }
 }
 
 static uint8_t load_exec(void)
 {
-    uint8_t ret = 0;    
-    int8_t done = 0;
-
-    void (* laddr)(void);
+    uint8_t ret = -1, done = 0;
+    SR_ENTRY sr_entry = NULL;
     
-    srinfo.sr_data = sr_data_buf;
+    sr_info.sr_data = sr_data_buff;
     
-    while (!done) 
+    /* Load SREC image from flash */
+    while (done == 0) 
     {
-        if ((ret = flash_get_srec_line(sr_buf)) != 0) 
+        /* Read single line */
+        if ((ret = flash_get_srec_line(sr_buff)) != 0) 
         {
             return ret;
         }
 
-        if ((ret = decode_srec_line(sr_buf, &srinfo)) != 0)
+        if ((ret = decode_srec_line(sr_buff, &sr_info)) != 0)
         {
             return ret;
         }
 
-        switch (srinfo.type) 
+        switch (sr_info.type) 
         {
             case SREC_TYPE_0:
                 
@@ -426,7 +462,8 @@ static uint8_t load_exec(void)
             case SREC_TYPE_2:
             case SREC_TYPE_3:
     
-                memcpy((void *)srinfo.addr, (void *)srinfo.sr_data, srinfo.dlen);
+                /* Copy image data */
+                memcpy((void *)sr_info.addr, (void *)sr_info.sr_data, sr_info.dlen);
                 break;
 
             case SREC_TYPE_5:
@@ -437,9 +474,12 @@ static uint8_t load_exec(void)
             case SREC_TYPE_8:
             case SREC_TYPE_9:
 
-                laddr = (void (*)())srinfo.addr;
+                /* Get entry point address */
+                sr_entry = (SR_ENTRY)sr_info.addr;
+
                 done = 1;
                 ret = 0;
+                
                 break;
         }
     }
@@ -447,39 +487,44 @@ static uint8_t load_exec(void)
 #ifdef VERBOSE
 
     print("Executing program starting at address: ");
-    putnum((uint32_t)laddr);
-    print("\r\n");
+    putnum((uint32_t)sr_entry);
+    print("\n");
 
 #endif // VERBOSE
 
+    /* Turn off LEDs */
     led_on_off(0);
 
-    (* laddr)();                 
+    if (done != 0)
+    {
+        /* Execute loaded image */
+        sr_entry();
+    }
   
     /* We will be dead at this point */
-    return 0;
+    return ret;
 }
 
-static uint8_t flash_get_srec_line(uint8_t *buf)
+static uint8_t flash_get_srec_line(uint8_t *buff)
 {
-    uint8_t c = 0;
+    uint8_t chr = 0;
     uint32_t count = 0;
 
-    while (1) 
+    while (TRUE) 
     {
-        // read single byte from flash
-        c = *flbuf++;
+        /* Read single byte from flash */
+        chr = *fl_buff_ptr++;
 
-        // check for end of the line
-        if (c == 0x0d)
+        /* Check for end of the line */
+        if (chr == 0x0d)
         {   
-            // skip 0x0a byte
-            c = *flbuf++; 
+            /* Skip 0x0A byte */
+            chr = *fl_buff_ptr++; 
 
             return 0;
         }
         
-        *buf++ = c;
+        *buff++ = chr;
         count++;
         
         if (count > SREC_MAX_BYTES) 
@@ -487,7 +532,7 @@ static uint8_t flash_get_srec_line(uint8_t *buf)
 
 #ifdef VERBOSE
 
-            print("SREC length is too large\r\n");
+            print("SREC length is too large\n");
 #endif
             return LD_SREC_LINE_ERROR;
         }
@@ -498,8 +543,10 @@ static uint8_t flash_get_srec_line(uint8_t *buf)
 
 #include <unistd.h>
 
-/* Save some code and data space on PowerPC 
-   by defining a minimal exit */
+/*
+    Save some code and data space on PowerPC
+    by defining a minimal exit.
+*/
 void exit(int ret)
 {
     _exit(ret);

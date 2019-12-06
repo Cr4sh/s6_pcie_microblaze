@@ -3,7 +3,7 @@
 
 ## What
 
-This repository contains a set of tools and proof of concepts related to PCI-E bus and [DMA attacks](https://en.wikipedia.org/wiki/DMA_attack). It includes HDL design which implements software controllable PCI-E gen 1.1 endpoint device for [Xilinx SP605 Evaluation Kit](https://www.xilinx.com/products/boards-and-kits/ek-s6-sp605-g.html) with Spartan-6 FPGA. In comparison with popular [USB3380EVB](http://www.hwtools.net/Adapter/USB3380EVB.html) this design allows to operate with raw Transaction Level Packets (TLP) of PCI-E bus and perform full 64-bit memory read/write operations. It's early version of my first much or less complicated FPGA project, so the speed is quite slow (around 1-2 Mb/s), but in upcoming releases it will be significantly increased by connecting PCI-E endpoint to MicroBlaze soft processor with AXI DMA engine. However, even such low speed is more than enough for reliable implementation of various practical attacks over PCI-E bus: to demonstrate applied use cases of the design, [there's a tool](https://github.com/Cr4sh/s6_pcie_microblaze/blob/master/python/uefi_backdoor_simple.py) for pre-boot DMA attacks on UEFI based machines which allow executing arbitrary UEFI DXE drivers during platform init. [Another example](https://github.com/Cr4sh/s6_pcie_microblaze/blob/master/python/uefi_backdoor_hv.py) shows how to use pre-boot DMA attacks to inject [Hyper-V VM exit handler backdoor](https://github.com/Cr4sh/s6_pcie_microblaze/blob/master/python/payloads/DmaBackdoorHv/src/DmaBackdoorHv.c) into the [virtualization-based security](https://docs.microsoft.com/en-us/windows-hardware/design/device-experiences/oem-vbs) enabled Windows 10 Enterprise running on UEFI Secure Boot enabled platform. Provided Hyper-V backdoor PoC might be useful for reverse engineering and exploit development purposes, it [provides an interface](https://github.com/Cr4sh/s6_pcie_microblaze/blob/master/python/payloads/DmaBackdoorHv/backdoor_client/backdoor_client.cpp) for inspecting of hypervisor state (VMCS, physical/virtual memory, registers, etc.) from guest partition and perform the guest to host VM escape attacks. 
+This repository contains a set of tools and proof of concepts related to PCI-E bus and [DMA attacks](https://en.wikipedia.org/wiki/DMA_attack). It includes HDL design which implements software controllable PCI-E gen 1.1 endpoint device for [Xilinx SP605 Evaluation Kit](https://www.xilinx.com/products/boards-and-kits/ek-s6-sp605-g.html) with Spartan-6 FPGA. In comparison with popular [USB3380EVB](http://www.hwtools.net/Adapter/USB3380EVB.html) this design allows to operate with raw Transaction Level Packets (TLP) of PCI-E bus and perform full 64-bit memory read/write operations. To demonstrate applied use cases of the design, [there's a tool](https://github.com/Cr4sh/s6_pcie_microblaze/blob/master/python/uefi_backdoor_simple.py) for pre-boot DMA attacks on UEFI based machines which allows executing arbitrary UEFI DXE drivers during platform init. [Another example](https://github.com/Cr4sh/s6_pcie_microblaze/blob/master/python/uefi_backdoor_hv.py) shows how to use pre-boot DMA attacks to inject [Hyper-V VM exit handler backdoor](https://github.com/Cr4sh/s6_pcie_microblaze/blob/master/python/payloads/DmaBackdoorHv/src/DmaBackdoorHv.c) into the [virtualization-based security](https://docs.microsoft.com/en-us/windows-hardware/design/device-experiences/oem-vbs) enabled Windows 10 Enterprise running on UEFI Secure Boot enabled platform. Provided Hyper-V backdoor PoC might be useful for reverse engineering and exploit development purposes, it [provides an interface](https://github.com/Cr4sh/s6_pcie_microblaze/blob/master/python/payloads/DmaBackdoorHv/backdoor_client/backdoor_client.cpp) for inspecting of hypervisor state (VMCS, physical/virtual memory, registers, etc.) from guest partition and perform the guest to host VM escape attacks. 
 
 
 ## Contents
@@ -46,7 +46,7 @@ Xilinx UG526 document also known as [SP605 Hardware User Guide](https://www.xili
 In case of [flashrom](https://www.flashrom.org/) compatible external SPI programmer you can use `flash_to_spi.py` program as a flashrom wrapper:
 
 ```
-# ./flash_to_spi.py s6_pcie_microblaze.bin
+# ./flash_to_spi.py linux_spi:dev=/dev/spidev1.0 s6_pcie_microblaze.bin
 Using region: "main".
 Calibrating delay loop... OK.
 Found Winbond flash chip "W25Q64.V" (8192 kB, SPI) on linux_spi.
@@ -240,17 +240,6 @@ Provided Python software uses some environment variables to override values of c
 * `DEBUG_TLP` &minus; If set to `1` print TX and RX TLP packets dump into the standard output.
 
 * `TARGET_ADDR` &minus; `<address>:<port>` string to override IP address of the board specified in `python/pcie_lib_config.py` file.
-
-
-## Using with PCILeech
-
-[PCILeech](https://github.com/ufrisk/pcileech) is a powerful DMA attack software developed by [@UlfFrisk](http://twitter.com/UlfFrisk), at this moment it supports Xilinx SP605 in USB 3 mode with [custom bitstream](https://github.com/ufrisk/pcileech-fpga) and TCP mode with MicroBlaze based bitstream located in this repository. To use PCILeech with MicroBlaze based design you need to pass `SP605_TCP` value for `-device` option and specify device address with `-device-addr` and `-device-port` options.
-
-Example:
-
-```
-> pcileech.exe dump -device sp605_tcp -device-addr 192.168.2.247 -device-port 28472 -max 0x1000
-```
 
 
 ## Using Python API
@@ -610,7 +599,7 @@ PCI Express is very complicated high speed bus so there's a lot of things that c
 
 6) Import `sdk/srec_bootloader_0` and `sdk/main_0` projects into the project tree and run the build.
 
-7) Run `make_out.sh` (or `make_out.bat`) shell script from Xilinx ISE command prompt to generate needed output files. 
+7) Run `make bitstream && make srec` from Xilinx ISE command prompt to generate needed output files. 
 
 
 ## TODO

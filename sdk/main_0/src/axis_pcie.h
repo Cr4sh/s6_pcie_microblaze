@@ -1,24 +1,31 @@
 #ifndef __AXIS_PCIE_H_
 #define __AXIS_PCIE_H_
 
-#define AXIS_PCIE_READ_RETRY 0x1000000
-
-// ID of AXI stream device used to transfer TLP packets
-#define AXIS_PCIE_DEV_ID_TLP 0
+#define AXIS_PCIE_STATUS_BUS_ID(_val_) (((_val_) >> 0) & 0xffff)
 
 // ID of AXI stream device used to obtain PCI-E hard IP block status
-#define AXIS_PCIE_DEV_ID_INFO 1
+#define AXIS_PCIE_DEV_ID_STATUS 0
 
+// ID of AXI stream device used to access PCI-E config space
+#define AXIS_PCIE_DEV_ID_CONFIG 1
 
-// last dword of TLP
-#define AXIS_PCIE_F_TLAST 0x01
+// get register number from register address
+#define AXIS_PCIE_CFG_ADDR(_addr_) ((_addr_) / 4)
 
-// exit from axis_pcie_read() after AXIS_PCIE_READ_RETRY read attempts
-#define AXIS_PCIE_F_WITH_TIMEOUT 0x02
+// configuration space registers
+#define CFG_BASE_ADDRESS_0  0x10
+#define CFG_BASE_ADDRESS_1  0x14
+#define CFG_BASE_ADDRESS_2  0x18
+#define CFG_BASE_ADDRESS_3  0x1c
+#define CFG_BASE_ADDRESS_4  0x20
+#define CFG_BASE_ADDRESS_5  0x24
+#define CFG_ROM_ADDRESS     0x30
 
-
-int axis_pcie_read(u32 *data, u32 *flags);
-int axis_pcie_write(u32 data, u32 flags);
 u32 axis_pcie_status(void);
+u32 axis_pcie_status_bus_id(void);
+
+u32 axis_pcie_read_config(u32 num);
+
+u32 aixs_pcie_rom_address(void);
 
 #endif

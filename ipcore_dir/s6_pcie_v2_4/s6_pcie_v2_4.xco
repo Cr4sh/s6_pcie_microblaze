@@ -1,7 +1,7 @@
 ##############################################################
 #
-# Xilinx Core Generator version 13.4
-# Date: Sun Oct 01 06:08:09 2017
+# Xilinx Core Generator version 14.7
+# Date: Sun Dec 01 05:43:17 2019
 #
 ##############################################################
 #
@@ -105,15 +105,15 @@ CSET d3_power_consumed_factor=0
 CSET d3_power_dissipated=0
 CSET d3_power_dissipated_factor=0
 CSET d3hot_pme_support=true
-CSET device_id=0007
+CSET device_id=1337
 CSET device_port_type=PCI_Express_Endpoint_device
 CSET device_specific_initialization=false
 CSET dsn_enabled=true
 CSET enable_aspm_l1_support=false
 CSET enable_slot_clock_cfg=false
-CSET expansion_rom_enabled=false
+CSET expansion_rom_enabled=true
 CSET expansion_rom_scale=Kilobytes
-CSET expansion_rom_size=2
+CSET expansion_rom_size=512
 CSET expose_unused_transceiver_ports=false
 CSET ext_pci_cfg_space=false
 CSET extended_tag_field=false
@@ -138,7 +138,7 @@ CSET vendor_id=10EE
 CSET xlnx_ref_board=SP605_Rev_A-D
 # END Parameters
 # BEGIN Extra information
-MISC pkg_timestamp=2012-01-07T13:53:59Z
+MISC pkg_timestamp=2013-10-13T18:02:40Z
 # END Extra information
 GENERATE
-# CRC: ac05bef1
+# CRC:  d622eff

@@ -1,73 +1,49 @@
 #include <stdio.h>
+#include <fsl.h>
 
-#include "fsl.h"
 #include "axis_pcie.h"
-
-int axis_pcie_read(u32 *data, u32 *flags)
-{
-    u32 val, invalid, error;
-
-    if (*flags & AXIS_PCIE_F_WITH_TIMEOUT)
-    {
-        int count = 0;
-
-        for (count = 0; count < AXIS_PCIE_READ_RETRY; count++)
-        {
-            getfslx(val, AXIS_PCIE_DEV_ID_TLP, FSL_NONBLOCKING);
-            fsl_isinvalid(invalid);
-            fsl_iserror(error);
-
-            if (invalid == 0)
-            {
-                count = -1;
-                break;
-            }
-        }
-
-        if (count == -1)
-        {
-            *data = val;
-            *flags = error ? AXIS_PCIE_F_TLAST : 0;
-
-            return 0;
-        }
-
-        xil_printf("axis_pcie_read() ERROR: Max read attempts reached\r\n");   
-        
-        return -1;
-    }
-    else
-    {
-        getfslx(val, AXIS_PCIE_DEV_ID_TLP, FSL_DEFAULT);
-        fsl_iserror(error);
-
-        *data = val;
-        *flags = error ? AXIS_PCIE_F_TLAST : 0;
-    }
-    
-    return 0;
-}
-
-int axis_pcie_write(u32 data, u32 flags)
-{
-    if (flags & AXIS_PCIE_F_TLAST)
-    {
-        putfslx(data, AXIS_PCIE_DEV_ID_TLP, FSL_CONTROL);
-    }
-    else
-    {
-        putfslx(data, AXIS_PCIE_DEV_ID_TLP, FSL_DEFAULT);   
-    }
-
-    return 0;
-}
 
 u32 axis_pcie_status(void)
 {
     u32 val;
 
-    getfslx(val, AXIS_PCIE_DEV_ID_INFO, FSL_DEFAULT);
+    // read device status
+    getfslx(val, AXIS_PCIE_DEV_ID_STATUS, FSL_DEFAULT);
 
     return val;
 }
 
+u32 axis_pcie_status_bus_id(void)
+{
+    return AXIS_PCIE_STATUS_BUS_ID(axis_pcie_status());
+}
+
+u32 axis_pcie_read_config(u32 num)
+{
+    u32 val;
+
+    getfslx(val, AXIS_PCIE_DEV_ID_CONFIG, FSL_NONBLOCKING);
+
+    // write config space register number
+    putfslx(num, AXIS_PCIE_DEV_ID_CONFIG, FSL_CONTROL);
+
+    // read config space register data
+    getfslx(val, AXIS_PCIE_DEV_ID_CONFIG, FSL_DEFAULT);
+
+    return val;
+}
+
+u32 aixs_pcie_rom_address(void)
+{
+    // read rom address register value
+    u32 val = axis_pcie_read_config(AXIS_PCIE_CFG_ADDR(CFG_ROM_ADDRESS));
+
+    // check if option ROM is present
+    if ((val & 1) != 0)
+    {
+        // return option ROM address
+        return val & 0xfffffffe;
+    }
+
+    return 0;
+}
