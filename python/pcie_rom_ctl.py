@@ -39,18 +39,6 @@ def main():
 
     dev.set_resident(True)    
 
-    if options.log_on:
-
-        print('[+] Enabling option ROM access log...')
-
-        dev.set_rom_log(True)
-
-    elif options.log_off:
-
-        print('[+] Disabling option ROM access log...')
-
-        dev.set_rom_log(False)
-
     if options.load is not None or options.erase:
 
         print('[+] Erasing option ROM...')
@@ -74,6 +62,18 @@ def main():
 
         # write option ROM to the device
         dev.rom_load(data)
+
+    if options.log_on:
+
+        print('[+] Enabling option ROM access log...')
+
+        dev.set_rom_log(True)
+
+    elif options.log_off:
+
+        print('[+] Disabling option ROM access log...')
+
+        dev.set_rom_log(False)
 
     print('[+] Done')
 
