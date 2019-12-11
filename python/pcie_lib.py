@@ -477,8 +477,8 @@ class TransactionLayer(LinkLayer):
     MEM_WR_TLP_LEN = 0x04
     MEM_RD_TLP_LEN = 0x40
 
-    # align all memory reads and writes by 4 byte boundary
-    MEM_ALIGN = 4
+    # align memory reads and writes
+    MEM_ALIGN = 0x40
 
     log_all = lambda self: os.getenv(self.env_debug_tlp) is not None
 

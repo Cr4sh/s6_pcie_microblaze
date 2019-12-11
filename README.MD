@@ -30,8 +30,6 @@ This repository contains a set of tools and proof of concepts related to PCI-E b
 
 * `python/payloads/DmaBackdoorHv` &minus; UEFI DXE driver which implements Hyper-V backdoor and backdoor client. 
 
-Ready to use FPGA bitstream files `s6_pcie_microblaze.mcs` and  `s6_pcie_microblaze.bin` can be downloaded [here](https://mega.nz/#!rccnTTTI!s8RSL8y1KyMjL0arGNUNxWio-lesgPPHueOLeaKKluY).
-
 
 ## SP605 board configuration
 
@@ -154,7 +152,6 @@ $ lspci -vvs 01:00.0
     Status: Cap+ 66MHz- UDF- FastB2B- ParErr- DEVSEL=fast >TAbort- <TAbort- <MAbort- >SERR- <PERR- INTx-
     Interrupt: pin A routed to IRQ 11
     Region 0: Memory at f7d00000 (32-bit, non-prefetchable) [disabled] [size=1M]
-    [virtual] Expansion ROM at 90c00000 [disabled] [size=512K]
     Capabilities: [40] Power Management version 3
         Flags: PMEClk- DSI- D1+ D2+ AuxCurrent=0mA PME(D0+,D1+,D2+,D3hot+,D3cold-)
         Status: D0 NoSoftRst+ PME-Enable- DSel=0 DScale=0 PME-
@@ -207,7 +204,7 @@ $ ./pcie_cfg.py
          CARDBUS_CIS = 0x0
  SUBSYSTEM_VENDOR_ID = 0x10ee
         SUBSYSTEM_ID = 0x7
-         ROM_ADDRESS = 0xfff80000
+         ROM_ADDRESS = 0x0
       INTERRUPT_LINE = 0xff
        INTERRUPT_PIN = 0x1
              MIN_GNT = 0x0
@@ -231,7 +228,7 @@ $ ./pcie_cfg.py -x
 0024: 0x0000 0x0000
 0028: 0x0000 0x0000
 002c: 0x10ee 0x0007
-0030: 0x0000 0xfff8
+0030: 0x0000 0x0000
 0034: 0x0040 0x0000
 0038: 0x0000 0x0000
 003c: 0x01ff 0x0000
@@ -398,7 +395,7 @@ Python program `uefi_backdoor_simple.py` injects dummy UEFI DXE driver located i
 2) Run the following command: 
 
 ```
-$ ./uefi_backdoor_simple.py payloads/DmaBackdoorSimple/DmaBackdoorSimple_X64.efi
+$ ./uefi_backdoor_simple.py --payload payloads/DmaBackdoorSimple/DmaBackdoorSimple_X64.efi
 ```
 
 3) Power on the target computer, in case of successful attack in couple of seconds you will see debug messages screen of injected UEFI driver.
@@ -432,7 +429,7 @@ Hooking LocateProtocol(): 0xd67e2c18 -> 0x0001031c
 Python program `uefi_backdoor_hv.py` injects Hyper-V VM exit handler backdoor located in UEFI driver `payloads/DmaBackdoorHv`. Usage:
 
 ```
-./uefi_backdoor_hv.py payloads/DmaBackdoorHv/DmaBackdoorHv_X64.efi
+./uefi_backdoor_hv.py --payload payloads/DmaBackdoorHv/DmaBackdoorHv_X64.efi
 [+] PCI-E link with target is up
 [+] TSEG is somewhere around 0x8b800000
 [+] PE image is at 0x88930000
@@ -635,8 +632,9 @@ Also, `backdoor_client.exe` can inject dummy driver located in `payloads/DmaBack
 
 ## Option ROM attacks
 
-Provided FPGA design emulates PCI-E device with 512K option ROM stored in onboard linear flash memory of SP605. Although modern platforms [mitigates](https://docs.microsoft.com/en-us/windows-hardware/manufacture/desktop/uefi-validation-option-rom-validation-guidance) option ROM [attacks](https://trmm.net/Thunderstrike), this feature still could be useful for security audit or prototyping purposes.
+Alternative bitstream version `s6_pcie_microblaze_orom.bin`/`s6_pcie_microblaze_orom.mcs` can emulate PCI-E option ROM stored in onboard linear flash memory of SP605. Although modern platforms [mitigates](https://docs.microsoft.com/en-us/windows-hardware/manufacture/desktop/uefi-validation-option-rom-validation-guidance) option ROM [attacks](https://trmm.net/Thunderstrike), this feature still could be useful for security audit or prototyping purposes.
 
+You can manage option ROM images using `pcie_rom_ctl.py` Python program.
 Erasing option ROM contents:
 
 ```

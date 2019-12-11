@@ -281,7 +281,7 @@
       <status xil_pn:value="SuccessfullyRun"/>
       <status xil_pn:value="ReadyToRun"/>
     </transform>
-    <transform xil_pn:end_ts="1575180883" xil_pn:in_ck="796095987657293126" xil_pn:name="TRAN_regenerateCores" xil_pn:prop_ck="2442290497965387634" xil_pn:start_ts="1575180883">
+    <transform xil_pn:end_ts="1576095029" xil_pn:in_ck="796095987657293126" xil_pn:name="TRAN_regenerateCores" xil_pn:prop_ck="2442290497965387634" xil_pn:start_ts="1576095029">
       <status xil_pn:value="SuccessfullyRun"/>
       <status xil_pn:value="ReadyToRun"/>
     </transform>
@@ -297,8 +297,9 @@
       <status xil_pn:value="SuccessfullyRun"/>
       <status xil_pn:value="ReadyToRun"/>
     </transform>
-    <transform xil_pn:end_ts="1575555810" xil_pn:in_ck="-6172246470216933969" xil_pn:name="TRAN_platgen" xil_pn:prop_ck="-6780250332531540676" xil_pn:start_ts="1575555802">
+    <transform xil_pn:end_ts="1576098059" xil_pn:in_ck="-4616221804757754635" xil_pn:name="TRAN_platgen" xil_pn:prop_ck="-6780250332531540676" xil_pn:start_ts="1576096705">
       <status xil_pn:value="SuccessfullyRun"/>
+      <status xil_pn:value="WarningsGenerated"/>
       <status xil_pn:value="ReadyToRun"/>
       <outfile xil_pn:name="microblaze.ngc"/>
       <outfile xil_pn:name="microblaze_axi4_0_wrapper.ncf"/>
@@ -340,7 +341,7 @@
       <outfile xil_pn:name="microblaze_push_buttons_4bits_wrapper.ngc"/>
       <outfile xil_pn:name="microblaze_rs232_uart_1_wrapper.ngc"/>
     </transform>
-    <transform xil_pn:end_ts="1575216501" xil_pn:in_ck="8895586743438979285" xil_pn:name="TRANEXT_xstsynthesize_spartan6" xil_pn:prop_ck="-4797023474037990079" xil_pn:start_ts="1575216446">
+    <transform xil_pn:end_ts="1576098124" xil_pn:in_ck="8895586743438979285" xil_pn:name="TRANEXT_xstsynthesize_spartan6" xil_pn:prop_ck="-4797023474037990079" xil_pn:start_ts="1576098059">
       <status xil_pn:value="SuccessfullyRun"/>
       <status xil_pn:value="WarningsGenerated"/>
       <status xil_pn:value="ReadyToRun"/>
@@ -362,32 +363,35 @@
       <status xil_pn:value="SuccessfullyRun"/>
       <status xil_pn:value="ReadyToRun"/>
     </transform>
-    <transform xil_pn:end_ts="1575555906" xil_pn:in_ck="-5861813939999422796" xil_pn:name="TRANEXT_ngdbuild_FPGA" xil_pn:prop_ck="-7103298731914979437" xil_pn:start_ts="1575555810">
+    <transform xil_pn:end_ts="1576098219" xil_pn:in_ck="894806485174734990" xil_pn:name="TRANEXT_ngdbuild_FPGA" xil_pn:prop_ck="-7103298731914979437" xil_pn:start_ts="1576098124">
       <status xil_pn:value="SuccessfullyRun"/>
       <status xil_pn:value="WarningsGenerated"/>
       <status xil_pn:value="ReadyToRun"/>
-      <status xil_pn:value="OutOfDateForInputs"/>
-      <status xil_pn:value="OutOfDateForOutputs"/>
-      <status xil_pn:value="InputRemoved"/>
-      <status xil_pn:value="OutputRemoved"/>
+      <outfile xil_pn:name="_ngo"/>
+      <outfile xil_pn:name="_xmsgs/ngdbuild.xmsgs"/>
+      <outfile xil_pn:name="microblaze.ncf"/>
+      <outfile xil_pn:name="microblaze_top.bld"/>
+      <outfile xil_pn:name="microblaze_top.ngd"/>
+      <outfile xil_pn:name="microblaze_top_ngdbuild.xrpt"/>
     </transform>
-    <transform xil_pn:end_ts="1575556326" xil_pn:in_ck="-1982953399006319999" xil_pn:name="TRANEXT_map_spartan6" xil_pn:prop_ck="4807565132092422995" xil_pn:start_ts="1575555906">
+    <transform xil_pn:end_ts="1576098558" xil_pn:in_ck="-1982953399006319999" xil_pn:name="TRANEXT_map_spartan6" xil_pn:prop_ck="4807565132092422995" xil_pn:start_ts="1576098219">
       <status xil_pn:value="SuccessfullyRun"/>
       <status xil_pn:value="WarningsGenerated"/>
-      <status xil_pn:value="NotReadyToRun"/>
-      <status xil_pn:value="OutOfDateForInputs"/>
-      <status xil_pn:value="OutOfDateForPredecessor"/>
-      <status xil_pn:value="OutOfDateForOutputs"/>
-      <status xil_pn:value="InputRemoved"/>
-      <status xil_pn:value="OutputRemoved"/>
+      <status xil_pn:value="ReadyToRun"/>
+      <outfile xil_pn:name="_xmsgs/map.xmsgs"/>
+      <outfile xil_pn:name="microblaze_top.pcf"/>
+      <outfile xil_pn:name="microblaze_top_map.map"/>
+      <outfile xil_pn:name="microblaze_top_map.mrp"/>
+      <outfile xil_pn:name="microblaze_top_map.ncd"/>
+      <outfile xil_pn:name="microblaze_top_map.ngm"/>
+      <outfile xil_pn:name="microblaze_top_map.xrpt"/>
+      <outfile xil_pn:name="microblaze_top_summary.xml"/>
+      <outfile xil_pn:name="microblaze_top_usage.xml"/>
     </transform>
-    <transform xil_pn:end_ts="1575556609" xil_pn:in_ck="1750103753833009690" xil_pn:name="TRANEXT_par_spartan6" xil_pn:prop_ck="3214117756270688487" xil_pn:start_ts="1575556326">
+    <transform xil_pn:end_ts="1576098856" xil_pn:in_ck="1750103753833009690" xil_pn:name="TRANEXT_par_spartan6" xil_pn:prop_ck="3214117756270688487" xil_pn:start_ts="1576098558">
       <status xil_pn:value="SuccessfullyRun"/>
       <status xil_pn:value="WarningsGenerated"/>
-      <status xil_pn:value="NotReadyToRun"/>
-      <status xil_pn:value="OutOfDateForInputs"/>
-      <status xil_pn:value="OutOfDateForPredecessor"/>
-      <status xil_pn:value="InputRemoved"/>
+      <status xil_pn:value="ReadyToRun"/>
       <outfile xil_pn:name="_xmsgs/par.xmsgs"/>
       <outfile xil_pn:name="microblaze_top.ncd"/>
       <outfile xil_pn:name="microblaze_top.pad"/>
@@ -399,11 +403,10 @@
       <outfile xil_pn:name="microblaze_top_pad.txt"/>
       <outfile xil_pn:name="microblaze_top_par.xrpt"/>
     </transform>
-    <transform xil_pn:end_ts="1575556708" xil_pn:in_ck="-1982953399006320131" xil_pn:name="TRANEXT_bitFile_spartan6" xil_pn:prop_ck="5341574683187206424" xil_pn:start_ts="1575556609">
+    <transform xil_pn:end_ts="1576098925" xil_pn:in_ck="-1982953399006320131" xil_pn:name="TRANEXT_bitFile_spartan6" xil_pn:prop_ck="5341574683187206424" xil_pn:start_ts="1576098856">
       <status xil_pn:value="SuccessfullyRun"/>
       <status xil_pn:value="WarningsGenerated"/>
       <status xil_pn:value="ReadyToRun"/>
-      <status xil_pn:value="OutOfDateForPredecessor"/>
       <outfile xil_pn:name="_xmsgs/bitgen.xmsgs"/>
       <outfile xil_pn:name="microblaze_top.bgn"/>
       <outfile xil_pn:name="microblaze_top.bit"/>
@@ -413,18 +416,14 @@
       <outfile xil_pn:name="webtalk.log"/>
       <outfile xil_pn:name="webtalk_pn.xml"/>
     </transform>
-    <transform xil_pn:end_ts="1575556716" xil_pn:in_ck="-2558171203062321156" xil_pn:name="TRAN_exportToSDK" xil_pn:prop_ck="4296800" xil_pn:start_ts="1575556708">
+    <transform xil_pn:end_ts="1576098960" xil_pn:in_ck="-2558171203062321156" xil_pn:name="TRAN_exportToSDK" xil_pn:prop_ck="4296800" xil_pn:start_ts="1576098925">
       <status xil_pn:value="SuccessfullyRun"/>
       <status xil_pn:value="ReadyToRun"/>
-      <status xil_pn:value="OutOfDateForPredecessor"/>
     </transform>
-    <transform xil_pn:end_ts="1575217158" xil_pn:in_ck="-1982953399006320131" xil_pn:name="TRAN_postRouteTrce" xil_pn:prop_ck="445577401284416185" xil_pn:start_ts="1575217129">
-      <status xil_pn:value="AbortedRun"/>
+    <transform xil_pn:end_ts="1576098856" xil_pn:in_ck="-1982953399006320131" xil_pn:name="TRAN_postRouteTrce" xil_pn:prop_ck="445577401284416185" xil_pn:start_ts="1576098824">
+      <status xil_pn:value="SuccessfullyRun"/>
       <status xil_pn:value="WarningsGenerated"/>
       <status xil_pn:value="ReadyToRun"/>
-      <status xil_pn:value="OutOfDateForInputs"/>
-      <status xil_pn:value="OutOfDateForPredecessor"/>
-      <status xil_pn:value="InputChanged"/>
       <outfile xil_pn:name="_xmsgs/trce.xmsgs"/>
       <outfile xil_pn:name="microblaze_top.twr"/>
       <outfile xil_pn:name="microblaze_top.twx"/>

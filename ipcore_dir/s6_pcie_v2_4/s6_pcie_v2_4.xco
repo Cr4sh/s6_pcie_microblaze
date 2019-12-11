@@ -1,7 +1,7 @@
 ##############################################################
 #
 # Xilinx Core Generator version 14.7
-# Date: Sun Dec 01 05:43:17 2019
+# Date: Wed Dec 11 20:05:02 2019
 #
 ##############################################################
 #
@@ -111,9 +111,9 @@ CSET device_specific_initialization=false
 CSET dsn_enabled=true
 CSET enable_aspm_l1_support=false
 CSET enable_slot_clock_cfg=false
-CSET expansion_rom_enabled=true
+CSET expansion_rom_enabled=false
 CSET expansion_rom_scale=Kilobytes
-CSET expansion_rom_size=512
+CSET expansion_rom_size=2
 CSET expose_unused_transceiver_ports=false
 CSET ext_pci_cfg_space=false
 CSET extended_tag_field=false
@@ -141,4 +141,4 @@ CSET xlnx_ref_board=SP605_Rev_A-D
 MISC pkg_timestamp=2013-10-13T18:02:40Z
 # END Extra information
 GENERATE
-# CRC:  d622eff
+# CRC: 734f6408
