@@ -13,7 +13,6 @@ PAGE_SIZE = 0x1000
 align_up = lambda x, a: ((x + a - 1) // a) * a
 align_down = lambda x, a: (x // a) * a
 
-
 FMT_3_NO_DATA = 0
 FMT_4_NO_DATA = 1
 FMT_3_DATA    = 2
@@ -22,7 +21,6 @@ FMT_4_DATA    = 3
 dev_id_decode = lambda val: ((val >> 8) & 0xff, (val >> 3) & 0x1f, (val >> 0) & 0x07)
 dev_id_encode = lambda bus, dev, func: ((bus << 8) | (dev << 3) | (func << 0))
 dev_id_str    = lambda bus, dev, func: '%.2x:%.2x.%x' % (bus, dev, func)
-
 
 def hexdump(data, width = 16, addr = 0):
 

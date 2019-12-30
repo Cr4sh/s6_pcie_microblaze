@@ -23,6 +23,7 @@ def main():
     options, _ = parser.parse_args()
     options.system_table = None if options.system_table is None else int(options.system_table, 16)
 
+    # inject DXE driver into the booting system
     dev = dxe_inject(payload = options.payload, system_table = options.system_table)
         
     if options.payload is None: return 0
@@ -96,3 +97,7 @@ def main():
 if __name__ == '__main__':
 
     exit(main())
+
+#
+# EoF
+#
