@@ -163,26 +163,39 @@ def main():
 
     print('[+] Opening device "%s"...' % dev)
 
+    # open serial port
+    fd = uart_open(dev, SERIAL_TIMEOUT)
+    fd.flush()
+
     if not console:
 
-        # open serial port
-        with uart_open(dev, SERIAL_TIMEOUT) as fd:
+        update_mode = False
+        
+        fd.timeout = 1
 
-            fd.flush()
+        for i in range(0, 3):
+
             fd.write(CTL_PING)
 
             # check for active flash update mode
-            if fd.read(1) != CTL_PING:
+            if fd.read(1) == CTL_PING:
 
-                print('ERROR: Target currently is not in update mode')
-                return -1
+                update_mode = True
+                break
+
+        fd.timeout = SERIAL_TIMEOUT
+                
+        if not update_mode:
+
+            print('ERROR: Target currently is not in update mode')
+            return -1
 
     if file_path is not None:
 
-        with open(file_path, 'rb') as fd:
+        with open(file_path, 'rb') as file:
 
             # read SREC image contents to flash
-            data = fd.read()
+            data = file.read()
 
         print('[+] Flasing %d bytes from "%s"...' % (len(data), file_path))
 
@@ -194,41 +207,36 @@ def main():
 
         print('[+] Exitting from update mode...')
 
-    # open serial port
-    with uart_open(dev, None) as fd:
+    if file_path is not None:
 
-        fd.flush()
+        # write SREC image into the flash
+        flash_write(fd, FLASH_IMAGE_START, data)
 
-        if file_path is not None:
+        print('[+] DONE')
 
-            # write SREC image into the flash
-            flash_write(fd, FLASH_IMAGE_START, data)
+    elif net_config is not None:
 
-            print('[+] DONE')
+        # write network configuration into the flash
+        update_config(fd, *net_config)
 
-        elif net_config is not None:
+        print('[+] DONE')
 
-            # write network configuration into the flash
-            update_config(fd, *net_config)
+    elif boot:
+    
+        # boot into the flashed SREC image
+        flash_mode_exit(fd)   
 
-            print('[+] DONE')
+    if boot or console:        
 
-        elif boot:
-        
-            # boot into the flashed SREC image
-            flash_mode_exit(fd)   
+        try:
 
-        if boot or console:        
+            while True: 
 
-            try:
+                sys.stdout.write(fd.read(1))
 
-                while True: 
+        except KeyboardInterrupt:
 
-                    sys.stdout.write(fd.read(1))
-
-            except KeyboardInterrupt:
-
-                pass    
+            pass    
 
     return 0
 
