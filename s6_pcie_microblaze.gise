@@ -281,7 +281,7 @@
       <status xil_pn:value="SuccessfullyRun"/>
       <status xil_pn:value="ReadyToRun"/>
     </transform>
-    <transform xil_pn:end_ts="1576095029" xil_pn:in_ck="796095987657293126" xil_pn:name="TRAN_regenerateCores" xil_pn:prop_ck="2442290497965387634" xil_pn:start_ts="1576095029">
+    <transform xil_pn:end_ts="1578682246" xil_pn:in_ck="796095987657293126" xil_pn:name="TRAN_regenerateCores" xil_pn:prop_ck="2442290497965387634" xil_pn:start_ts="1578682246">
       <status xil_pn:value="SuccessfullyRun"/>
       <status xil_pn:value="ReadyToRun"/>
     </transform>
@@ -297,7 +297,7 @@
       <status xil_pn:value="SuccessfullyRun"/>
       <status xil_pn:value="ReadyToRun"/>
     </transform>
-    <transform xil_pn:end_ts="1576098059" xil_pn:in_ck="-4616221804757754635" xil_pn:name="TRAN_platgen" xil_pn:prop_ck="-6780250332531540676" xil_pn:start_ts="1576096705">
+    <transform xil_pn:end_ts="1578683714" xil_pn:in_ck="-6172246470216933969" xil_pn:name="TRAN_platgen" xil_pn:prop_ck="-6780250332531540676" xil_pn:start_ts="1578682246">
       <status xil_pn:value="SuccessfullyRun"/>
       <status xil_pn:value="WarningsGenerated"/>
       <status xil_pn:value="ReadyToRun"/>
@@ -363,7 +363,7 @@
       <status xil_pn:value="SuccessfullyRun"/>
       <status xil_pn:value="ReadyToRun"/>
     </transform>
-    <transform xil_pn:end_ts="1576098219" xil_pn:in_ck="894806485174734990" xil_pn:name="TRANEXT_ngdbuild_FPGA" xil_pn:prop_ck="-7103298731914979437" xil_pn:start_ts="1576098124">
+    <transform xil_pn:end_ts="1578683838" xil_pn:in_ck="894806485174734990" xil_pn:name="TRANEXT_ngdbuild_FPGA" xil_pn:prop_ck="-7103298731914979437" xil_pn:start_ts="1578683714">
       <status xil_pn:value="SuccessfullyRun"/>
       <status xil_pn:value="WarningsGenerated"/>
       <status xil_pn:value="ReadyToRun"/>
@@ -374,7 +374,7 @@
       <outfile xil_pn:name="microblaze_top.ngd"/>
       <outfile xil_pn:name="microblaze_top_ngdbuild.xrpt"/>
     </transform>
-    <transform xil_pn:end_ts="1576098558" xil_pn:in_ck="-1982953399006319999" xil_pn:name="TRANEXT_map_spartan6" xil_pn:prop_ck="4807565132092422995" xil_pn:start_ts="1576098219">
+    <transform xil_pn:end_ts="1578684325" xil_pn:in_ck="-1982953399006319999" xil_pn:name="TRANEXT_map_spartan6" xil_pn:prop_ck="4807565132092422995" xil_pn:start_ts="1578683838">
       <status xil_pn:value="SuccessfullyRun"/>
       <status xil_pn:value="WarningsGenerated"/>
       <status xil_pn:value="ReadyToRun"/>
@@ -388,7 +388,7 @@
       <outfile xil_pn:name="microblaze_top_summary.xml"/>
       <outfile xil_pn:name="microblaze_top_usage.xml"/>
     </transform>
-    <transform xil_pn:end_ts="1576098856" xil_pn:in_ck="1750103753833009690" xil_pn:name="TRANEXT_par_spartan6" xil_pn:prop_ck="3214117756270688487" xil_pn:start_ts="1576098558">
+    <transform xil_pn:end_ts="1578685132" xil_pn:in_ck="1750103753833009690" xil_pn:name="TRANEXT_par_spartan6" xil_pn:prop_ck="3214117756270688487" xil_pn:start_ts="1578684325">
       <status xil_pn:value="SuccessfullyRun"/>
       <status xil_pn:value="WarningsGenerated"/>
       <status xil_pn:value="ReadyToRun"/>
@@ -403,7 +403,7 @@
       <outfile xil_pn:name="microblaze_top_pad.txt"/>
       <outfile xil_pn:name="microblaze_top_par.xrpt"/>
     </transform>
-    <transform xil_pn:end_ts="1576098925" xil_pn:in_ck="-1982953399006320131" xil_pn:name="TRANEXT_bitFile_spartan6" xil_pn:prop_ck="5341574683187206424" xil_pn:start_ts="1576098856">
+    <transform xil_pn:end_ts="1578685222" xil_pn:in_ck="-1982953399006320131" xil_pn:name="TRANEXT_bitFile_spartan6" xil_pn:prop_ck="5341574683187206424" xil_pn:start_ts="1578685132">
       <status xil_pn:value="SuccessfullyRun"/>
       <status xil_pn:value="WarningsGenerated"/>
       <status xil_pn:value="ReadyToRun"/>
@@ -416,11 +416,11 @@
       <outfile xil_pn:name="webtalk.log"/>
       <outfile xil_pn:name="webtalk_pn.xml"/>
     </transform>
-    <transform xil_pn:end_ts="1576098960" xil_pn:in_ck="-2558171203062321156" xil_pn:name="TRAN_exportToSDK" xil_pn:prop_ck="4296800" xil_pn:start_ts="1576098925">
+    <transform xil_pn:end_ts="1578685252" xil_pn:in_ck="-2558171203062321156" xil_pn:name="TRAN_exportToSDK" xil_pn:prop_ck="4296800" xil_pn:start_ts="1578685222">
       <status xil_pn:value="SuccessfullyRun"/>
       <status xil_pn:value="ReadyToRun"/>
     </transform>
-    <transform xil_pn:end_ts="1576098856" xil_pn:in_ck="-1982953399006320131" xil_pn:name="TRAN_postRouteTrce" xil_pn:prop_ck="445577401284416185" xil_pn:start_ts="1576098824">
+    <transform xil_pn:end_ts="1578685132" xil_pn:in_ck="-1982953399006320131" xil_pn:name="TRAN_postRouteTrce" xil_pn:prop_ck="445577401284416185" xil_pn:start_ts="1578685084">
       <status xil_pn:value="SuccessfullyRun"/>
       <status xil_pn:value="WarningsGenerated"/>
       <status xil_pn:value="ReadyToRun"/>

@@ -632,7 +632,7 @@ Also, `backdoor_client.exe` can inject dummy driver located in `payloads/DmaBack
 
 ## Option ROM attacks
 
-Alternative bitstream version `s6_pcie_microblaze_orom.bin`/`s6_pcie_microblaze_orom.mcs` can emulate PCI-E option ROM stored in onboard linear flash memory of SP605. Although modern platforms [mitigates](https://docs.microsoft.com/en-us/windows-hardware/manufacture/desktop/uefi-validation-option-rom-validation-guidance) option ROM [attacks](https://trmm.net/Thunderstrike), this feature still could be useful for security audit or prototyping purposes.
+Provided bitstream can emulate PCI-E option ROM stored in onboard linear flash memory of SP605. Although modern platforms [mitigates](https://docs.microsoft.com/en-us/windows-hardware/manufacture/desktop/uefi-validation-option-rom-validation-guidance) option ROM [attacks](https://trmm.net/Thunderstrike), this feature still could be useful for security audit or prototyping purposes.
 
 You can manage option ROM images using `pcie_rom_ctl.py` Python program.
 Erasing option ROM contents:

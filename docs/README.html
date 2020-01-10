@@ -644,7 +644,7 @@ EPT PDPTE 0x145f9000[0x0]: 0x14612007
 <p><a href="https://raw.githubusercontent.com/Cr4sh/s6_pcie_microblaze/master/docs/images/backdoor_vm_inject.png" target="_blank" rel="nofollow"><img src="https://raw.githubusercontent.com/Cr4sh/s6_pcie_microblaze/master/docs/images/backdoor_vm_inject.png" width="749" height="498" style="max-width:100%;"></a></p>
 <h2>
 <a id="user-content-option-rom-attacks" class="anchor" href="#option-rom-attacks" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Option ROM attacks</h2>
-<p>Alternative bitstream version <code>s6_pcie_microblaze_orom.bin</code>/<code>s6_pcie_microblaze_orom.mcs</code> can emulate PCI-E option ROM stored in onboard linear flash memory of SP605. Although modern platforms <a href="https://docs.microsoft.com/en-us/windows-hardware/manufacture/desktop/uefi-validation-option-rom-validation-guidance" rel="nofollow">mitigates</a> option ROM <a href="https://trmm.net/Thunderstrike" rel="nofollow">attacks</a>, this feature still could be useful for security audit or prototyping purposes.</p>
+<p>Provided bitstream can emulate PCI-E option ROM stored in onboard linear flash memory of SP605. Although modern platforms <a href="https://docs.microsoft.com/en-us/windows-hardware/manufacture/desktop/uefi-validation-option-rom-validation-guidance" rel="nofollow">mitigates</a> option ROM <a href="https://trmm.net/Thunderstrike" rel="nofollow">attacks</a>, this feature still could be useful for security audit or prototyping purposes.</p>
 <p>You can manage option ROM images using <code>pcie_rom_ctl.py</code> Python program.
 Erasing option ROM contents:</p>
 <pre><code>$ ./pcie_rom_ctl.py --erase
