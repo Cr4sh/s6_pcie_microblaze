@@ -10,6 +10,7 @@
   src/printf.c
   src/DmaBackdoorHv.c
   src/serial.c
+  src/std.c
 
 [Sources.X64]
   src/asm/amd64/common_asm.asm

