@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <fsl.h>
 
+#include "config.h"
 #include "axis_pcie.h"
 
 u32 axis_pcie_status(void)

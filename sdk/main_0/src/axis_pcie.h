@@ -3,12 +3,6 @@
 
 #define AXIS_PCIE_STATUS_BUS_ID(_val_) (((_val_) >> 0) & 0xffff)
 
-// ID of AXI stream device used to obtain PCI-E hard IP block status
-#define AXIS_PCIE_DEV_ID_STATUS 0
-
-// ID of AXI stream device used to access PCI-E config space
-#define AXIS_PCIE_DEV_ID_CONFIG 1
-
 // get register number from register address
 #define AXIS_PCIE_CFG_ADDR(_addr_) ((_addr_) / 4)
 

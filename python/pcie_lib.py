@@ -265,7 +265,7 @@ class LinkLayer(object):
 
     RECV_TIMEOUT = 3
 
-    ROM_MAX_SIZE = 0x80000
+    ROM_MAX_SIZE = 0x200000
     ROM_CHUNK_LEN = 0x20
 
     status_bus_id = lambda self, s: (s >> 0) & 0xffff

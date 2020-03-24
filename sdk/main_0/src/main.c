@@ -6,7 +6,6 @@
 #include <netif/xadapter.h>
 
 #include "platform.h"
-#include "platform_config.h"
 #include "config.h"
 #include "pcie_to_tcp.h"
 #include "axi_dma.h"
@@ -31,7 +30,7 @@ int main(void)
     unsigned char mac_ethernet_address[] = SERVER_MAC;
 
     netif = &server_netif;
-    netcfg = (NET_CONFIG *)FLASH_IMAGE_BASEADDR;
+    netcfg = (NET_CONFIG *)BASE_ADDR_FLASH;
 
     init_platform();    
 
@@ -68,7 +67,7 @@ int main(void)
     lwip_init();
 
      // add network interface to the netif_list, and set it as default
-    if (!xemac_add(netif, &ipaddr, &netmask, &gw, mac_ethernet_address, PLATFORM_EMAC_BASEADDR)) 
+    if (!xemac_add(netif, &ipaddr, &netmask, &gw, mac_ethernet_address, BASE_ADDR_ETHERNET)) 
     {
         xil_printf("xemac_add() ERROR\n");
         return -1;

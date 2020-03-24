@@ -125,21 +125,15 @@ void axi_dma_isr_rx(void *Param)
 int axi_dma_initialize_interrupts(u32 BaseAddr, XAxiDma *AxiDma)
 {   
     // register transmit ISR
-    XIntc_RegisterHandler(
-        BaseAddr,
-        XPAR_INTC_0_AXIDMA_0_MM2S_INTROUT_VEC_ID, axi_dma_isr_tx, AxiDma
-    );
+    XIntc_RegisterHandler(BaseAddr, VEC_ID_AXI_DMA_TX, axi_dma_isr_tx, AxiDma);
 
     // register receive ISR
-    XIntc_RegisterHandler(
-        BaseAddr,
-        XPAR_INTC_0_AXIDMA_0_S2MM_INTROUT_VEC_ID, axi_dma_isr_rx, AxiDma
-    );
+    XIntc_RegisterHandler(BaseAddr, VEC_ID_AXI_DMA_RX, axi_dma_isr_rx, AxiDma);
 
     u32 Mask = XIntc_In32(BaseAddr + XIN_IER_OFFSET);
 
-    Mask |= (1 << XPAR_INTC_0_AXIDMA_0_MM2S_INTROUT_VEC_ID);
-    Mask |= (1 << XPAR_INTC_0_AXIDMA_0_S2MM_INTROUT_VEC_ID);
+    Mask |= (1 << VEC_ID_AXI_DMA_TX);
+    Mask |= (1 << VEC_ID_AXI_DMA_RX);
 
     // enable interrupts
     XIntc_EnableIntr(BaseAddr, Mask);
@@ -153,7 +147,7 @@ int axi_dma_initialize(void)
 
     xil_printf("Initializing DMA...\n");
 
-    XAxiDma_Config *Config = XAxiDma_LookupConfig(XPAR_AXI_DMA_0_DEVICE_ID);
+    XAxiDma_Config *Config = XAxiDma_LookupConfig(DEVICE_ID_AXI_DMA);
     if (Config == NULL)
     {
         xil_printf("ERROR: XAxiDma_LookupConfig() fails\n");
@@ -172,7 +166,7 @@ int axi_dma_initialize(void)
     xil_printf("Initializing interrupts...\n");
 
     // set up interrupt controller
-    if (axi_dma_initialize_interrupts(XPAR_MICROBLAZE_0_INTC_BASEADDR, &m_AxiDma) != XST_SUCCESS)
+    if (axi_dma_initialize_interrupts(BASE_ADDR_INTC, &m_AxiDma) != XST_SUCCESS)
     {
         return XST_FAILURE;
     }

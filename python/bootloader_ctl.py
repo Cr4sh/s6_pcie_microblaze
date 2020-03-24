@@ -1,8 +1,15 @@
 #!/usr/bin/env python
 
 import sys, os
-import serial
 from struct import pack, unpack
+
+try:
+
+    import serial
+
+except ImportError:
+
+    raise(Exception('pyserial is not installed'))
 
 SERIAL_BAUDRATE = 115200
 SERIAL_TIMEOUT = 5 # in seconds
