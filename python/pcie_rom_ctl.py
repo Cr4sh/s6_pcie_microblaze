@@ -41,37 +41,37 @@ def main():
 
     if options.load is not None or options.erase:
 
-        print('[+] Erasing option ROM...')
+        print('[+] Erasing ROM...')
 
-        # erase option ROM contents
+        # erase ROM contents
         dev.rom_erase()
 
     if options.load is not None:
 
         with open(options.load, 'rb') as fd:
             
-            # read option ROM contents from file
+            # read ROM contents from file
             data = fd.read()
 
-        if len(data) > dev.OPTION_ROM_MAX_SIZE:
+        if len(data) > dev.ROM_MAX_SIZE:
 
-            print('ERROR: Specified option ROM is too large')
+            print('ERROR: Specified ROM is too large')
             return -1
 
-        print('[+] Loading %d bytes of option ROM...' % len(data))
+        print('[+] Loading %d bytes of ROM...' % len(data))
 
-        # write option ROM to the device
+        # write ROM to the device
         dev.rom_load(data)
 
     if options.log_on:
 
-        print('[+] Enabling option ROM access log...')
+        print('[+] Enabling ROM access log...')
 
         dev.set_rom_log(True)
 
     elif options.log_off:
 
-        print('[+] Disabling option ROM access log...')
+        print('[+] Disabling ROM access log...')
 
         dev.set_rom_log(False)
 

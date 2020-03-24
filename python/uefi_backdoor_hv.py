@@ -100,7 +100,7 @@ def main():
 
         if hv_vmexit == 0:
 
-            printf('ERROR: Unable to locate Hyper-V VM exit handler')
+            print('ERROR: Unable to locate Hyper-V VM exit handler')
 
         break
 

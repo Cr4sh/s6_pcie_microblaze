@@ -4,9 +4,9 @@ import sys, os, time, socket, signal, unittest
 from struct import pack, unpack
 from threading import Thread
 from multiprocessing.dummy import Pool as ThreadPool
+from abc import ABCMeta, abstractmethod
 
-from pcie_lib_config import Conf
-
+from pcie_lib_config import Conf, DEVICE_TYPE_TCP, DEVICE_TYPE_SERIAL
 
 PAGE_SIZE = 0x1000
 
@@ -54,7 +54,29 @@ def hexdump(data, width = 16, addr = 0):
     return ret
 
 
-class Socket(object):
+class Device(object):
+
+    __metaclass__ = ABCMeta
+
+    class Timeout(Exception): pass
+
+    @abstractmethod
+    def read(self, size, timeout = None):
+
+        pass
+
+    @abstractmethod
+    def write(self, data):
+
+        pass
+
+    @abstractmethod
+    def close(self):
+
+        pass
+
+
+class Socket(Device):
 
     def __init__(self, addr):
 
@@ -73,12 +95,20 @@ class Socket(object):
 
         self.sock.settimeout(timeout)
 
-        while len(ret) < size:
-            
-            data = self.sock.recv(size - len(ret))
-            assert len(data) > 0
+        try:
 
-            ret += data
+            while len(ret) < size:
+                
+                # receive needed amount of data
+                data = self.sock.recv(size - len(ret))
+                assert len(data) > 0
+
+                ret += data
+
+        except socket.timeout:
+
+            # timeout occurred
+            raise(self.Timeout())
 
         if timeout is not None:
 
@@ -97,12 +127,64 @@ class Socket(object):
         if self.sock is not None:
 
             self.sock.close()
-            self.sock = None    
+            self.sock = None   
 
 
-class LinkLayer(Socket):
+class Serial(Device):
 
-    env_target_addr = 'TARGET_ADDR'
+    def __init__(self, device, baud):
+
+        try:
+
+            import serial
+
+        except ImportError:
+
+            raise(Exception('pyserial is not installed'))
+
+        self.device = serial.Serial(device, baud, timeout = 0)
+        self.device.flush()
+
+    def read(self, size, timeout = None):
+
+        ret, started = '', time.time()
+
+        assert self.device is not None
+
+        while len(ret) < size:
+
+            if timeout is not None:
+
+                if time.time() - started > timeout:
+
+                    # timeout occurred
+                    raise(self.Timeout())
+            
+            # receive needed amount of data
+            ret += self.device.read(size - len(ret))
+
+        return ret
+
+    def write(self, data):
+
+        assert self.device is not None        
+
+        while len(data) > 0:
+            
+            size = self.device.write(data)
+            data = data[size :]
+
+    def close(self):
+
+        if self.device is not None:
+
+            self.device.close()
+            self.device = None   
+
+
+class LinkLayer(object):
+
+    ENV_DEVICE = 'DEVICE'
 
     #
     # protocol control codes
@@ -183,8 +265,8 @@ class LinkLayer(Socket):
 
     RECV_TIMEOUT = 3
 
-    OPTION_ROM_MAX_SIZE = 0x80000
-    OPTION_ROM_CHUNK_LEN = 0x20
+    ROM_MAX_SIZE = 0x80000
+    ROM_CHUNK_LEN = 0x20
 
     status_bus_id = lambda self, s: (s >> 0) & 0xffff
 
@@ -192,26 +274,31 @@ class LinkLayer(Socket):
 
     class ErrorTimeout(Exception): pass
 
-    def __init__(self, addr = None, bus_id = None, verbose = False, force = False, timeout = None):
+    def __init__(self, device = None, bus_id = None, verbose = False, force = False, timeout = None):
 
         self.bus_id, self.verbose = bus_id, verbose
         self.timeout = self.RECV_TIMEOUT if timeout is None else timeout
 
-        if addr is None:
+        if Conf.device_type == DEVICE_TYPE_TCP:
 
-            try:
+            self._init_tcp(device)
 
-                host, port = os.getenv(self.env_target_addr).strip().split(':')
-                addr = ( host, int(port) )
+        elif Conf.device_type == DEVICE_TYPE_SERIAL:
 
-            except: pass
+            self._init_serial(device)
 
-        super(LinkLayer, self).__init__(addr = Conf.PCIE_TO_TCP_ADDR if addr is None else addr)
-        
+        else:
+
+            raise(Exception('Unknown device type'))
+
+        # check connection        
+        self.ping()
+
         if self.bus_id is None:
 
             # obtain bus id from the device
             bus_id = self.get_bus_id()
+
             if bus_id != 0:
 
                 self.bus_id = dev_id_decode(bus_id)
@@ -219,14 +306,43 @@ class LinkLayer(Socket):
             elif not force:
 
                 raise(self.ErrorNotReady('PCI-E endpoint is not configured by root complex yet'))            
-        
-    def _read(self, timeout = None):
 
-        return unpack('=BB', super(LinkLayer, self).read(1 + 1, timeout = timeout))
+    def _init_tcp(self, device):
+
+        if device is None:
+
+            try:
+
+                # obtain device address from environment variable
+                host, port = os.getenv(self.ENV_DEVICE).strip().split(':')
+                device = ( host, int(port) )
+
+            except: pass
+
+        # initialize TCP based device
+        self.device = Socket(addr = Conf.addr if device is None else device)
+
+    def _init_serial(self, device):
+
+        if device is None:
+
+            try:
+
+                # obtain device name from environment variable
+                device = os.getenv(self.ENV_DEVICE).strip()
+
+            except: pass            
+
+        # initialize serial based device
+        self.device = Serial(device = Conf.device if device is None else device, baud = Conf.baud)
+        
+    def _read(self):
+
+        return unpack('=BB', self.device.read(1 + 1, timeout = self.timeout))
 
     def _write(self, *args):
 
-        super(LinkLayer, self).write(pack('=BB', *args))
+        self.device.write(pack('=BB', *args))
 
     def set_timeout(self, timeout):
 
@@ -239,7 +355,7 @@ class LinkLayer(Socket):
 
     def set_rom_log(self, on):
 
-        # send option ROM access log configuration request
+        # send ROM access log configuration request
         self._write(self.CTL_ROM_LOG_ON if on else self.CTL_ROM_LOG_OFF, 0)
 
     def test(self, test_size):
@@ -253,15 +369,21 @@ class LinkLayer(Socket):
         assert code == self.CTL_SUCCESS and size == test_size
 
         # receive reply data
-        return super(LinkLayer, self).read(size)
+        return self.device.read(size, timeout = self.timeout)
 
     def ping(self):
 
         # send ping request
         self._write(self.CTL_PING, 0)
 
-        # receive reply
-        code, size = self._read()
+        try:
+
+            # receive reply
+            code, size = self._read()
+
+        except self.device.Timeout:
+
+            raise(self.ErrorTimeout('Device timeout occurred'))
 
         assert code == self.CTL_SUCCESS and size == 0
 
@@ -286,7 +408,7 @@ class LinkLayer(Socket):
         assert code == self.CTL_SUCCESS and size == 4
 
         # receive reply data
-        return unpack('<I', super(LinkLayer, self).read(size))[0]
+        return unpack('<I', self.device.read(size, timeout = self.timeout))[0]
 
     def get_bus_id(self):
 
@@ -302,17 +424,21 @@ class LinkLayer(Socket):
         try:
 
             # receive reply
-            code, size = self._read(timeout = self.timeout)
+            code, size = self._read()
 
-        except socket.timeout:
+        except self.device.Timeout:
 
-            raise(self.ErrorTimeout('TLP read timeout occured'))
+            raise(self.ErrorTimeout('TLP read timeout occurred'))
+
+        if code == self.CTL_ERROR_TIMEOUT:
+
+            raise(self.ErrorTimeout('TLP read timeout occurred'))
 
         assert code == self.CTL_TLP_RECV
         assert size > 8 and size % 4 == 0
 
         # receive reply data
-        data = super(LinkLayer, self).read(size)
+        data = self.device.read(size, timeout = self.timeout)
 
         for i in range(0, size / 4):
 
@@ -332,7 +458,7 @@ class LinkLayer(Socket):
             # send request data
             buff += pack('<I', data[i])
 
-        super(LinkLayer, self).write(buff)
+        self.device.write(buff)
 
         # receive reply
         code, size = self._read()
@@ -356,7 +482,7 @@ class LinkLayer(Socket):
         for i in range(0, 2):
 
             # send config space read request
-            super(LinkLayer, self).write(pack('<BBI', self.CTL_CONFIG, 4, reg_num + i))
+            self.device.write(pack('<BBI', self.CTL_CONFIG, 4, reg_num + i))
 
             # receive reply
             code, size = self._read()
@@ -364,7 +490,7 @@ class LinkLayer(Socket):
             assert code == self.CTL_SUCCESS and size == 4
 
             # receive reply data
-            data += super(LinkLayer, self).read(size)
+            data += self.device.read(size, timeout = self.timeout)
 
         # get register value from readed data
         data = data[reg_off : reg_off + cfg_size]
@@ -388,16 +514,16 @@ class LinkLayer(Socket):
     def rom_load(self, data):
 
         chunk_ptr = 0
-        chunk_len = self.OPTION_ROM_CHUNK_LEN
+        chunk_len = self.ROM_CHUNK_LEN
 
         while len(data) > 0:
             
             chunk = data[: chunk_len]
 
-            # option ROM write request
+            # ROM write request
             buff = pack('<BBI', self.CTL_ROM_WRITE, len(chunk), chunk_ptr) + chunk
 
-            super(LinkLayer, self).write(buff)
+            self.device.write(buff)
 
             # receive reply
             code, size = self._read()
@@ -410,13 +536,17 @@ class LinkLayer(Socket):
 
     def rom_erase(self):
 
-        # send option ROM erase request
+        # send ROM erase request
         self._write(self.CTL_ROM_ERASE, 0)
 
         # receive reply
         code, size = self._read()
 
-        assert code == self.CTL_SUCCESS and size == 0    
+        assert code == self.CTL_SUCCESS and size == 0   
+
+    def close(self):
+
+        self.device.close()
 
 
 class LinkLayerTest(unittest.TestCase):
@@ -467,7 +597,7 @@ def tlp_type_from_name(name):
 
 class TransactionLayer(LinkLayer):
 
-    env_debug_tlp = 'DEBUG_TLP'
+    ENV_DEBUG_TLP = 'DEBUG_TLP'
 
     #
     # Maximum bytes of data per each MWr and MRd TLP
@@ -476,9 +606,7 @@ class TransactionLayer(LinkLayer):
     MEM_RD_TLP_LEN = 0x40
 
     # align memory reads and writes
-    MEM_ALIGN = 0x40
-
-    log_all = lambda self: os.getenv(self.env_debug_tlp) is not None
+    MEM_ALIGN = 0x40    
 
     mem_write_1 = lambda self, addr, v: self.mem_write(addr, pack('B', v))
     mem_write_2 = lambda self, addr, v: self.mem_write(addr, pack('H', v))
@@ -853,6 +981,17 @@ class TransactionLayer(LinkLayer):
                    (self.h_tag, self.h_byte_count, dev_id_str(*self.h_requester), \
                                                    dev_id_str(*self.h_completer))    
 
+    def log_all(self): 
+
+        try:
+
+            val = os.getenv(self.ENV_DEBUG_TLP)
+            if val is not None:
+
+                return int(val) != 0
+
+        except: pass
+        return False
 
     def read(self, raw = False):
 
