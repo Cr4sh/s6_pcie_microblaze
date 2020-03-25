@@ -19,6 +19,38 @@ AXI_DMA_HANDLER m_handler_rx = NULL;
 // send complete handler
 AXI_DMA_HANDLER m_handler_tx = NULL;
 
+static int m_queued_rx = 0, m_queued_tx = 0;
+
+static void axi_dma_interrupts_disable(void)
+{
+    // disable all interrupts
+    XAxiDma_IntrDisable(&m_AxiDma, XAXIDMA_IRQ_ALL_MASK, XAXIDMA_DMA_TO_DEVICE);
+    XAxiDma_IntrDisable(&m_AxiDma, XAXIDMA_IRQ_ALL_MASK, XAXIDMA_DEVICE_TO_DMA);
+}
+
+static void axi_dma_interrupts_enable(void)
+{
+    // enable all interrupts
+    XAxiDma_IntrEnable(&m_AxiDma, XAXIDMA_IRQ_ALL_MASK, XAXIDMA_DMA_TO_DEVICE);
+    XAxiDma_IntrEnable(&m_AxiDma, XAXIDMA_IRQ_ALL_MASK, XAXIDMA_DEVICE_TO_DMA);
+}
+
+void axi_dma_reset(void)
+{
+    m_queued_rx = m_queued_tx = 0;
+    m_handler_rx = m_handler_tx = NULL;    
+
+    XAxiDma_Reset(&m_AxiDma);
+
+    while (XAxiDma_ResetIsDone(&m_AxiDma) == 0)
+    {
+        // wait for reset
+    }
+   
+    axi_dma_interrupts_disable();
+    axi_dma_interrupts_enable();  
+}
+
 void axi_dma_isr_tx(void *Param)
 {
     XAxiDma *AxiDma = (XAxiDma *)Param;
@@ -40,32 +72,26 @@ void axi_dma_isr_tx(void *Param)
     {
         xil_printf("isr_dma_tx(): IRQ error\n");
 
-        // reset transmit channel
-        XAxiDma_Reset(&m_AxiDma);
-
-        while (XAxiDma_ResetIsDone(&m_AxiDma) == 0)
-        {
-            // wait for reset
-        }
-
-        m_handler_tx = NULL;
+        // reset DMA engine
+        axi_dma_reset();
         return;
     }
 
     // transmit completed
     if (IrqStatus & (XAXIDMA_IRQ_DELAY_MASK | XAXIDMA_IRQ_IOC_MASK))
     {
+        AXI_DMA_HANDLER handler = m_handler_tx;
 
 #ifdef VERBOSE
 
         xil_printf("isr_dma_tx(): transmit completed\n");
 #endif
-        if (m_handler_tx)
-        {
-            AXI_DMA_HANDLER handler = m_handler_tx;
+        m_queued_tx = 0;
+        m_handler_tx = NULL;
 
-            m_handler_tx = NULL;
-            
+        if (handler)
+        {
+            // call user handler
             handler();            
         }
     }
@@ -92,31 +118,25 @@ void axi_dma_isr_rx(void *Param)
     {
         xil_printf("isr_dma_rx(): IRQ error\n");
 
-        // reset transmit channel
-        XAxiDma_Reset(&m_AxiDma);
-
-        while (XAxiDma_ResetIsDone(&m_AxiDma) == 0)
-        {
-            // wait for reset
-        }
-
-        m_handler_rx = NULL;
+        // reset DMA engine
+        axi_dma_reset();
         return;
     }
 
     if (IrqStatus & (XAXIDMA_IRQ_DELAY_MASK | XAXIDMA_IRQ_IOC_MASK))
     {
+        AXI_DMA_HANDLER handler = m_handler_rx;
 
 #ifdef VERBOSE
 
         xil_printf("isr_dma_rx(): receive completed\n");
 #endif
-        if (m_handler_rx)
-        {
-            AXI_DMA_HANDLER handler = m_handler_rx;
+        m_queued_rx = 0;
+        m_handler_rx = NULL;
 
-            m_handler_rx = NULL;
-            
+        if (handler)
+        {
+            // call user handler
             handler();            
         }
     }
@@ -125,15 +145,21 @@ void axi_dma_isr_rx(void *Param)
 int axi_dma_initialize_interrupts(u32 BaseAddr, XAxiDma *AxiDma)
 {   
     // register transmit ISR
-    XIntc_RegisterHandler(BaseAddr, VEC_ID_AXI_DMA_TX, axi_dma_isr_tx, AxiDma);
+    XIntc_RegisterHandler(
+        BaseAddr,
+        XPAR_INTC_0_AXIDMA_0_MM2S_INTROUT_VEC_ID, axi_dma_isr_tx, AxiDma
+    );
 
     // register receive ISR
-    XIntc_RegisterHandler(BaseAddr, VEC_ID_AXI_DMA_RX, axi_dma_isr_rx, AxiDma);
+    XIntc_RegisterHandler(
+        BaseAddr,
+        XPAR_INTC_0_AXIDMA_0_S2MM_INTROUT_VEC_ID, axi_dma_isr_rx, AxiDma
+    );
 
     u32 Mask = XIntc_In32(BaseAddr + XIN_IER_OFFSET);
 
-    Mask |= (1 << VEC_ID_AXI_DMA_TX);
-    Mask |= (1 << VEC_ID_AXI_DMA_RX);
+    Mask |= (1 << XPAR_INTC_0_AXIDMA_0_MM2S_INTROUT_VEC_ID);
+    Mask |= (1 << XPAR_INTC_0_AXIDMA_0_S2MM_INTROUT_VEC_ID);
 
     // enable interrupts
     XIntc_EnableIntr(BaseAddr, Mask);
@@ -143,11 +169,12 @@ int axi_dma_initialize_interrupts(u32 BaseAddr, XAxiDma *AxiDma)
 
 int axi_dma_initialize(void)
 {
+    m_queued_rx = m_queued_tx = 0;
     m_handler_rx = m_handler_tx = NULL;
 
     xil_printf("Initializing DMA...\n");
 
-    XAxiDma_Config *Config = XAxiDma_LookupConfig(DEVICE_ID_AXI_DMA);
+    XAxiDma_Config *Config = XAxiDma_LookupConfig(XPAR_AXI_DMA_0_DEVICE_ID);
     if (Config == NULL)
     {
         xil_printf("ERROR: XAxiDma_LookupConfig() fails\n");
@@ -166,30 +193,26 @@ int axi_dma_initialize(void)
     xil_printf("Initializing interrupts...\n");
 
     // set up interrupt controller
-    if (axi_dma_initialize_interrupts(BASE_ADDR_INTC, &m_AxiDma) != XST_SUCCESS)
+    if (axi_dma_initialize_interrupts(XPAR_MICROBLAZE_0_INTC_BASEADDR, &m_AxiDma) != XST_SUCCESS)
     {
         return XST_FAILURE;
     }
 
-    // disable all interrupts
-    XAxiDma_IntrDisable(&m_AxiDma, XAXIDMA_IRQ_ALL_MASK, XAXIDMA_DMA_TO_DEVICE);
-    XAxiDma_IntrDisable(&m_AxiDma, XAXIDMA_IRQ_ALL_MASK, XAXIDMA_DEVICE_TO_DMA);
-
-    // enable all interrupts
-    XAxiDma_IntrEnable(&m_AxiDma, XAXIDMA_IRQ_ALL_MASK, XAXIDMA_DMA_TO_DEVICE);
-    XAxiDma_IntrEnable(&m_AxiDma, XAXIDMA_IRQ_ALL_MASK, XAXIDMA_DEVICE_TO_DMA);
+    axi_dma_interrupts_disable();
+    axi_dma_interrupts_enable();
 
     return XST_SUCCESS;
 }
 
 int axi_dma_queue_tx(void *buff, u32 size, AXI_DMA_HANDLER handler)
 {
-    if (m_handler_tx != NULL)
+    if (axi_dma_queued_tx())
     {
         xil_printf("axi_dma_queue_tx() ERROR: Busy\n");
         return XST_FAILURE;
     }
 
+    m_queued_tx += 1;
     m_handler_tx = handler;
 
     // start transmit transfer
@@ -204,12 +227,13 @@ int axi_dma_queue_tx(void *buff, u32 size, AXI_DMA_HANDLER handler)
 
 int axi_dma_queue_rx(void *buff, u32 size, AXI_DMA_HANDLER handler)
 {
-    if (m_handler_rx != NULL)
+    if (axi_dma_queued_rx())
     {
         xil_printf("axi_dma_queue_rx() ERROR: Busy\n");
         return XST_FAILURE;
     }
 
+    m_queued_rx += 1;
     m_handler_rx = handler;
 
     // start receive transfer
@@ -222,22 +246,22 @@ int axi_dma_queue_rx(void *buff, u32 size, AXI_DMA_HANDLER handler)
     return XST_SUCCESS;
 }
 
-bool axi_dma_queued_tx(void)
+inline bool axi_dma_queued_tx(void)
 {
-    return m_handler_tx != NULL;
+    return m_queued_tx != 0;
 }
 
-bool axi_dma_queued_rx(void)
+inline bool axi_dma_queued_rx(void)
 {
-    return m_handler_rx != NULL;
+    return m_queued_rx != 0;
 }
 
-void axi_dma_wait_tx(void)
+inline void axi_dma_wait_tx(void)
 {
-    while (m_handler_tx != NULL) {}
+    while (axi_dma_queued_tx()) {}
 }
 
-void axi_dma_wait_rx(void)
+inline void axi_dma_wait_rx(void)
 {
-    while (m_handler_rx != NULL) {}
+    while (axi_dma_queued_rx()) {}
 }

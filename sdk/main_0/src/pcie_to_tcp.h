@@ -33,7 +33,7 @@ typedef struct _PROT_CTL_ROM
 
 } __attribute__((packed)) PROT_CTL_ROM;
 
-#define PROT_MAX_PACKET_SIZE 0x100
+#define PROT_MAX_PACKET_SIZE 0xff
 
 int dma_tx_queue(u8 *data, u32 size);
 

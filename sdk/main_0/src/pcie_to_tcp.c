@@ -16,6 +16,9 @@
 #include "axis_pcie.h"
 #include "flash.h"
 
+#define MIN(_a_, _b_) (((_a_) < (_b_)) ? (_a_) : (_b_))
+#define MAX(_a_, _b_) (((_a_) > (_b_)) ? (_a_) : (_b_))
+
 #ifdef __arm__
 
 extern volatile int TcpFastTimer;
@@ -30,8 +33,15 @@ bool m_resident = false, m_verbose = false;
 
 u8 *m_option_rom = (u8 *)BASE_ADDR_OPTION_ROM;
 
+// DMA transmit/receive buffers
 u8 m_buffer_rx[PROT_MAX_PACKET_SIZE];
 u8 m_buffer_tx[PROT_MAX_PACKET_SIZE];
+
+// protocol receive buffer
+u8 m_buffer_recv[sizeof(PROT_CTL) + PROT_MAX_PACKET_SIZE];
+
+u32 m_bytes_have = 0;
+u32 m_bytes_need = sizeof(PROT_CTL);
 
 void dma_rx_callback(void);
 void dma_tx_callback(void);
@@ -179,34 +189,14 @@ void dma_tx_callback(void)
     
 }
 
-err_t recv_callback(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, err_t err)
-{
-    u8 buff[sizeof(PROT_CTL) + PROT_MAX_PACKET_SIZE];
-    PROT_CTL *request = NULL, *reply = (PROT_CTL *)&buff;
+void handle_request(struct tcp_pcb *tpcb, PROT_CTL *request)
+{    
+    u8 buffer[sizeof(PROT_CTL) + PROT_MAX_PACKET_SIZE];
+    PROT_CTL *reply = (PROT_CTL *)&buffer;
     bool ignore = false;
-
-    // do not read the packet if we are not in ESTABLISHED state
-    if (!p) 
-    {
-        tcp_close(tpcb);
-        tcp_recv(tpcb, NULL);
-
-        return ERR_OK;
-    }
-
-    // indicate that the packet has been received
-    tcp_recved(tpcb, p->len);
-
-#ifdef VERBOSE
-
-    xil_printf("recv_callback(): len = %d (max = %d)\n", p->len, tcp_sndbuf(tpcb));
-
-#endif
 
     reply->code = PROT_CTL_ERROR_FAILED;
     reply->size = 0;
-
-    request = (PROT_CTL *)p->payload;
 
     // dispatch client request
     switch (request->code)
@@ -301,8 +291,8 @@ err_t recv_callback(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, err_t err)
 
                 memcpy(&cfg_addr, request->data, sizeof(u32));
 
-            	// read PCI-E config space
-            	cfg_data = axis_pcie_read_config(cfg_addr);
+                // read PCI-E config space
+                cfg_data = axis_pcie_read_config(cfg_addr);
 
                 memcpy(reply->data, &cfg_data, sizeof(u32));
 
@@ -319,11 +309,8 @@ err_t recv_callback(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, err_t err)
 
     case PROT_CTL_TEST:
         {
-            if (request->size < PROT_MAX_PACKET_SIZE)
-            {
-                reply->size = request->size;
-                reply->code = PROT_CTL_SUCCESS;
-            }
+            reply->size = PROT_MAX_PACKET_SIZE;
+            reply->code = PROT_CTL_SUCCESS;
 
             break;
         }
@@ -432,11 +419,64 @@ err_t recv_callback(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, err_t err)
 
     if (!ignore)
     {
+        err_t err;
+
         // send reply to the client
-        if ((err = tcp_write(tpcb, (void *)buff, sizeof(PROT_CTL) + reply->size, TCP_WRITE_FLAG_COPY)) != ERR_OK)
+        if ((err = tcp_write(tpcb, (void *)buffer, sizeof(PROT_CTL) + reply->size, TCP_WRITE_FLAG_COPY)) != ERR_OK)
         {
             xil_printf("tcp_write() ERROR %d\n", err);   
         }
+    }
+
+    // receive next request
+    m_bytes_have = 0;
+    m_bytes_need = sizeof(PROT_CTL);
+}
+
+err_t recv_callback(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, err_t err)
+{
+    u32 copied = 0;
+
+    // do not read the packet if we are not in ESTABLISHED state
+    if (!p) 
+    {
+        tcp_close(tpcb);
+        tcp_recv(tpcb, NULL);
+
+        return ERR_OK;
+    }
+
+    // indicate that the packet has been received
+    tcp_recved(tpcb, p->len);
+
+#ifdef VERBOSE
+
+    xil_printf("recv_callback(): len = %d (max = %d)\n", p->len, tcp_sndbuf(tpcb));
+
+#endif
+
+    while (copied < p->len)
+    {
+        PROT_CTL *request = (PROT_CTL *)&m_buffer_recv;
+        u32 len = MIN(m_bytes_need - m_bytes_have, p->len - copied);
+
+        // copy available amount of bytes to the request buffer
+        memcpy(m_buffer_recv + m_bytes_have, p->payload + copied, len);
+        m_bytes_have += len;
+
+        if (m_bytes_have == sizeof(PROT_CTL))
+        {
+            // determine full request length
+            m_bytes_need += request->size;
+        }
+
+        if (m_bytes_need == m_bytes_have)
+        {
+            // handle receied request
+            handle_request(tpcb, request);
+        }
+        
+        copied += len;
     }
 
     // free the received pbuf

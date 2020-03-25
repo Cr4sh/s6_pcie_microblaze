@@ -5,6 +5,7 @@ from struct import pack, unpack
 
 from pcie_lib import *
 
+RETRY_WAIT = 2
 
 # physical address where DXE driver will be loaded
 BACKDOOR_ADDR = 0x10000
@@ -237,21 +238,21 @@ def dxe_inject(payload = None, payload_data = None, system_table = None, status_
         except LinkLayer.ErrorNotReady as e: 
 
             # link not redy
-            if retry % 20 == 0: print('[!] ' + str(e))
+            print('[!] ' + str(e))
 
         except LinkLayer.ErrorTimeout as e:
 
             # TLP reply timeout
-            if retry % 20 == 0: print('[!] ' + str(e))
+            print('[!] ' + str(e))
 
         except TransactionLayer.ErrorBadCompletion as e: 
 
             # bad MRd TLP completion received
-            if retry % 20 == 0: print('[!] ' + str(e))        
+            print('[!] ' + str(e))        
 
         # system is not ready yet
-        retry += 1
-        time.sleep(0.1)
+        time.sleep(RETRY_WAIT)
+        retry += 1        
     
     print('[+] PCI-E link with target is up')
 

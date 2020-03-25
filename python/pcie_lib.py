@@ -108,7 +108,7 @@ class Socket(Device):
         except socket.timeout:
 
             # timeout occurred
-            raise(self.Timeout())
+            raise(self.Timeout('Socket read timeout'))
 
         if timeout is not None:
 
@@ -147,7 +147,7 @@ class Serial(Device):
 
     def read(self, size, timeout = None):
 
-        ret, started = '', time.time()
+        ret, started = '', time.time()        
 
         assert self.device is not None
 
@@ -158,7 +158,7 @@ class Serial(Device):
                 if time.time() - started > timeout:
 
                     # timeout occurred
-                    raise(self.Timeout())
+                    raise(self.Timeout('Serial port read timeout'))
             
             # receive needed amount of data
             ret += self.device.read(size - len(ret))
@@ -358,15 +358,15 @@ class LinkLayer(object):
         # send ROM access log configuration request
         self._write(self.CTL_ROM_LOG_ON if on else self.CTL_ROM_LOG_OFF, 0)
 
-    def test(self, test_size):
+    def test(self):
 
         # send test request
-        self._write(self.CTL_TEST, test_size)
+        self._write(self.CTL_TEST, 0)
 
         # receive reply
         code, size = self._read()
 
-        assert code == self.CTL_SUCCESS and size == test_size
+        assert code == self.CTL_SUCCESS and size == 0xff
 
         # receive reply data
         return self.device.read(size, timeout = self.timeout)
