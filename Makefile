@@ -15,7 +15,7 @@ bitstream:
 
 flash:
 
-	python flash_to_spi.py linux_spi:dev=/dev/spidev1.0 s6_pcie_microblaze.bin
+	python flash_to_spi.py linux_spi:dev=/dev/spidev1.0 s6_pcie_microblaze.bin root@bbb.local
 
 srec:
 
