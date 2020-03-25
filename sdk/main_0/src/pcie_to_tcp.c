@@ -349,6 +349,8 @@ void handle_request(struct tcp_pcb *tpcb, PROT_CTL *request)
         {
             PROT_CTL_ROM *rom_write = (PROT_CTL_ROM *)&request->data;
 
+            request->size -= sizeof(PROT_CTL_ROM);
+
             xil_printf(
                 "recv_callback(): PROT_CTL_ROM_WRITE: offset = 0x%x, size = 0x%x\n",
                 rom_write->offset, request->size
@@ -455,6 +457,7 @@ err_t recv_callback(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, err_t err)
 
 #endif
 
+    // handle received data
     while (copied < p->len)
     {
         PROT_CTL *request = (PROT_CTL *)&m_buffer_recv;
@@ -472,7 +475,7 @@ err_t recv_callback(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, err_t err)
 
         if (m_bytes_need == m_bytes_have)
         {
-            // handle receied request
+            // handle received request
             handle_request(tpcb, request);
         }
         

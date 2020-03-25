@@ -530,7 +530,7 @@ class LinkLayer(object):
             chunk = data[: chunk_len]
 
             # ROM write request
-            buff = pack('<BBI', self.CTL_ROM_WRITE, len(chunk), chunk_ptr) + chunk
+            buff = pack('<BBI', self.CTL_ROM_WRITE, len(chunk) + 4, chunk_ptr) + chunk
 
             self.device.write(buff)
 
