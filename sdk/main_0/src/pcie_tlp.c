@@ -192,9 +192,14 @@ int tlp_handle(u8 *data, u32 size)
         {            
             u32 offset = addr_lo - addr_rom, i = 0;
 
+            // data length
             u32 length = (header_rx[0] >> 0) & 0x3ff;
+
+            // transaction ID
+            u8 tag = (header_rx[1] >> 8) & 0xff;
             u32 requester = (header_rx[1] >> 16) & 0xffff;
 
+            // byte enable flags
             u8 last_dw_be = (header_rx[1] >> 4) & 0xf;
             u8 first_dw_be = (header_rx[1] >> 0) & 0xf;            
 
@@ -244,7 +249,7 @@ int tlp_handle(u8 *data, u32 size)
                 // construct reply header
                 header_tx[0] = (TLP_TYPE_CplD << 24) | length;
                 header_tx[1] = (completer << 16) | byte_count;
-                header_tx[2] = (requester << 16) | lower_address;
+                header_tx[2] = (requester << 16) | (tag << 8) | lower_address;
 
                 for (i = 0; i < length; i += 1)
                 {
