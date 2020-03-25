@@ -5,7 +5,7 @@ from struct import pack, unpack
 
 from pcie_lib import *
 
-RETRY_WAIT = 2
+RETRY_WAIT = 1
 
 # physical address where DXE driver will be loaded
 BACKDOOR_ADDR = 0x10000
@@ -223,7 +223,7 @@ def dxe_inject(payload = None, payload_data = None, system_table = None, status_
         try:
 
             # open FPGA board
-            dev = TransactionLayer() if dev is None else dev
+            dev = TransactionLayer()
 
             # try to read some memory 
             if dev.mem_read(BACKDOOR_ADDR, 2) == HEADER_MAGIC:
@@ -248,7 +248,11 @@ def dxe_inject(payload = None, payload_data = None, system_table = None, status_
         except TransactionLayer.ErrorBadCompletion as e: 
 
             # bad MRd TLP completion received
-            print('[!] ' + str(e))        
+            print('[!] ' + str(e))    
+
+        if dev is not None:
+
+            dev.close()    
 
         # system is not ready yet
         time.sleep(RETRY_WAIT)

