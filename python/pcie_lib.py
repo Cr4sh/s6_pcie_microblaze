@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-import sys, os, time, socket, signal, unittest
+import sys, os, time, socket, select, signal, unittest
 from struct import pack, unpack
 from threading import Thread
 from multiprocessing.dummy import Pool as ThreadPool
@@ -58,7 +58,13 @@ class Device(object):
 
     __metaclass__ = ABCMeta
 
-    class Timeout(Exception): pass
+    class Error(Exception): 
+
+        pass
+
+    class Timeout(Exception): 
+
+        pass    
 
     @abstractmethod
     def read(self, size, timeout = None):
@@ -92,27 +98,30 @@ class Socket(Device):
         ret = ''
 
         assert self.sock is not None
+        
+        # check if there's any data to receive
+        fd_read, fd_write, fd_err = select.select([ self.sock ], [], [], timeout)
 
-        self.sock.settimeout(timeout)
+        if self.sock in fd_err:
 
-        try:
+            # error occurred
+            raise(self.Error('Connection error'))
 
-            while len(ret) < size:
-                
-                # receive needed amount of data
-                data = self.sock.recv(size - len(ret))
-                assert len(data) > 0
-
-                ret += data
-
-        except socket.timeout:
+        if not self.sock in fd_read:
 
             # timeout occurred
-            raise(self.Timeout('Socket read timeout'))
+            raise(self.Timeout('Socket read timeout'))         
 
-        if timeout is not None:
+        while len(ret) < size:
+            
+            # receive needed amount of data
+            data = self.sock.recv(size - len(ret))
+            if len(data) == 0:
 
-            self.sock.settimeout(None)
+                # connection was closed by remote host
+                raise(self.Error('Connection closed')) 
+
+            ret += data            
 
         return ret
 
