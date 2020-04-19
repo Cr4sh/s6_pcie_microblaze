@@ -35,6 +35,6 @@
     Serial port configuration for BACKDOOR_DEBUG_SERIAL
 */
 #define SERIAL_BAUDRATE 115200
-#define SERIAL_PORT_NUM SERIAL_PORT_0
+#define SERIAL_PORT_NUM SERIAL_PORT_1
 
 #endif

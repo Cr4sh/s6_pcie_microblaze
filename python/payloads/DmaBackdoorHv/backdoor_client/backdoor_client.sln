@@ -1,0 +1,54 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 2013
+VisualStudioVersion = 12.0.21005.1
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "backdoor_client", "backdoor_client\backdoor_client.vcxproj", "{BA949478-6636-40F3-B418-F11C210AD5DB}"
+	ProjectSection(ProjectDependencies) = postProject
+		{2B04173C-05C7-4E20-BE7B-DD90651EBB4B} = {2B04173C-05C7-4E20-BE7B-DD90651EBB4B}
+		{F9848187-D693-4DB4-B8C2-407165AE5299} = {F9848187-D693-4DB4-B8C2-407165AE5299}
+	EndProjectSection
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "udis86_lib", "udis86\udis86_lib.vcxproj", "{F9848187-D693-4DB4-B8C2-407165AE5299}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "backdoor_library", "backdoor_library\backdoor_library.vcxproj", "{2B04173C-05C7-4E20-BE7B-DD90651EBB4B}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "trustlet_loader", "trustlet_loader\trustlet_loader.vcxproj", "{3607C825-5071-406A-94CC-08F911DD54C1}"
+	ProjectSection(ProjectDependencies) = postProject
+		{2B04173C-05C7-4E20-BE7B-DD90651EBB4B} = {2B04173C-05C7-4E20-BE7B-DD90651EBB4B}
+		{F9848187-D693-4DB4-B8C2-407165AE5299} = {F9848187-D693-4DB4-B8C2-407165AE5299}
+	EndProjectSection
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "trustlet_demo", "trustlet_demo\trustlet_demo.vcxproj", "{AF413792-440A-4E87-964C-C9B07EE0AA38}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|x64 = Debug|x64
+		Release|x64 = Release|x64
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{BA949478-6636-40F3-B418-F11C210AD5DB}.Debug|x64.ActiveCfg = Debug|x64
+		{BA949478-6636-40F3-B418-F11C210AD5DB}.Debug|x64.Build.0 = Debug|x64
+		{BA949478-6636-40F3-B418-F11C210AD5DB}.Release|x64.ActiveCfg = Release|x64
+		{BA949478-6636-40F3-B418-F11C210AD5DB}.Release|x64.Build.0 = Release|x64
+		{F9848187-D693-4DB4-B8C2-407165AE5299}.Debug|x64.ActiveCfg = Debug|x64
+		{F9848187-D693-4DB4-B8C2-407165AE5299}.Debug|x64.Build.0 = Debug|x64
+		{F9848187-D693-4DB4-B8C2-407165AE5299}.Release|x64.ActiveCfg = Release|x64
+		{F9848187-D693-4DB4-B8C2-407165AE5299}.Release|x64.Build.0 = Release|x64
+		{2B04173C-05C7-4E20-BE7B-DD90651EBB4B}.Debug|x64.ActiveCfg = Debug|x64
+		{2B04173C-05C7-4E20-BE7B-DD90651EBB4B}.Debug|x64.Build.0 = Debug|x64
+		{2B04173C-05C7-4E20-BE7B-DD90651EBB4B}.Release|x64.ActiveCfg = Release|x64
+		{2B04173C-05C7-4E20-BE7B-DD90651EBB4B}.Release|x64.Build.0 = Release|x64
+		{3607C825-5071-406A-94CC-08F911DD54C1}.Debug|x64.ActiveCfg = Debug|x64
+		{3607C825-5071-406A-94CC-08F911DD54C1}.Debug|x64.Build.0 = Debug|x64
+		{3607C825-5071-406A-94CC-08F911DD54C1}.Release|x64.ActiveCfg = Release|x64
+		{3607C825-5071-406A-94CC-08F911DD54C1}.Release|x64.Build.0 = Release|x64
+		{AF413792-440A-4E87-964C-C9B07EE0AA38}.Debug|x64.ActiveCfg = Debug|x64
+		{AF413792-440A-4E87-964C-C9B07EE0AA38}.Debug|x64.Build.0 = Debug|x64
+		{AF413792-440A-4E87-964C-C9B07EE0AA38}.Release|x64.ActiveCfg = Release|x64
+		{AF413792-440A-4E87-964C-C9B07EE0AA38}.Release|x64.Build.0 = Release|x64
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal

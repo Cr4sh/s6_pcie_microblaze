@@ -1,0 +1,26 @@
+[
+   // interface UUID
+   uuid(47919643-aab8-4e4d-bda7-1cb6afaac8d8),
+
+   // interface version
+   version(1.0)
+]
+interface TrustletDebug
+{
+    typedef struct 
+    {
+        unsigned long BufferLength;
+        [unique, size_is(BufferLength)] byte *Buffer;
+
+    } IDENTY_KEY;
+
+    // terminate trustlet process
+    void Terminate(
+        [in] unsigned long Code
+    );
+
+    // get trustlet identy key
+    error_status_t GetIdentyKey(
+        [out] IDENTY_KEY *pKey
+    );
+}

