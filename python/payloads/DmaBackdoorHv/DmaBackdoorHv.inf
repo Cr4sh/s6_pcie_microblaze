@@ -2,15 +2,16 @@
   INF_VERSION = 0x00010005 
   BASE_NAME = DmaBackdoorHv
   FILE_GUID = 22D5AE41-147E-4C44-AE72-ECD9BBB454C4
-  MODULE_TYPE = DXE_SMM_DRIVER
+  MODULE_TYPE = UEFI_APPLICATION
 
 [Sources]
   src/debug.c
   src/loader.c
-  src/printf.c
-  src/DmaBackdoorHv.c
+  src/printf.c  
   src/serial.c
   src/std.c
+  src/DmaBackdoorHv.c
+  src/HyperV.c
 
 [Sources.X64]
   src/asm/amd64/common_asm.asm

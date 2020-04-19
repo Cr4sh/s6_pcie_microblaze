@@ -2,6 +2,15 @@
 #ifndef _COMMON_H_
 #define _COMMON_H_
 
+#define JUMP32_LEN 5
+#define JUMP64_LEN 12
+
+// destination from operand
+#define JUMP32_ADDR(_addr_) ((UINTN)(_addr_) + *(INT32 *)((UINT8 *)(_addr_) + 1) + JUMP32_LEN)
+
+// destination to operand
+#define JUMP32_OP(_from_, _to_) ((UINT32)((UINTN)(_to_) - (UINTN)(_from_) - JUMP32_LEN))
+
 #define ALIGN_DOWN(x, align) (x &~ (align - 1))
 #define ALIGN_UP(x, align) ((x & (align - 1)) ? ALIGN_DOWN(x, align) + align : x)
 

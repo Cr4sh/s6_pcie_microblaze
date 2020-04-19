@@ -3,48 +3,24 @@
     backdoor_call() control codes
 */
 
-// get backdoor information
-#define HVBD_C_INFO             0
-
-// get extended backdoor information
-#define HVBD_C_INFO_EX          1
-
-// get extended backdoor information
-#define HVBD_C_INFO_EX2         2
-
-// read virtual memory
-#define HVBD_C_VIRT_READ        3
-
-// write virtual memory
-#define HVBD_C_VIRT_WRITE       4
-
-// read VMCS value
-#define HVBD_C_VMREAD           5
-
-// write VMCS value
-#define HVBD_C_VMWRITE          6
-
-// start collecting EPT pointers
-#define HVBD_C_EPT_GET_START    7
-
-// stop collecting EPT pointers
-#define HVBD_C_EPT_GET_STOP     8
-
-// invalidate processpr caches and flush TLB
-#define HVBD_C_INVL_CACHES      9
+#define HVBD_C_INFO             0x00    // get backdoor information
+#define HVBD_C_INFO_EX          0x01    // get extended backdoor information
+#define HVBD_C_INFO_EX2         0x02    // get extended backdoor information
+#define HVBD_C_VIRT_READ        0x03    // read virtual memory
+#define HVBD_C_VIRT_WRITE       0x04    // write virtual memory
+#define HVBD_C_VMREAD           0x05    // read VMCS value
+#define HVBD_C_VMWRITE          0x06    // write VMCS value
+#define HVBD_C_EPT_GET_START    0x07    // start collecting EPT pointers
+#define HVBD_C_EPT_GET_STOP     0x08    // stop collecting EPT pointers
+#define HVBD_C_INVL_CACHES      0x09    // invalidate processpr caches and flush TLB
 
 /*
     backdoor_call() return values
 */
 
-// VM exit backdoor is not present
-#define HVBD_E_NO_BACKDOOR      0xffffffffffffffff
-
-// operation successfully completed
-#define HVBD_E_SUCCESS          0x0000000000000000
-
-// invalid parameter
-#define HVBD_E_INVALID_PARAM    0x8000000000000002
+#define HVBD_E_NO_BACKDOOR      0xffffffffffffffff  // VM exit backdoor is not present
+#define HVBD_E_INVALID_PARAM    0x8000000000000002  // invalid parameter
+#define HVBD_E_SUCCESS          0x0000000000000000  // operation successfully completed
 
 /*
     misc
@@ -53,6 +29,12 @@
 // magic R10 value to activate VM exit backdoor
 #define HVBD_VM_EXIT_MAGIC 0x5ad0432adfc25b2b
 
+#define EPT_NONE 0xffffffffffffffff
+#define EPT_MAX_COUNT 32
+
+#pragma pack(1)
+
+// EPT information
 typedef struct _EPT_INFO
 {
     UINT64 Vpid;
@@ -61,6 +43,16 @@ typedef struct _EPT_INFO
 } EPT_INFO,
 *PEPT_INFO;
 
-#define EPT_MAX_COUNT 32
+#pragma pack()
 
-#define EPT_NONE 0xffffffffffffffff
+/*
+    Firmware variable to store debug messages buffer address
+*/
+
+#define BACKDOOR_VAR_NAME L"DmaBackdoorInfo"
+
+#define BACKDOOR_VAR_GUID { 0x4c52678d, 0x4851, 0x4501, \
+                          { 0x9a, 0x14, 0x29, 0xa9, 0xae, 0x18, 0xf0, 0x57 }}
+
+// debug messages buffer size 
+#define DEBUG_OUTPUT_SIZE PAGE_SIZE

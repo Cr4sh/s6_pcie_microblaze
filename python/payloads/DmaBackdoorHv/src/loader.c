@@ -4,6 +4,7 @@
 
 #include "common.h"
 #include "loader.h"
+#include "std.h"
 //--------------------------------------------------------------------------------------
 BOOLEAN LdrProcessRelocs(VOID *Image, VOID *NewBase)
 {
@@ -72,7 +73,7 @@ BOOLEAN LdrProcessRelocs(VOID *Image, VOID *NewBase)
     return TRUE;
 }
 //--------------------------------------------------------------------------------------
-UINT32 LdrGetProcAddress(VOID *Image, char *lpszFunctionName)
+VOID *LdrGetProcAddress(VOID *Image, char *lpszFunctionName)
 {
     EFI_IMAGE_EXPORT_DIRECTORY *pExport = NULL;
 
@@ -96,14 +97,14 @@ UINT32 LdrGetProcAddress(VOID *Image, char *lpszFunctionName)
 
         for (i = 0; i < pExport->NumberOfFunctions; i++)
         {
-            if (!strcmp((char *)RVATOVA(Image, AddressOfNames[i]), lpszFunctionName))
+            if (std_strcmp((char *)RVATOVA(Image, AddressOfNames[i]), lpszFunctionName) == 0)
             {
-                return AddressOfFunctions[AddrOfOrdinals[i]];
+                return RVATOVA(Image, AddressOfFunctions[AddrOfOrdinals[i]]);
             }
         }
     }
 
-    return 0;
+    return NULL;
 }
 //--------------------------------------------------------------------------------------
 // EoF

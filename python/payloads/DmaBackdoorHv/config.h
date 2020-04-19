@@ -9,20 +9,31 @@
 #define BACKDOOR_DEBUG
 
 /*
+    Write debug messages into the ttyS0 using 0x3F8 I/O port.
+*/
+#define BACKDOOR_DEBUG_SERIAL
+
+/*
+    Show welcome screen on backdoor init using UEFI simple
+    text output protocol.
+*/
+#define BACKDOOR_DEBUG_SPLASH
+
+/*
+    Write debug messages to the screen using UEFI simple
+    text output protocol.
+*/
+// #define BACKDOOR_DEBUG_SCREEN
+
+/*
     Write debug messages into the OVMF debug output port.
     Uncomment this option if you're planning to run backdoor on QEMU.
 */
 // #define BACKDOOR_DEBUG_OVMF
 
-/*
-    Write debug messages into the ttyS0 using 0x3F8 I/O port.
-    Most likely you will never need this option because COM port of
-    modern computers usually connected to PCH via dedicated Super I/O 
-    chip and during PEI phase it's not initialized yet.
+/* 
+    Serial port configuration for BACKDOOR_DEBUG_SERIAL
 */
-#define BACKDOOR_DEBUG_SERIAL
-
-// serial port configuration for BACKDOOR_DEBUG_SERIAL
 #define SERIAL_BAUDRATE 115200
 #define SERIAL_PORT_NUM SERIAL_PORT_0
 

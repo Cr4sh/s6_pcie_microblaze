@@ -147,17 +147,22 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="..\backdoor_client.h" />
+    <ClInclude Include="..\olsioctl.h" />
     <ClInclude Include="common_asm.h" />
     <ClInclude Include="common.h" />
     <ClInclude Include="loader.h" />
+    <ClInclude Include="service.h" />
     <ClInclude Include="stdafx.h" />
     <ClInclude Include="targetver.h" />
+    <ClInclude Include="winio.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="backdoor_client.cpp" />
     <ClCompile Include="common.cpp" />
     <ClCompile Include="loader.cpp" />
+    <ClCompile Include="service.cpp" />
     <ClCompile Include="stdafx.cpp" />
+    <ClCompile Include="winio.cpp" />
   </ItemGroup>
   <ItemGroup>
     <MASM Include="common_asm.asm">

