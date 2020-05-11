@@ -43,7 +43,7 @@ Virtualization-based Security is relying on UEFI Secure Boot enabled, so, to loa
 
 Luckily, such digitally signed 3-rd party bootloader can be taken form [Kaspersky Rescue Disk 18](https://support.kaspersky.com/viruses/krd18). This bootloader is actually just [GRUB 2.02](https://www.gnu.org/software/grub/index.html) that was compiled without disabling some dangerous built-in commands like `rmmod` and `insmod`. This commands can be used by attacker to load malicious [GRUB chain-loader](https://www.gnu.org/software/grub/manual/grub/html_node/Chain_002dloading.html) module and effectively bypass UEFI Secure Boot.
 
-<img src="https://raw.githubusercontent.com/Cr4sh/s6_pcie_microblaze/master/docs/images/backdoor_boot_flow.png" width="671" height="381">
+<img src="https://raw.githubusercontent.com/Cr4sh/s6_pcie_microblaze/master/docs/images/backdoor_boot_flow.png" width="701" height="363">
 
 To install Hyper-V backdoor along with the Kaspersky bootloader thatere's a program called `bootkit_installer.ps1` that embeds all the needed executables. Use `-Install` command line key to install Hyper-V backdoor as bootkit or `-Uninstall` to revert original boot chain.
 
