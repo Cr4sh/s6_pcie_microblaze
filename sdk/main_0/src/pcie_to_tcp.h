@@ -17,6 +17,7 @@
 #define PROT_CTL_ROM_ERASE        13
 #define PROT_CTL_ROM_LOG_ON       14
 #define PROT_CTL_ROM_LOG_OFF      15
+#define PROT_CTL_ROM_SIZE         16
 
 typedef struct _PROT_CTL
 {

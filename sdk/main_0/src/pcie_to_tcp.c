@@ -310,8 +310,11 @@ void handle_request(struct tcp_pcb *tpcb, PROT_CTL *request)
 
     case PROT_CTL_TEST:
         {
-            reply->size = PROT_MAX_PACKET_SIZE;
-            reply->code = PROT_CTL_SUCCESS;
+            if (request->size < PROT_MAX_PACKET_SIZE)
+            {
+                reply->size = request->size;
+                reply->code = PROT_CTL_SUCCESS;
+            }
 
             break;
         }
@@ -408,6 +411,19 @@ void handle_request(struct tcp_pcb *tpcb, PROT_CTL *request)
             
             // don't send any reply
             ignore = true;  
+            break;
+        }
+
+    case PROT_CTL_ROM_SIZE:
+        {
+            u32 rom_size = OPTION_ROM_MAX_SIZE;
+
+            xil_printf("recv_callback(): PROT_CTL_ROM_SIZE\n");
+
+            memcpy(reply->data, &rom_size, sizeof(u32));
+
+            reply->size = sizeof(u32);
+            reply->code = PROT_CTL_SUCCESS;
             break;
         }
 

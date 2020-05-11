@@ -136,7 +136,7 @@ class Socket(Device):
         if self.sock is not None:
 
             self.sock.close()
-            self.sock = None   
+            self.sock = None
 
 
 class Serial(Device):
@@ -156,7 +156,7 @@ class Serial(Device):
 
     def read(self, size, timeout = None):
 
-        ret, started = '', time.time()        
+        ret, started = '', time.time()
 
         assert self.device is not None
 
@@ -188,7 +188,7 @@ class Serial(Device):
         if self.device is not None:
 
             self.device.close()
-            self.device = None   
+            self.device = None
 
 
 class LinkLayer(object):
@@ -214,6 +214,7 @@ class LinkLayer(object):
     CTL_ROM_ERASE           = 13
     CTL_ROM_LOG_ON          = 14
     CTL_ROM_LOG_OFF         = 15
+    CTL_ROM_SIZE            = 16
 
     #
     # configuration space registers
@@ -274,8 +275,7 @@ class LinkLayer(object):
 
     RECV_TIMEOUT = 3
 
-    ROM_MAX_SIZE = 0x200000
-    ROM_CHUNK_LEN = 0x20
+    ROM_CHUNK_LEN = 0x80
 
     status_bus_id = lambda self, s: (s >> 0) & 0xffff
 
@@ -345,9 +345,9 @@ class LinkLayer(object):
         # initialize serial based device
         self.device = Serial(device = Conf.device if device is None else device, baud = Conf.baud)
         
-    def _read(self):
+    def _read(self, no_timeout = False):
 
-        return unpack('=BB', self.device.read(1 + 1, timeout = self.timeout))
+        return unpack('=BB', self.device.read(1 + 1, timeout = None if no_timeout else self.timeout))
 
     def _write(self, *args):
 
@@ -367,15 +367,15 @@ class LinkLayer(object):
         # send ROM access log configuration request
         self._write(self.CTL_ROM_LOG_ON if on else self.CTL_ROM_LOG_OFF, 0)
 
-    def test(self):
+    def test(self, test_size):
 
         # send test request
-        self._write(self.CTL_TEST, 0)
+        self._write(self.CTL_TEST, test_size)
 
         # receive reply
         code, size = self._read()
 
-        assert code == self.CTL_SUCCESS and size == 0xff
+        assert code == self.CTL_SUCCESS and size == test_size
 
         # receive reply data
         return self.device.read(size, timeout = self.timeout)
@@ -520,10 +520,14 @@ class LinkLayer(object):
         # read register value
         return self.cfg_read(cfg_reg, cfg_size = cfg_size)
 
-    def rom_load(self, data):
+    def rom_load(self, data, progress_cb = None):
 
         chunk_ptr = 0
         chunk_len = self.ROM_CHUNK_LEN
+        total_len, percent_prev = len(data), None
+
+        # sanity check
+        assert len(data) < self.rom_size()
 
         while len(data) > 0:
             
@@ -543,15 +547,39 @@ class LinkLayer(object):
             data = data[chunk_len :]
             chunk_ptr += chunk_len
 
+            percent = int(float(100) / (float(total_len) / chunk_ptr))
+
+            if percent_prev != percent and progress_cb is not None and percent <= 100:
+
+                progress_cb(percent)
+                percent_prev = percent
+
+        if progress_cb is not None:
+
+            progress_cb(100)
+
     def rom_erase(self):
 
         # send ROM erase request
         self._write(self.CTL_ROM_ERASE, 0)
 
+        # receive reply (erase command might take a while)
+        code, size = self._read(no_timeout = True)
+
+        assert code == self.CTL_SUCCESS and size == 0   
+
+    def rom_size(self):
+
+        # send get ROM size request
+        self._write(self.CTL_ROM_SIZE, 0)
+
         # receive reply
         code, size = self._read()
 
-        assert code == self.CTL_SUCCESS and size == 0   
+        assert code == self.CTL_SUCCESS and size == 4
+
+        # receive reply data
+        return unpack('<I', self.device.read(size, timeout = self.timeout))[0]
 
     def close(self):
 

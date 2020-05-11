@@ -40,3 +40,4 @@ installer:
 	powershell.exe -NoProfile -ExecutionPolicy bypass .\resources\prepare_file.ps1 -Path .\resources\boot\grub\grub.cfg -VarName GrubCfg >> $(INSTALLER)
 # rest of the installer code
 	type .\resources\bootkit_installer_template.ps1 >> $(INSTALLER)
+

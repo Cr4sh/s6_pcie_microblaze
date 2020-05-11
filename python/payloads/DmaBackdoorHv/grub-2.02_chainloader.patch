@@ -1,5 +1,5 @@
 --- grub-2.02_original/grub-core/loader/efi/chainloader.c	2017-04-24 02:15:49.000000000 -0700
-+++ grub-2.02_patched/grub-core/loader/efi/chainloader.c	2020-04-19 03:51:23.000000000 -0700
++++ grub-2.02_patched/grub-core/loader/efi/chainloader.c	2020-04-19 10:07:13.000000000 -0700
 @@ -32,6 +32,7 @@
  #include <grub/efi/api.h>
  #include <grub/efi/efi.h>
@@ -8,10 +8,12 @@
  #include <grub/command.h>
  #include <grub/i18n.h>
  #include <grub/net.h>
-@@ -50,6 +51,257 @@
+@@ -48,7 +49,257 @@
+ static grub_efi_uintn_t pages;
+ static grub_efi_device_path_t *file_path;
  static grub_efi_handle_t image_handle;
- static grub_efi_char16_t *cmdline;
- 
+-static grub_efi_char16_t *cmdline;
++
 +#define GRUB_PE32_MAGIC 0x5a4d
 +
 +struct dos_header
@@ -125,7 +127,7 @@
 +  grub_uint16_t i = 0;
 +  grub_efi_status_t status = GRUB_EFI_SUCCESS;
 +  grub_efi_physical_address_t data_address = 0, image_address = 0;
-+  grub_efi_uintn_t data_pages = 0, image_pages = 0;
++  grub_efi_uintn_t data_pages = 0, image_pages = 0;  
 +  grub_uint8_t *data = NULL, *image = NULL;
 +  void *entry_point = NULL;
 +  struct dos_header *dos = NULL;
@@ -262,11 +264,19 @@
 +
 +  return grub_errno;
 +}
-+
+ 
  static grub_err_t
  grub_chainloader_unload (void)
- {
-@@ -212,6 +464,10 @@
+@@ -60,8 +311,6 @@
+   efi_call_2 (b->free_pages, address, pages);
+ 
+   grub_free (file_path);
+-  grub_free (cmdline);
+-  cmdline = 0;
+   file_path = 0;
+ 
+   grub_dl_unref (my_mod);
+@@ -212,6 +461,10 @@
  
    grub_dl_ref (my_mod);
  
@@ -277,3 +287,39 @@
    /* Initialize some global variables.  */
    address = 0;
    image_handle = 0;
+@@ -354,35 +607,6 @@
+     }
+   loaded_image->device_handle = dev_handle;
+ 
+-  if (argc > 1)
+-    {
+-      int i, len;
+-      grub_efi_char16_t *p16;
+-
+-      for (i = 1, len = 0; i < argc; i++)
+-        len += grub_strlen (argv[i]) + 1;
+-
+-      len *= sizeof (grub_efi_char16_t);
+-      cmdline = p16 = grub_malloc (len);
+-      if (! cmdline)
+-        goto fail;
+-
+-      for (i = 1; i < argc; i++)
+-        {
+-          char *p8;
+-
+-          p8 = argv[i];
+-          while (*p8)
+-            *(p16++) = *(p8++);
+-
+-          *(p16++) = ' ';
+-        }
+-      *(--p16) = 0;
+-
+-      loaded_image->load_options = cmdline;
+-      loaded_image->load_options_size = len;
+-    }
+-
+   grub_file_close (file);
+   grub_device_close (dev);
+ 

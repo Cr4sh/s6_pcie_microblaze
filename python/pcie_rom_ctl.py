@@ -53,15 +53,27 @@ def main():
             # read ROM contents from file
             data = fd.read()
 
-        if len(data) > dev.ROM_MAX_SIZE:
+        # query max rom size
+        max_size = dev.rom_size()
+
+        print('[+] Maximum ROM size for this device is %d bytes' % max_size)
+
+        if len(data) > max_size:
 
             print('ERROR: Specified ROM is too large')
             return -1
 
         print('[+] Loading %d bytes of ROM...' % len(data))
 
+        def progress_cb(percent):
+
+            sys.stdout.flush()
+            sys.stdout.write('\r[+] %d%% completed' % percent)
+
         # write ROM to the device
-        dev.rom_load(data)
+        dev.rom_load(data, progress_cb = progress_cb)
+
+        sys.stdout.write('\n')
 
     if options.log_on:
 
