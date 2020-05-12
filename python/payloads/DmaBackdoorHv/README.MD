@@ -3,9 +3,11 @@
 
 ## General information
 
-This repository contains Hyper-V backdoor that might be useful for reverse engineering and exploit development purposes, it [provides an interface](https://github.com/Cr4sh/s6_pcie_microblaze/blob/master/python/payloads/DmaBackdoorHv/backdoor_client/backdoor_library/backdoor_library.cpp) for inspecting of hypervisor state (VMCS, physical/virtual memory, registers, etc.) from guest partition and perform the guest to host VM escape attacks. 
+This repository contains Hyper-V backdoor that might be useful for reverse engineering and exploit development purposes, it [provides an interface](https://github.com/Cr4sh/s6_pcie_microblaze/blob/master/python/payloads/DmaBackdoorHv/backdoor_client/backdoor_library/backdoor_library.cpp) for inspecting of hypervisor state (VMCS, physical/virtual memory, registers, etc.) from guest or host partition and perform the VM escape attacks. 
 
-To deploy thee backdoor you can use [DMA attack toolkit](https://github.com/Cr4sh/s6_pcie_microblaze) or UEFI bootkit based on [signed insecure bootloader](https://support.microsoft.com/en-us/help/4524244/security-update-for-windows-10-february-11-2020) from Kaspersky products which [was discovered](https://habr.com/en/post/446238/) by [@ValdikSS](https://twitter.com/valdikss).
+Also, backdoor allows to inspect Secure Kernel and run 3-rd party trustlets in the [Isolated User Mode](https://docs.microsoft.com/en-us/windows/win32/procthread/isolated-user-mode--ium--processes) (a virtualization-based security feature of Windows 10).
+
+To deploy the backdoor you can use [DMA attack toolkit](https://github.com/Cr4sh/s6_pcie_microblaze) or UEFI bootkit based on [signed insecure bootloader](https://support.microsoft.com/en-us/help/4524244/security-update-for-windows-10-february-11-2020) from Kaspersky products that [was discovered](https://habr.com/en/post/446238/) by [@ValdikSS](https://twitter.com/valdikss).
 
 
 ## Contents
@@ -22,9 +24,9 @@ To deploy thee backdoor you can use [DMA attack toolkit](https://github.com/Cr4s
 
 * `backdoor_client/backdoor_client` &minus; Command line application that interracts with the backdoor using client library.
 
-* `backdoor_client/trustlet_loader` &minus; Command line application to run 3-rd party VTL1 trustlets using Hyper-V backdoor.
+* `backdoor_client/trustlet_loader` &minus; Command line application to run 3-rd party trustlets using Hyper-V backdoor.
 
-* `backdoor_client/trustlet_demo` &minus; 3-rd party VTL1 trustlet project that provides an example of communication between normal world and secure world.
+* `backdoor_client/trustlet_demo` &minus; 3-rd party trustlet project that provides an example of communication between normal world and secure world.
 
 * `bootkit_installer.ps1` &minus; Program to deploy Hyper-V backdoor as bootkit along with the signed Kaspersky bootloader used for Secure Boot bypass.
 
@@ -37,13 +39,15 @@ To deploy thee backdoor you can use [DMA attack toolkit](https://github.com/Cr4s
 
 [Windows Virtualization-based Security (VBS)](https://docs.microsoft.com/en-us/windows-hardware/design/device-experiences/oem-vbs) uses hardware virtualization features and Hyper-V to host a number of security solutions, providing them with greatly increased protection from vulnerabilities in the operating system, and preventing the use of malicious exploits which attempt to defeat protections. One of the examples of such services is [Hypervisor-Enforced Code Integrity](https://docs.microsoft.com/en-us/windows/security/threat-protection/device-guard/enable-virtualization-based-protection-of-code-integrity) which uses VBS to significantly strengthen code integrity policy enforcement.
 
-Another example of VSB based security feature is [Windows Credential Guard](https://docs.microsoft.com/en-us/windows/security/identity-protection/credential-guard/credential-guard). Hyper-V functionality is employed to logically divide the system into two separate "worlds": the normal world (VTL0) running the NT kernel that we’re all familiar with and a separate secure world (VTL1) running a Secure Kernel (SK). Enabled Credential Guard causes the LSA process (LSASS) to remain in the Host OS running in the normal world, and a special, additional instance of LSA (called LSAIso – which stands for LSA Isolated) to remain as trustlet running in the secure world. Because isolated LSAIso trustlet is responsible for protecting domain credentials, attacker who managed to gain Administrator privileges within normal world are not able to use [Mimikatz](https://github.com/gentilkiwi/mimikatz) like tools anymore to steal the credentials from memory.
+Another example of VSB based security feature is [Windows Credential Guard](https://docs.microsoft.com/en-us/windows/security/identity-protection/credential-guard/credential-guard). Hyper-V functionality is employed to logically divide the system into two separate "worlds": the normal world (VTL0) running the NT kernel that we’re all familiar with and a separate secure world (VTL1) running a Secure Kernel (SK). Enabled Credential Guard causes the LSA process (LSASS) to remain in the Host OS running in the normal world, and a special, additional instance of LSA (called LSAIso – which stands for LSA Isolated) to remain as trustlet running in the secure world. Because isolated LSAIso trustlet responsible for protecting domain credentials is running in the secure world, attacker who managed to gain Administrator privileges within normal world is not able to use [Mimikatz](https://github.com/gentilkiwi/mimikatz) like tools to steal credentials from the memory.
 
-Virtualization-based Security is relying on UEFI Secure Boot enabled, so, to load Hyper-V backdoor on VBS enabled machines we should not to disrupt the Secure Boot configuration. One of the possible ways to do that is injecting Hyper-V backdoor using pre-boot DMA attack which was described in [DMA attack toolkit](https://github.com/Cr4sh/s6_pcie_microblaze) documentation. Another possible way is to use signed 3-rd party bootloader as part of the secure boot chain which functionality can be abused to load Hyper-V backdoor UEFI DXE driver whithout valid digital sugnature just before the passing execution to the legitimate Windows Boot Manager. 
+Virtualization-based Security is relying on UEFI Secure Boot enabled, so, to load Hyper-V backdoor on VBS enabled machines we should not disrupt the Secure Boot configuration. One of the possible ways to do that is injecting Hyper-V backdoor using pre-boot DMA attack which was described in [DMA attack toolkit](https://github.com/Cr4sh/s6_pcie_microblaze) documentation. Another possible way &minus; use signed 3-rd party bootloader as part of secure boot chain which functionality can be abused to load Hyper-V backdoor UEFI DXE driver whithout digital sugnature verification just before passing the execution to the legitimate Windows Boot Manager. 
 
 Luckily, such digitally signed 3-rd party bootloader can be taken form [Kaspersky Rescue Disk 18](https://support.kaspersky.com/viruses/krd18). This bootloader is actually just [GRUB 2.02](https://www.gnu.org/software/grub/index.html) that was compiled without disabling some dangerous built-in commands like `rmmod` and `insmod`. This commands can be used by attacker to load malicious [GRUB chain-loader](https://www.gnu.org/software/grub/manual/grub/html_node/Chain_002dloading.html) module and effectively bypass UEFI Secure Boot.
 
-To install Hyper-V backdoor along with the Kaspersky bootloader thatere's a program called `bootkit_installer.ps1` that embeds all the needed executables. Use `-Install` command line key to install Hyper-V backdoor as bootkit or `-Uninstall` to revert original boot chain.
+<img src="https://raw.githubusercontent.com/Cr4sh/s6_pcie_microblaze/master/docs/images/backdoor_boot.png" width="694" height="371">
+
+To install Hyper-V backdoor along with the Kaspersky bootloader there's a program called `bootkit_installer.ps1` that embeds all needed executables. Use `-Install` command line key to install Hyper-V backdoor as bootkit or `-Uninstall` to revert original bootloader.
 
 <img src="https://raw.githubusercontent.com/Cr4sh/s6_pcie_microblaze/master/docs/images/backdoor_bootkit.png" width="710" height="420">
 
@@ -70,7 +74,7 @@ Check if backdoor is loaded:
 Press any key to quit...
 ```
 
-Obtaining backdoor UEFI DXE driver debug messages that was stored in the special UEFI runtime memory region (useful for troubleshooting):
+Obtaining backdoor UEFI DXE driver debug messages that was stored in UEFI runtime memory region (useful for troubleshooting):
 
 ```
 > .\backdoor_client.exe --debug
@@ -321,7 +325,7 @@ Show list of the running VTL1 trustlets:
 
 ```
 
-On the example above you can see `LSAIso` trustlet process that belongs to the Windows Credential Guard and demo trustlet that was loaded using the Hyper-V backdoor. In order to execute the trustlet in the secure world Microsoft introduced `CREATE_SECURE_PROCESS` flag of `CreateProcess` [API function](https://docs.microsoft.com/en-us/windows/win32/procthread/process-creation-flags). Trustlet executable must have valid Microsoft digital signature with the Windows System Component Verification (1.3.6.1.4.311.10.3.6) Enhanced Key Usage property. To bypass this requirement I made `trustlet_loader.exe` tool that utilizes Hyper-V backdoor functionality to perform in-memory patching of `skci.dll` image responsible for VTL1 code integrity used by Secure Kernel.
+On the example above you can see LSAIso trustlet process that belongs to the Windows Credential Guard and demo trustlet that was loaded using the Hyper-V backdoor. In order to execute the trustlet in Isolated User Mode Microsoft introduced `CREATE_SECURE_PROCESS` flag of `CreateProcess` [API function](https://docs.microsoft.com/en-us/windows/win32/procthread/process-creation-flags). Trustlet executable must have valid Microsoft digital signature with the Windows System Component Verification (1.3.6.1.4.311.10.3.6) Enhanced Key Usage property. To bypass this requirement I made `trustlet_loader.exe` tool that utilizes Hyper-V backdoor functionality to perform in-memory patching of `skci.dll` image responsible for VTL1 code integrity used by Secure Kernel.
 
 Example of loading 3-rd party VTL1 trustlet:
 
@@ -383,7 +387,7 @@ Patching location at address skci+4022e (phys: 0x616d22e)
 
 Trustlet executable image also contains the structure called [Image Policy Metadata](https://docs.microsoft.com/en-us/windows-hardware/drivers/ddi/wdm/ns-wdm-_image_policy_metadata) that dascribes its capabilities. Among various interesting things it has `ImagePolicyIdDebug` property, it tells the Secure Kernel if it's possible to attach debugger to the trustlet process or not.
 
-From the example above you can see that `LSAIso` trustlet has `ImagePolicyIdDebug` set to zero, it prevents the attacker from attaching debugger to this process and compromising its memory contents:
+From the example above you can see that LSAIso trustlet has `ImagePolicyIdDebug` set to zero, it prevents the attacker from attaching debugger to this process and compromising its memory contents:
 
 ```
 > C:\Debuggers\x64\cdb.exe -pn LsaIso.exe
@@ -450,6 +454,8 @@ ntdll!DbgBreakPoint:
 ```
 
 ## Building from the source code
+
+To build Hyper-V backdoor UEFI DXE driver you have to perform the following steps:
 
 1. Copy `payloads` subdirectory into the [EDK2](https://github.com/tianocore/edk2) source code directory.
 
