@@ -490,7 +490,7 @@ To build Hyper-V backdoor UEFI DXE driver you have to perform the following step
 
 7. Run `nmake orom` to generate UEFI option ROM.
 
-8. Run `nmake chainloader` to download GRUB2, apply `grub-2.02_chainloader.patch` and build chain-loader module.
+8. Open [WSL command prompt](https://docs.microsoft.com/en-us/windows/wsl/install-win10) and run `make chainloader` to download GRUB2, apply `grub-2.02_chainloader.patch` and build chain-loader module.
 
 9. Run `nmake installer` to generate `bootkit_installer.ps1` program.
 
