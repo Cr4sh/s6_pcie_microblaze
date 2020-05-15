@@ -63,7 +63,7 @@ To get more information about Virtualization-based Security and Virtual Secure M
 
 * [Work Package 6: Virtual Secure Mode](https://www.bsi.bund.de/SharedDocs/Downloads/DE/BSI/Cyber-Sicherheit/SiSyPHus/Workpackage6_Virtual_Secure_Mode.pdf?__blob=publicationFile&v=2) by [The BSI](https://www.bsi.bund.de/EN/TheBSI/thebsi_node.html)
 
-# Troubleshooting
+## Troubleshooting
 
 To add Kaspersky bootloader digital signature to the Secure Boot Forbidden Signature Database (dbx) Microsoft released [KB4524244](https://support.microsoft.com/en-us/help/4524244/security-update-for-windows-10-february-11-2020) security fix but later [it was removed](https://www.zdnet.com/article/microsoft-pulls-security-update-after-reports-of-issues-affecting-some-pcs/) from Windows Update servers and enterprise update channels due to an issue affecting a sub-set of devices. If your test system where you want to run the backdoor has KB4524244 installed you can reset Secure Boot NVRAM variables (including dbx) to the factory state using appropriate option of BIOS Setup Utility menu.
 
