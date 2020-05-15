@@ -558,6 +558,38 @@ VOID *HyperVHook(VOID *Image)
                     HookLen = 8;
                     Version = 1903;                    
                 }
+                /*
+                    Match hvix64.sys VM exit handler signature for Windows 10 2004:
+
+                        .text:FFFFF80000232372      mov     [rsp+arg_20], rcx
+                        .text:FFFFF80000232377      mov     rcx, [rsp+arg_18]
+                        .text:FFFFF8000023237C      mov     rcx, [rcx]
+                        .text:FFFFF8000023237F      mov     [rcx], rax
+                        .text:FFFFF80000232382      mov     [rcx+10h], rdx
+                        
+                        ...
+
+                        .text:FFFFF800002323B2      mov     [rcx+78h], r15
+                        .text:FFFFF800002323B6      mov     rax, [rsp+arg_20]
+                        .text:FFFFF800002323BB      mov     [rcx+8], rax
+                        .text:FFFFF800002323BF      lea     rax, [rcx+70h]
+                        
+                        ...
+
+                        .text:FFFFF80000232436      mov     rcx, [rsp+arg_18]
+                        .text:FFFFF8000023243B      mov     rdx, [rsp+arg_28]
+                        .text:FFFFF80000232440      call    sub_FFFFF8000020E010
+                */
+                else if (*(Func + 0x00) == 0x48 && *(Func + 0x01) == 0x89 && *(Func + 0x02) == 0x4c && *(Func + 0x03) == 0x24 &&
+                         *(Func + 0x0d) == 0x48 && *(Func + 0x0e) == 0x89 && *(Func + 0x0f) == 0x01 && 
+                         *(Func + 0x10) == 0x48 && *(Func + 0x11) == 0x89 && *(Func + 0x12) == 0x51 && *(Func + 0x13) == 0x10 &&
+                         *(Func + 0x40) == 0x4c && *(Func + 0x41) == 0x89 && *(Func + 0x42) == 0x79 && *(Func + 0x43) == 0x78 &&
+                         *(Func + 0xce) == 0xe8)
+                {
+                    Func = (UINT8 *)JUMP32_ADDR(Func + 0xce);
+                    HookLen = 5;
+                    Version = 2004;                    
+                }
                 else
                 {
                     Func = NULL;

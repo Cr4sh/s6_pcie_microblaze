@@ -9,7 +9,7 @@ Also, backdoor allows to inspect Secure Kernel and run 3-rd party trustlets in t
 
 To deploy the backdoor you can use [DMA attack toolkit](https://github.com/Cr4sh/s6_pcie_microblaze) or UEFI bootkit based on [signed insecure bootloader](https://support.microsoft.com/en-us/help/4524244/security-update-for-windows-10-february-11-2020) from Kaspersky products that [was discovered](https://habr.com/en/post/446238/) by [@ValdikSS](https://twitter.com/valdikss).
 
-Backdoor supports 64-bit versions of Windows 10 1709, 1803, 1809, 1903 and 1909 running on Intel systems.
+Backdoor supports 64-bit versions of Windows 10 1709, 1803, 1809, 1903, 1909 and 2004 running on Intel systems.
 
 
 ## Contents
@@ -53,8 +53,6 @@ To install Hyper-V backdoor along with the Kaspersky bootloader there's a progra
 
 <img src="https://raw.githubusercontent.com/Cr4sh/s6_pcie_microblaze/master/docs/images/backdoor_bootkit.png" width="710" height="420">
 
-To add Kaspersky bootloader digital signature to the Secure Boot Forbidden Signature Database (dbx) Microsoft released [KB4524244](https://support.microsoft.com/en-us/help/4524244/security-update-for-windows-10-february-11-2020) security fix but later [it was removed](https://www.zdnet.com/article/microsoft-pulls-security-update-after-reports-of-issues-affecting-some-pcs/) from Windows Update servers and enterprise update channels due to an issue affecting a sub-set of devices. If your test system where you want to run the backdoor has KB4524244 installed you can reset Secure Boot NVRAM variables (including dbx) to the factory state using appropriate option of BIOS Setup Utility menu.
-
 To get more information about Virtualization-based Security and Virtual Secure Mode please refer to the following materials:
 
 * [Hyper-V Hypervisor Top-Level Functional Specification](https://docs.microsoft.com/en-us/virtualization/hyper-v-on-windows/reference/tlfs) 
@@ -64,6 +62,14 @@ To get more information about Virtualization-based Security and Virtual Secure M
 * [Live forensics on the Windows 10 secure kernel](https://www.semanticscholar.org/paper/Live-forensics-on-the-Windows-10-secure-kernel.-Brendmo/e275cc28c5c8e8e158c45e5e773d0fa3da01e118) by Hans Kristian Brendmo
 
 * [Work Package 6: Virtual Secure Mode](https://www.bsi.bund.de/SharedDocs/Downloads/DE/BSI/Cyber-Sicherheit/SiSyPHus/Workpackage6_Virtual_Secure_Mode.pdf?__blob=publicationFile&v=2) by [The BSI](https://www.bsi.bund.de/EN/TheBSI/thebsi_node.html)
+
+# Troubleshooting
+
+To add Kaspersky bootloader digital signature to the Secure Boot Forbidden Signature Database (dbx) Microsoft released [KB4524244](https://support.microsoft.com/en-us/help/4524244/security-update-for-windows-10-february-11-2020) security fix but later [it was removed](https://www.zdnet.com/article/microsoft-pulls-security-update-after-reports-of-issues-affecting-some-pcs/) from Windows Update servers and enterprise update channels due to an issue affecting a sub-set of devices. If your test system where you want to run the backdoor has KB4524244 installed you can reset Secure Boot NVRAM variables (including dbx) to the factory state using appropriate option of BIOS Setup Utility menu.
+
+Also, starting from Windows 10 2004 (build 19041) dbx variable is being updated with banned bootloader hash during operating system setup, so, if after the backdoor install your system becomes unbootable &minus; just disable or reset Secure Boot.
+
+By default `bootkit_installer.ps1` is placing 1-st stage Kaspersky bootloader as `\EFI\Microsoft\Boot\bootmgfw.efi` file on EFI System Parition, if after the backdoor install your system boots as usual but you don't see Hyper-V backdoor red splash screen &minus; ensure that firmware is configured to use proper bootloader.
 
 ## Usage
 
