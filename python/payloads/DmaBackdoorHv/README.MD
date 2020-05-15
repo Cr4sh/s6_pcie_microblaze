@@ -484,7 +484,7 @@ To build Hyper-V backdoor UEFI DXE driver you have to perform the following step
 
 4. Run Visual Studio Command Prompt and cd to the EDK2 directory.
 
-5. Run `Execute Edk2Setup.bat --pull` to configure build environment and download required binaries.
+5. Run `Edk2Setup.bat --pull` to configure build environment and download required binaries.
 
 6. Run `cd payloads/DmaBackdoorHv && nmake` to build DXE driver.
 
