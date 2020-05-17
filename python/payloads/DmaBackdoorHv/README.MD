@@ -69,7 +69,7 @@ To add Kaspersky bootloader digital signature to the Secure Boot Forbidden Signa
 
 Also, starting from Windows 10 2004 (build 19041) dbx variable is being updated with banned bootloader hash during operating system setup, so, if after the backdoor install your system becomes unbootable &minus; just disable or reset Secure Boot.
 
-By default `bootkit_installer.ps1` is placing 1-st stage Kaspersky bootloader as `\EFI\Microsoft\Boot\bootmgfw.efi` file on EFI System Parition, if after the backdoor install your system boots as usual but you don't see Hyper-V backdoor red splash screen &minus; ensure that firmware is configured to use proper bootloader.
+By default `bootkit_installer.ps1` is placing 1-st stage Kaspersky bootloader as `\EFI\Microsoft\Boot\bootmgfw.efi` (Windows EFI bootloader) and `\EFI\Boot\bootx64.efi` (default EFI bootloader) files on EFI System Parition, if after the backdoor install your system boots as usual but you don't see Hyper-V backdoor red splash screen &minus; ensure that firmware is configured to use proper bootloader.
 
 ## Usage
 
