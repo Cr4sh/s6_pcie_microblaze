@@ -1,4 +1,5 @@
 #pragma once
+#pragma warning(disable: 4996)
 
 #include "targetver.h"
 
@@ -9,6 +10,7 @@
 #include <tchar.h>
 
 #include <windows.h>
+#include <TlHelp32.h>
 
 #include "../common/common.h"
 #include "../common/loader.h"

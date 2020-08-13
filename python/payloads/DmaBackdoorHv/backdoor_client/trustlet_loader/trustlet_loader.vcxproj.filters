@@ -45,6 +45,9 @@
     <ClInclude Include="..\rpc\params.h">
       <Filter>Header Files\rpc</Filter>
     </ClInclude>
+    <ClInclude Include="..\common\common_backdoor.h">
+      <Filter>Header Files\common</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="stdafx.cpp">
@@ -58,6 +61,12 @@
     </ClCompile>
     <ClCompile Include="..\rpc\trustlet_debug_c.c">
       <Filter>Source Files\rpc</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\common_backdoor.cpp">
+      <Filter>Source Files\common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\common.cpp">
+      <Filter>Source Files\common</Filter>
     </ClCompile>
   </ItemGroup>
 </Project>

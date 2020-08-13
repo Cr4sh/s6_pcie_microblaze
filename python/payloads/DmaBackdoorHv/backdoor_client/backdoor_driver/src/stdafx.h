@@ -7,6 +7,7 @@ extern "C"
 #include "undocnt.h"
 }
 
+#include "stdint.h"
 #include "common.h"
 #include "asm/common_asm.h"
 
@@ -15,3 +16,7 @@ extern "C"
 #include "runtime/runtime.h"
 
 #include "debug.h"
+
+#include "../../vmx.h"
+#include "../../backdoor_client.h"
+#include "../../backdoor_library.h"

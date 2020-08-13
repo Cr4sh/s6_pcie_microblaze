@@ -25,3 +25,7 @@
 #include "../backdoor_library.h"
 
 #include "../udis86/extern.h"
+
+#include "service.h"
+#include "winio.h"
+#include "backdoor_debug.h"

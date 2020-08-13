@@ -11,6 +11,6 @@ runtime.obj: src/runtime/runtime.cpp
 import.obj: src/runtime/import.cpp
     $(CC) $(CFLAGS) src/runtime/import.cpp
 
-LLIBS = ntoskrnl.lib hal.lib
+LLIBS = ntoskrnl.lib hal.lib ../backdoor_library.lib
 
 LOBJS = backdoor_driver.obj debug.obj runtime.obj import.obj

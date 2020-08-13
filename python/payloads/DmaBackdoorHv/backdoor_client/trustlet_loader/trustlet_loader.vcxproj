@@ -86,6 +86,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="..\common\common.h" />
+    <ClInclude Include="..\common\common_backdoor.h" />
     <ClInclude Include="..\common\loader.h" />
     <ClInclude Include="..\rpc\params.h" />
     <ClInclude Include="..\rpc\trustlet_debug.h" />
@@ -93,6 +94,8 @@
     <ClInclude Include="targetver.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="..\common\common.cpp" />
+    <ClCompile Include="..\common\common_backdoor.cpp" />
     <ClCompile Include="..\common\loader.cpp" />
     <ClCompile Include="..\rpc\trustlet_debug_c.c" />
     <ClCompile Include="stdafx.cpp" />

@@ -1,27 +1,33 @@
 
-// enable debuge messages output
-#define DBG
-
 #ifdef _X86_
 
 #error x86 is not supported
 
 #endif
 
-#ifdef DBG
+extern "C"
+{
+// heap alloc
+void *bd_alloc(size_t size);
 
-// print debug messages
-#define dbg_printf printf
+// heap free
+void bd_free(void *addr);
 
-#else
+// sleep for specified milliseconds
+void bd_sleep(int msec);
 
-#define dbg_printf
+// switch execution to other process/thread
+void bd_yeld(void);
 
-#endif
+// switch execution to other process/thread
+void bd_yeld(void);
 
-// memory allocation functions
-#define M_ALLOC(_size_) malloc((_size_))
-#define M_FREE(_addr_) free((_addr_))
+// dummy address for backdoor_virt_map()
+uint64_t bd_map_va(void);
+    
+// debug output
+void bd_printf(char *format, ...);
+}
 
 #pragma pack(1)
 
@@ -89,6 +95,7 @@ int backdoor_vmwrite(uint64_t val, uint64_t data);
 
 int backdoor_ept_list(EPT_INFO *ept_list);
 int backdoor_ept_dump(uint64_t pml4_addr);
+int backdoor_ept_info_addr(uint64_t *addr);
 
 int backdoor_phys_translate(uint64_t addr, uint64_t *ret, uint64_t pml4_addr);
 int backdoor_phys_update(uint64_t addr, uint64_t entry, uint64_t *old, uint64_t pml4_addr);
@@ -97,6 +104,5 @@ int backdoor_virt_translate(uint64_t addr, uint64_t *ret, uint64_t pml4_addr, ui
 int backdoor_virt_update(uint64_t addr, uint64_t entry, uint64_t *old, uint64_t pml4_addr, uint64_t ept_addr);
 
 int backdoor_sk_info(SK_INFO *sk_info, uint64_t *call_count);
+int backdoor_sk_info_addr(uint64_t *addr);
 int backdoor_sk_base(SK_INFO *sk_info, uint64_t *sk_addr, uint64_t *skci_addr);
-
-int backdoor_read_debug_messages(void);
