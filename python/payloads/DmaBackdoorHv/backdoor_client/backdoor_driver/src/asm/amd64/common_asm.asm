@@ -1,21 +1,21 @@
 .code
 
-public _cr4_get
-public _cr4_set
+public _cr0_get
+public _cr0_set
 public _msr_get
 public _msr_set
 
 
-_cr4_get:
+_cr0_get:
 
-    mov     rax, cr4    
+    mov     rax, cr0
     ret
 
 
-_cr4_set:
+_cr0_set:
 
     and     rcx, 0FFFFFFFFh
-    mov     cr4, rcx
+    mov     cr0, rcx
     ret
 
 

