@@ -7,6 +7,9 @@ extern "C"
 #include "undocnt.h"
 }
 
+#pragma intrinsic(memset)
+#pragma intrinsic(memcpy)
+
 #include "stdint.h"
 #include "common.h"
 #include "asm/common_asm.h"
@@ -17,6 +20,8 @@ extern "C"
 
 #include "debug.h"
 
-#include "../../vmx.h"
-#include "../../backdoor_client.h"
-#include "../../backdoor_library.h"
+#include "../vmx.h"
+#include "../backdoor_client.h"
+#include "../backdoor_library.h"
+#include "../common/loader.h"
+#include "../driver_loader.h"

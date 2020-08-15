@@ -3,11 +3,11 @@
 // make crt functions inline
 #pragma intrinsic(strcpy)
 
-PVOID m_Kernel = NULL;
+extern DRIVER_PARAMS m_Params;
 //--------------------------------------------------------------------------------------
 PVOID NTAPI GetKernelBase(void)
 {
-    return m_Kernel;
+    return m_Params.KernelBase;
 }
 //--------------------------------------------------------------------------------------
 ULONG NTAPI ImportHash(char *Str)

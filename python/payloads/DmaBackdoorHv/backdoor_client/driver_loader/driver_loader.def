@@ -1,0 +1,5 @@
+NAME loader.sys
+EXPORTS
+m_Params       @1 NONAME
+new_NtReadFile @2 NONAME
+old_NtReadFile @3 NONAME

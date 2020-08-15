@@ -23,6 +23,7 @@
 #include "../vmx.h"
 #include "../backdoor_client.h"
 #include "../backdoor_library.h"
+#include "../backdoor_library/virtual_mem.h"
 
 #include "../udis86/extern.h"
 

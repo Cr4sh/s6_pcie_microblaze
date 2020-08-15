@@ -13,6 +13,9 @@
 #include <sys/types.h>  
 #include <sys/stat.h> 
 
+#pragma intrinsic(memset)
+#pragma intrinsic(memcpy)
+
 #include <windows.h>
 #include <TlHelp32.h>
 

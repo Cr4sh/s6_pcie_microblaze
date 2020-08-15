@@ -1,5 +1,0 @@
-EXPORTS
-m_Kernel
-m_Driver
-new_NtReadFile
-old_NtReadFile

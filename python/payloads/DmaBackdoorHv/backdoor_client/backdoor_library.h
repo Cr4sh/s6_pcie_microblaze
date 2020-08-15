@@ -53,6 +53,14 @@ typedef struct _HVBD_INFO
 
 } HVBD_INFO;
 
+typedef enum _HVBD_PTE_SIZE
+{
+    HVBD_PTE_SIZE_4K,
+    HVBD_PTE_SIZE_2M,
+    HVBD_PTE_SIZE_1G
+
+} HVBD_PTE_SIZE;
+
 int backdoor_invalidate_caches(void);
 
 int backdoor_info(HVBD_INFO *info);
@@ -69,8 +77,8 @@ int backdoor_virt_write_32(uint64_t addr, uint32_t val);
 int backdoor_virt_write_16(uint64_t addr, uint16_t val);
 int backdoor_virt_write_8(uint64_t addr, uint8_t val);
 
-int backdoor_virt_map(uint64_t pte_index, uint64_t phys_addr);
-int backdoor_virt_unmap(uint64_t pte_index);
+int backdoor_virt_map(uint64_t pte_index, uint64_t phys_addr, uint64_t *entry);
+int backdoor_virt_unmap(uint64_t pte_index, uint64_t entry);
 
 int backdoor_phys_read(uint64_t addr, void *buff, int size);
 int backdoor_phys_read_64(uint64_t addr, uint64_t *val);
@@ -100,3 +108,10 @@ int backdoor_virt_update(uint64_t addr, uint64_t entry, uint64_t *old, uint64_t 
 int backdoor_sk_info(SK_INFO *sk_info, uint64_t *call_count);
 int backdoor_sk_info_addr(uint64_t *addr);
 int backdoor_sk_base(SK_INFO *sk_info, uint64_t *sk_addr, uint64_t *skci_addr);
+
+int backdoor_make_exec_ept(uint64_t addr, uint64_t pml4_addr);
+int backdoor_make_exec_pt(uint64_t addr, uint64_t pml4_addr, uint64_t ept_addr);
+
+int backdoor_pte_addr(uint64_t addr, uint64_t *pte_addr, HVBD_PTE_SIZE *pte_size, uint64_t pml4_addr, uint64_t ept_addr);
+
+int backdoor_ept_addr(uint64_t *addr);

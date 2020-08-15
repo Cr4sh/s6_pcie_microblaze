@@ -7,6 +7,7 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "backdoor_client", "backdoor
 	ProjectSection(ProjectDependencies) = postProject
 		{2B04173C-05C7-4E20-BE7B-DD90651EBB4B} = {2B04173C-05C7-4E20-BE7B-DD90651EBB4B}
 		{F9848187-D693-4DB4-B8C2-407165AE5299} = {F9848187-D693-4DB4-B8C2-407165AE5299}
+		{EBB9F5D5-A131-47E9-9E06-59BD64096FEC} = {EBB9F5D5-A131-47E9-9E06-59BD64096FEC}
 	EndProjectSection
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "udis86_lib", "udis86\udis86_lib.vcxproj", "{F9848187-D693-4DB4-B8C2-407165AE5299}"
@@ -20,6 +21,13 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "trustlet_loader", "trustlet
 	EndProjectSection
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "trustlet_demo", "trustlet_demo\trustlet_demo.vcxproj", "{AF413792-440A-4E87-964C-C9B07EE0AA38}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "driver_loader", "driver_loader\driver_loader.vcxproj", "{EBB9F5D5-A131-47E9-9E06-59BD64096FEC}"
+	ProjectSection(ProjectDependencies) = postProject
+		{2B04173C-05C7-4E20-BE7B-DD90651EBB4B} = {2B04173C-05C7-4E20-BE7B-DD90651EBB4B}
+	EndProjectSection
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "driver_example", "driver_example\driver_example.vcxproj", "{708800BA-FBF9-4A7A-845B-D9629E5D70F6}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -47,6 +55,14 @@ Global
 		{AF413792-440A-4E87-964C-C9B07EE0AA38}.Debug|x64.Build.0 = Debug|x64
 		{AF413792-440A-4E87-964C-C9B07EE0AA38}.Release|x64.ActiveCfg = Release|x64
 		{AF413792-440A-4E87-964C-C9B07EE0AA38}.Release|x64.Build.0 = Release|x64
+		{EBB9F5D5-A131-47E9-9E06-59BD64096FEC}.Debug|x64.ActiveCfg = Debug|x64
+		{EBB9F5D5-A131-47E9-9E06-59BD64096FEC}.Debug|x64.Build.0 = Debug|x64
+		{EBB9F5D5-A131-47E9-9E06-59BD64096FEC}.Release|x64.ActiveCfg = Release|x64
+		{EBB9F5D5-A131-47E9-9E06-59BD64096FEC}.Release|x64.Build.0 = Release|x64
+		{708800BA-FBF9-4A7A-845B-D9629E5D70F6}.Debug|x64.ActiveCfg = Debug|x64
+		{708800BA-FBF9-4A7A-845B-D9629E5D70F6}.Debug|x64.Build.0 = Debug|x64
+		{708800BA-FBF9-4A7A-845B-D9629E5D70F6}.Release|x64.ActiveCfg = Release|x64
+		{708800BA-FBF9-4A7A-845B-D9629E5D70F6}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
