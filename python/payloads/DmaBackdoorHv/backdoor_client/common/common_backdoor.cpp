@@ -44,5 +44,21 @@ void bd_printf(char *format, ...)
  
     va_end(arg_list);
 }
+
+int bd_priority_raise(void)
+{
+    int ret = GetThreadPriority(GetCurrentThread());
+
+    // set maximum priority for the current thread
+    SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_TIME_CRITICAL);
+
+    return ret;
+}
+
+void bd_priority_revert(int priority)
+{
+    // restore current thread priority
+    SetThreadPriority(GetCurrentThread(), priority);
+}
 //--------------------------------------------------------------------------------------
 // EoF

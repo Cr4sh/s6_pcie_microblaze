@@ -315,7 +315,6 @@ Loading arbitrary kernel drivers into the specified hypervisor partition from an
 [+] Payload driver image address is 0xffffc801321ee000
 [+] Performing cleanup...
 [+] DONE
-
 ```
 
 <img src="https://raw.githubusercontent.com/Cr4sh/s6_pcie_microblaze/master/docs/images/backdoor_vm_inject.png" width="749" height="498">

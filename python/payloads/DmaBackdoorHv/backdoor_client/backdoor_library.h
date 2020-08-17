@@ -21,6 +21,10 @@ void bd_yeld(void);
     
 // debug output
 void bd_printf(char *format, ...);
+
+// set/revert highest priority for the current thread
+int bd_priority_raise(void);
+void bd_priority_revert(int priority);
 }
 
 #pragma pack(1)
