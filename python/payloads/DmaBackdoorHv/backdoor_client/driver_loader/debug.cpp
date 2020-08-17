@@ -21,8 +21,8 @@ char *DbgNameFromPath(char *lpszPath)
 
 void DbgMsg(char *lpszFile, int Line, char *lpszMsg, ...)
 {    
-    func_sprintf f_sprintf = (func_sprintf)ImportGetProcAddress(0, H_sprintf);
-    func_vsprintf f_vsprintf = (func_vsprintf)ImportGetProcAddress(0, H_vsprintf);
+    func_sprintf f_sprintf = (func_sprintf)ImportGetProcAddress(I_MODULE_NT, H_sprintf);
+    func_vsprintf f_vsprintf = (func_vsprintf)ImportGetProcAddress(I_MODULE_NT, H_vsprintf);
 
     if (f_sprintf && f_vsprintf)
     {

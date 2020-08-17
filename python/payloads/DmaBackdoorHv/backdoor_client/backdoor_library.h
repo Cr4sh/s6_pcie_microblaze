@@ -59,7 +59,13 @@ typedef enum _HVBD_PTE_SIZE
     HVBD_PTE_SIZE_2M,
     HVBD_PTE_SIZE_1G
 
-} HVBD_PTE_SIZE;
+} HVBD_PTE_SIZE;    
+
+/*
+    Memory protection flags for backdoor_modify_pt() and backdoor_modify_ept()
+*/
+#define HVBD_MEM_EXECUTABLE 1
+#define HVBD_MEM_WRITEABLE  2
 
 int backdoor_invalidate_caches(void);
 
@@ -109,8 +115,8 @@ int backdoor_sk_info(SK_INFO *sk_info, uint64_t *call_count);
 int backdoor_sk_info_addr(uint64_t *addr);
 int backdoor_sk_base(SK_INFO *sk_info, uint64_t *sk_addr, uint64_t *skci_addr);
 
-int backdoor_make_exec_ept(uint64_t addr, uint64_t pml4_addr);
-int backdoor_make_exec_pt(uint64_t addr, uint64_t pml4_addr, uint64_t ept_addr);
+int backdoor_modify_ept(uint32_t flags, uint64_t addr, uint64_t pml4_addr);
+int backdoor_modify_pt(uint32_t flags, uint64_t addr, uint64_t pml4_addr, uint64_t ept_addr);
 
 int backdoor_pte_addr(uint64_t addr, uint64_t *pte_addr, HVBD_PTE_SIZE *pte_size, uint64_t pml4_addr, uint64_t ept_addr);
 

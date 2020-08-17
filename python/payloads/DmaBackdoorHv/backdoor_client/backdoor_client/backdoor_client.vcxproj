@@ -99,6 +99,8 @@
     <ClInclude Include="..\common\common_backdoor.h" />
     <ClInclude Include="..\common\image_policy.h" />
     <ClInclude Include="..\common\loader.h" />
+    <ClInclude Include="..\driver_loader.h" />
+    <ClInclude Include="..\driver_loader_sk.h" />
     <ClInclude Include="..\vmx.h" />
     <ClInclude Include="backdoor_debug.h" />
     <ClInclude Include="service.h" />

