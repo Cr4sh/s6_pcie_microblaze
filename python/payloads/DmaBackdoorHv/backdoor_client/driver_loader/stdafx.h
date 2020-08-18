@@ -10,7 +10,7 @@ extern "C"
 #pragma intrinsic(memset)
 #pragma intrinsic(memcpy)
 
-#include "stdint.h"
+#include <stdint.h>
 #include "common.h"
 #include "asm/common_asm.h"
 

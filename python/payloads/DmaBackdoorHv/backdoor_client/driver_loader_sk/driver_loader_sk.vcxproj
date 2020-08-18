@@ -136,7 +136,6 @@
     <ClInclude Include="runtime\runtime.h" />
     <ClInclude Include="runtime\std.h" />
     <ClInclude Include="stdafx.h" />
-    <ClInclude Include="stdint.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

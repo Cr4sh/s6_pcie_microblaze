@@ -58,9 +58,6 @@
     <ClInclude Include="debug.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="stdint.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="undocnt.h">
       <Filter>Header Files</Filter>
     </ClInclude>

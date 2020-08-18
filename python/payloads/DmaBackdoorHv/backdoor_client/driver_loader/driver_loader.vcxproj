@@ -135,7 +135,6 @@
     <ClInclude Include="runtime\import.h" />
     <ClInclude Include="runtime\runtime.h" />
     <ClInclude Include="stdafx.h" />
-    <ClInclude Include="stdint.h" />
     <ClInclude Include="undocnt.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
