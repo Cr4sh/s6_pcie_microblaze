@@ -22,9 +22,11 @@
 
 typedef struct _INFECTOR_CONFIG
 {
-    UINT64 BackdoorEntryInfected;
+    UINT64 BackdoorEntryDma;
     UINT64 LocateProtocol;
     UINT64 SystemTable;
+    UINT64 BackdoorEntryInfected;
+    UINT64 OriginalEntryPoint;
 
 } INFECTOR_CONFIG,
 *PINFECTOR_CONFIG;
