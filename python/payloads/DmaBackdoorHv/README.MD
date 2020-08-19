@@ -7,7 +7,13 @@ This repository contains Hyper-V backdoor that might be useful for reverse engin
 
 Also, backdoor allows to inspect Secure Kernel and run 3-rd party trustlets in the [Isolated User Mode](https://docs.microsoft.com/en-us/windows/win32/procthread/isolated-user-mode--ium--processes) (a virtualization-based security feature of Windows 10).
 
-To deploy the backdoor you can use [DMA attack toolkit](https://github.com/Cr4sh/s6_pcie_microblaze) or UEFI bootkit based on [signed insecure bootloader](https://support.microsoft.com/en-us/help/4524244/security-update-for-windows-10-february-11-2020) from Kaspersky products that [was discovered](https://habr.com/en/post/446238/) by [@ValdikSS](https://twitter.com/valdikss).
+To deploy the backdoor you can use one of the following methods:
+
+ * DMA attack over the PCI Express bus using [DMA attack toolkit](https://github.com/Cr4sh/s6_pcie_microblaze)
+
+ * UEFI bootkit based on [signed insecure bootloader](https://support.microsoft.com/en-us/help/4524244/security-update-for-windows-10-february-11-2020) from Kaspersky products that [was discovered](https://habr.com/en/post/446238/) by [@ValdikSS](https://twitter.com/valdikss).
+
+ * UEFI bootkit based on the infection of the platform firmware stored in [SPI flash chip on the motherboard](https://raw.githubusercontent.com/Cr4sh/blog/master/uefi-boot-script-expl/spi-flash-chips.jpg), which is suitable for supply chain attacks.
 
 Backdoor supports 64-bit versions of Windows 10 1709, 1803, 1809, 1903, 1909 and 2004 running on Intel systems.
 
@@ -37,7 +43,7 @@ Backdoor supports 64-bit versions of Windows 10 1709, 1803, 1809, 1903, 1909 and
 * `grub-2.02_chainloader.patch` &minus; GRUB2 patch used to compile malicious chain-loader module needed for Secure Boot bypass with the help of the signed Kaspersky bootloader.
 
 
-## Deploying the backdoor
+## Deploying the backdoor using signed Kaspersky bootloader
 
 [Windows Virtualization-based Security (VBS)](https://docs.microsoft.com/en-us/windows-hardware/design/device-experiences/oem-vbs) uses hardware virtualization features and Hyper-V to host a number of security solutions, providing them with greatly increased protection from vulnerabilities in the operating system, and preventing the use of malicious exploits which attempt to defeat protections. One of the examples of such services is [Hypervisor-Enforced Code Integrity](https://docs.microsoft.com/en-us/windows/security/threat-protection/device-guard/enable-virtualization-based-protection-of-code-integrity) which uses VBS to significantly strengthen code integrity policy enforcement.
 
@@ -70,6 +76,46 @@ To add Kaspersky bootloader digital signature to the Secure Boot Forbidden Signa
 Also, starting from Windows 10 2004 (build 19041) dbx variable is being updated with banned bootloader hash during operating system setup, so, if after the backdoor install your system becomes unbootable &minus; just disable or reset Secure Boot.
 
 By default `bootkit_installer.ps1` is placing 1-st stage Kaspersky bootloader as `\EFI\Microsoft\Boot\bootmgfw.efi` (Windows EFI bootloader) and `\EFI\Boot\bootx64.efi` (default EFI bootloader) files on EFI System Parition, if after the backdoor install your system boots as usual but you don't see Hyper-V backdoor red splash screen &minus; ensure that firmware is configured to use proper bootloader.
+
+## Deploying the backdoor using firmware flash infection
+
+To infect platform firmware stored in flash chip on the motherboard you will need some SPI flash programmer, I prefer to use cheap and widely available [FT2232H Mini Module](https://www.ftdichip.com/Support/Documents/DataSheets/Modules/DS_FT2232H_Mini_Module.pdf) from FTDI. In addition to the programmer you also will need the following tools:
+
+* [UEFITool](https://github.com/LongSoft/UEFITool/releases/tag/0.28.0) utility
+
+* [Flashrom](https://github.com/flashrom/flashrom/releases/tag/v1.2) utility
+
+* SOIC8 [test clip](https://www.sparkfun.com/products/13153) or [probe hook](https://www.sparkfun.com/products/9741) clips kit
+
+First of all, you have to disassemble the machine and locate flash chip with platform firmware. Usually, it's W25Q64 or W25Q128 Windbond NOR flash in SOIC8 package. Then you have to connect the chip to the FT2232H Mini Module used as SPI flash programmer. It’s more convenient to use SOIC8 test clip than probe hook clips, but very often there’s not enough free space around the chip to place test clip:
+
+<img src="https://raw.githubusercontent.com/Cr4sh/s6_pcie_microblaze/master/docs/images/spi_probe.jpg" width="714" height="464">
+
+Flash chip must be connected to the channel A of FT2232 Mini Module by the following scheme:
+
+<img src="https://raw.githubusercontent.com/Cr4sh/s6_pcie_microblaze/master/docs/images/spi_wiring.png" width="542" height="237">
+
+Now you can read flash chip contents using Flashrom:
+
+```
+> flashrom -p ft2232_spi:type=2232H,port=A –r firmware.bin
+```
+
+After that you need to open dunped firmware in UEFITool, locate arbitrary UEFI DXE driver to infect and extract its PE32 image section from the firmware image:
+
+<img src="https://raw.githubusercontent.com/Cr4sh/s6_pcie_microblaze/master/docs/images/uefi_tool.png" width="721" height="484">
+
+For example, I chosed Bds.efi DXE driver responsible for boot device selection as pretty much suitable one. Then you can infect extracted driver with Hyper-V backdoor using `infector.py` program:
+
+```
+> python infector.py --payload DmaBackdoorHv_X64.efi --input Bds.efi --output Bds_infected.efi
+```
+
+After that you have to replace original driver image with infected one in UEFITool, save resulting firmware image and flash it back into the chip:
+
+```
+> flashrom -p ft2232_spi:type=2232H,port=A –w firmware_infected.bin
+```
 
 ## Usage
 
