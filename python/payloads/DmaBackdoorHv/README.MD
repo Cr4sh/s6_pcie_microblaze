@@ -89,7 +89,7 @@ To infect platform firmware stored in flash chip on the motherboard you will nee
 
 First of all, you have to disassemble the machine and locate flash chip with platform firmware. Usually, it's W25Q64 or W25Q128 Windbond NOR flash in SOIC8 package. Then you have to connect the chip to the FT2232H Mini Module used as SPI flash programmer. It’s more convenient to use SOIC8 test clip than probe hook clips, but very often there’s not enough free space around the chip to place test clip:
 
-<img src="https://raw.githubusercontent.com/Cr4sh/s6_pcie_microblaze/master/docs/images/spi_probe.jpg" width="714" height="464">
+<img src="https://raw.githubusercontent.com/Cr4sh/s6_pcie_microblaze/master/docs/images/spi_probe.jpg" width="666" height="433">
 
 Flash chip must be connected to the channel A of FT2232 Mini Module by the following scheme:
 
