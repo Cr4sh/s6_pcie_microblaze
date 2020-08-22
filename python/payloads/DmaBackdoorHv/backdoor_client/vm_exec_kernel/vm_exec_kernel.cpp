@@ -340,7 +340,11 @@ NTSTATUS DriverEntry(
         return STATUS_UNSUCCESSFUL;
     }
 
-    return STATUS_SUCCESS;
+    /*
+        We don't need to keep this driver loaded after the DLL injection so here we
+        just returning an error code but without closing unique event handle.
+    */
+    return STATUS_DOMAIN_EXISTS;
 }
 //--------------------------------------------------------------------------------------
 // EoF
