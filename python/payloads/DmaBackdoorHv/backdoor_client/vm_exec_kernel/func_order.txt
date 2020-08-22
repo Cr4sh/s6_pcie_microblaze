@@ -1,0 +1,6 @@
+dll_inject_Entry
+dll_inject_ProcessImports
+dll_inject_CalcHash
+dll_inject_GetModuleAddressByHash
+dll_inject_GetProcAddressByHash
+dll_inject_End

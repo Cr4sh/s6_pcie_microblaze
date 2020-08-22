@@ -1,6 +1,4 @@
 
-#define KUSER_SHARED_DATA 0xfffff78000000000
-
 // spin lock address
 #define DRIVER_LOCK_ADDR (KUSER_SHARED_DATA + PAGE_SIZE - sizeof(ULONG64))
 

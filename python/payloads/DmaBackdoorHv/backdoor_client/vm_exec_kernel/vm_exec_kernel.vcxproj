@@ -11,10 +11,10 @@
     </ProjectConfiguration>
   </ItemGroup>
   <PropertyGroup Label="Globals">
-    <ProjectGuid>{EBB9F5D5-A131-47E9-9E06-59BD64096FEC}</ProjectGuid>
-    <RootNamespace>driver_loader</RootNamespace>
+    <ProjectGuid>{954ED771-8F85-4CE9-B18F-2DE36A5450DC}</ProjectGuid>
+    <RootNamespace>vm_exec_kernel</RootNamespace>
     <Keyword>Win32Proj</Keyword>
-    <ProjectName>driver_loader</ProjectName>
+    <ProjectName>vm_exec_kernel</ProjectName>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
@@ -51,7 +51,7 @@
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
-      <AdditionalOptions>/D "DBG" /D "_AMD64_" /Gw %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalOptions>/D "_AMD64_" /D "DBG" /Gw %(AdditionalOptions)</AdditionalOptions>
       <Optimization>Full</Optimization>
       <AdditionalIncludeDirectories>$(ProjectDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>WIN32;_DEBUG;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
@@ -68,11 +68,11 @@
       <ExceptionHandling>false</ExceptionHandling>
     </ClCompile>
     <Link>
-      <AdditionalOptions>/DRIVER /VERSION:5.1 /OSVERSION:5.1 /BASE:0x10000 /ALIGN:0x10 /SUBSYSTEM:native /ENTRY:DriverEntry /STACK:0x40000,0x1000 /NODEFAULTLIB /OPT:REF /OPT:ICF /DEF:driver_loader.def /MERGE:.rdata=.text /MERGE:.edata=.text %(AdditionalOptions)</AdditionalOptions>
-      <AdditionalDependencies>../backdoor_library.lib;ntoskrnl.lib;hal.lib;%(AdditionalDependencies)</AdditionalDependencies>
-      <OutputFile>../driver_loader.sys</OutputFile>
+      <AdditionalOptions>/DRIVER /VERSION:5.1 /OSVERSION:5.1 /BASE:0x10000 /SUBSYSTEM:native /ENTRY:DriverEntry /STACK:0x40000,0x1000 /NODEFAULTLIB /OPT:REF /OPT:ICF /ORDER:@func_order.txt %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalDependencies>ntoskrnl.lib;hal.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <OutputFile>../vm_exec_kernel.sys</OutputFile>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <ProgramDatabaseFile>../driver_loader.pdb</ProgramDatabaseFile>
+      <ProgramDatabaseFile>../vm_exec_kernel.pdb</ProgramDatabaseFile>
       <SubSystem>Native</SubSystem>
       <RandomizedBaseAddress>
       </RandomizedBaseAddress>
@@ -81,10 +81,13 @@
       </DataExecutionPrevention>
       <ImageHasSafeExceptionHandlers>false</ImageHasSafeExceptionHandlers>
     </Link>
+    <PreBuildEvent>
+      <Command>pre_build.bat</Command>
+    </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
-      <AdditionalOptions>/D "DBG" /D "_AMD64_" /Gw %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalOptions>/D "_AMD64_" /D "DBG" /Gw %(AdditionalOptions)</AdditionalOptions>
       <Optimization>Full</Optimization>
       <AdditionalIncludeDirectories>$(ProjectDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>WIN32;_DEBUG;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
@@ -101,11 +104,11 @@
       <ExceptionHandling>false</ExceptionHandling>
     </ClCompile>
     <Link>
-      <AdditionalOptions>/DRIVER /VERSION:5.1 /OSVERSION:5.1 /BASE:0x10000 /ALIGN:0x10 /SUBSYSTEM:native /ENTRY:DriverEntry /STACK:0x40000,0x1000 /NODEFAULTLIB /OPT:REF /OPT:ICF /DEF:driver_loader.def /MERGE:.rdata=.text /MERGE:.edata=.text %(AdditionalOptions)</AdditionalOptions>
-      <AdditionalDependencies>../backdoor_library.lib;ntoskrnl.lib;hal.lib;%(AdditionalDependencies)</AdditionalDependencies>
-      <OutputFile>../driver_loader.sys</OutputFile>
+      <AdditionalOptions>/DRIVER /VERSION:5.1 /OSVERSION:5.1 /BASE:0x10000 /SUBSYSTEM:native /ENTRY:DriverEntry /STACK:0x40000,0x1000 /NODEFAULTLIB /OPT:REF /OPT:ICF /ORDER:@func_order.txt %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalDependencies>ntoskrnl.lib;hal.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <OutputFile>../vm_exec_kernel.sys</OutputFile>
       <GenerateDebugInformation>false</GenerateDebugInformation>
-      <ProgramDatabaseFile>../driver_loader.pdb</ProgramDatabaseFile>
+      <ProgramDatabaseFile>../vm_exec_kernel.pdb</ProgramDatabaseFile>
       <SubSystem>Native</SubSystem>
       <RandomizedBaseAddress>
       </RandomizedBaseAddress>
@@ -114,28 +117,28 @@
       </DataExecutionPrevention>
       <ImageHasSafeExceptionHandlers>false</ImageHasSafeExceptionHandlers>
     </Link>
+    <PreBuildEvent>
+      <Command>pre_build.bat</Command>
+    </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <MASM Include="asm\amd64\common_asm.asm">
-    </MASM>
-  </ItemGroup>
-  <ItemGroup>
     <ClCompile Include="..\common\loader.cpp" />
-    <ClCompile Include="driver_loader.cpp" />
+    <ClCompile Include="common.cpp" />
     <ClCompile Include="debug.cpp" />
-    <ClCompile Include="runtime\import.cpp" />
-    <ClCompile Include="runtime\runtime.cpp" />
+    <ClCompile Include="dll_inject_shellcode.cpp" />
+    <ClCompile Include="vm_exec_kernel.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\common\loader.h" />
-    <ClInclude Include="..\driver_loader.h" />
     <ClInclude Include="asm\common_asm.h" />
     <ClInclude Include="common.h" />
     <ClInclude Include="debug.h" />
-    <ClInclude Include="runtime\import.h" />
-    <ClInclude Include="runtime\runtime.h" />
+    <ClInclude Include="dll_inject_shellcode.h" />
     <ClInclude Include="stdafx.h" />
     <ClInclude Include="undocnt.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <MASM Include="asm\amd64\common_asm.asm" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

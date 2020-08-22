@@ -7,6 +7,7 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "backdoor_client", "backdoor
 	ProjectSection(ProjectDependencies) = postProject
 		{2B04173C-05C7-4E20-BE7B-DD90651EBB4B} = {2B04173C-05C7-4E20-BE7B-DD90651EBB4B}
 		{05D0F16A-FAD2-4225-A2E2-7276968D3D24} = {05D0F16A-FAD2-4225-A2E2-7276968D3D24}
+		{954ED771-8F85-4CE9-B18F-2DE36A5450DC} = {954ED771-8F85-4CE9-B18F-2DE36A5450DC}
 		{F9848187-D693-4DB4-B8C2-407165AE5299} = {F9848187-D693-4DB4-B8C2-407165AE5299}
 		{EBB9F5D5-A131-47E9-9E06-59BD64096FEC} = {EBB9F5D5-A131-47E9-9E06-59BD64096FEC}
 	EndProjectSection
@@ -33,6 +34,13 @@ EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "driver_loader_sk", "driver_loader_sk\driver_loader_sk.vcxproj", "{05D0F16A-FAD2-4225-A2E2-7276968D3D24}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "driver_example_sk", "driver_example_sk\driver_example_sk.vcxproj", "{F92DD675-46F5-4487-A43D-628789C5DBEB}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "vm_exec_kernel", "vm_exec_kernel\vm_exec_kernel.vcxproj", "{954ED771-8F85-4CE9-B18F-2DE36A5450DC}"
+	ProjectSection(ProjectDependencies) = postProject
+		{60067986-A909-433D-9699-0E00FE13E16E} = {60067986-A909-433D-9699-0E00FE13E16E}
+	EndProjectSection
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "vm_exec_user", "vm_exec_user\vm_exec_user.vcxproj", "{60067986-A909-433D-9699-0E00FE13E16E}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -76,6 +84,14 @@ Global
 		{F92DD675-46F5-4487-A43D-628789C5DBEB}.Debug|x64.Build.0 = Debug|x64
 		{F92DD675-46F5-4487-A43D-628789C5DBEB}.Release|x64.ActiveCfg = Release|x64
 		{F92DD675-46F5-4487-A43D-628789C5DBEB}.Release|x64.Build.0 = Release|x64
+		{954ED771-8F85-4CE9-B18F-2DE36A5450DC}.Debug|x64.ActiveCfg = Debug|x64
+		{954ED771-8F85-4CE9-B18F-2DE36A5450DC}.Debug|x64.Build.0 = Debug|x64
+		{954ED771-8F85-4CE9-B18F-2DE36A5450DC}.Release|x64.ActiveCfg = Release|x64
+		{954ED771-8F85-4CE9-B18F-2DE36A5450DC}.Release|x64.Build.0 = Release|x64
+		{60067986-A909-433D-9699-0E00FE13E16E}.Debug|x64.ActiveCfg = Debug|x64
+		{60067986-A909-433D-9699-0E00FE13E16E}.Debug|x64.Build.0 = Debug|x64
+		{60067986-A909-433D-9699-0E00FE13E16E}.Release|x64.ActiveCfg = Release|x64
+		{60067986-A909-433D-9699-0E00FE13E16E}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

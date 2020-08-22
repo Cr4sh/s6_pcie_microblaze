@@ -2,6 +2,7 @@ extern "C"
 {
 #include <ntifs.h>
 #include <stdio.h>
+#include <stdint.h>
 #include <stdarg.h>
 #include <ntimage.h>
 }
@@ -10,7 +11,6 @@ extern "C"
 #pragma intrinsic(memcpy)
 #pragma intrinsic(strcmp)
 
-#include <stdint.h>
 #include "common.h"
 #include "asm/common_asm.h"
 

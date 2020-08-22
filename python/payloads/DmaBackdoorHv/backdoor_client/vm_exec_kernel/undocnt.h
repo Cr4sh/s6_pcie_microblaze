@@ -1,4 +1,37 @@
 
+typedef struct _LDR_DATA_TABLE_ENTRY
+{
+    LIST_ENTRY InLoadOrderModuleList;
+    LIST_ENTRY InMemoryOrderModuleList;
+    LIST_ENTRY InInitializationOrderModuleList;
+    PVOID DllBase;
+    PVOID EntryPoint;
+    ULONG SizeOfImage;
+    UNICODE_STRING FullDllName;
+    UNICODE_STRING BaseDllName;
+    ULONG Flags;
+    USHORT LoadCount;
+    USHORT TlsIndex;
+    LIST_ENTRY HashLinks;
+    PVOID SectionPointer;
+    ULONG CheckSum;
+    ULONG TimeDateStamp;
+
+} LDR_DATA_TABLE_ENTRY,
+*PLDR_DATA_TABLE_ENTRY;
+
+typedef struct _PEB_LDR_DATA
+{
+    ULONG Length;
+    BOOLEAN Initialized;
+    PVOID SsHandle;
+    LIST_ENTRY ModuleListLoadOrder;
+    LIST_ENTRY ModuleListMemoryOrder;
+    LIST_ENTRY ModuleListInitOrder;
+
+} PEB_LDR_DATA,
+*PPEB_LDR_DATA;
+
 typedef enum _SYSTEM_INFORMATION_CLASS 
 {
     SystemBasicInformation,
@@ -87,26 +120,51 @@ typedef enum _SYSTEM_INFORMATION_CLASS
     
 } SYSTEM_INFORMATION_CLASS;
 
-typedef struct _RTL_PROCESS_MODULE_INFORMATION 
+typedef struct _SYSTEM_PROCESS_INFORMATION 
 {
-    HANDLE Section;                 // Not filled in
-    PVOID MappedBase;
-    PVOID ImageBase;
-    ULONG ImageSize;
-    ULONG Flags;
-    USHORT LoadOrderIndex;
-    USHORT InitOrderIndex;
-    USHORT LoadCount;
-    USHORT OffsetToFileName;
-    UCHAR  FullPathName[ 256 ];
-    
-} RTL_PROCESS_MODULE_INFORMATION, 
-*PRTL_PROCESS_MODULE_INFORMATION;
+    ULONG NextEntryOffset;
+    ULONG NumberOfThreads;
+    LARGE_INTEGER SpareLi1;
+    LARGE_INTEGER SpareLi2;
+    LARGE_INTEGER SpareLi3;
+    LARGE_INTEGER CreateTime;
+    LARGE_INTEGER UserTime;
+    LARGE_INTEGER KernelTime;
+    UNICODE_STRING ImageName;
+    KPRIORITY BasePriority;
+    HANDLE UniqueProcessId;
+    HANDLE InheritedFromUniqueProcessId;
+    ULONG HandleCount;
+    ULONG SessionId;
+    ULONG_PTR PageDirectoryBase;
+    SIZE_T PeakVirtualSize;
+    SIZE_T VirtualSize;
+    ULONG PageFaultCount;
+    SIZE_T PeakWorkingSetSize;
+    SIZE_T WorkingSetSize;
+    SIZE_T QuotaPeakPagedPoolUsage;
+    SIZE_T QuotaPagedPoolUsage;
+    SIZE_T QuotaPeakNonPagedPoolUsage;
+    SIZE_T QuotaNonPagedPoolUsage;
+    SIZE_T PagefileUsage;
+    SIZE_T PeakPagefileUsage;
+    SIZE_T PrivatePageCount;
+    LARGE_INTEGER ReadOperationCount;
+    LARGE_INTEGER WriteOperationCount;
+    LARGE_INTEGER OtherOperationCount;
+    LARGE_INTEGER ReadTransferCount;
+    LARGE_INTEGER WriteTransferCount;
+    LARGE_INTEGER OtherTransferCount;
 
-typedef struct _RTL_PROCESS_MODULES 
-{
-    ULONG NumberOfModules;
-    RTL_PROCESS_MODULE_INFORMATION Modules[ 1 ];
-    
-} RTL_PROCESS_MODULES, 
-*PRTL_PROCESS_MODULES;
+} SYSTEM_PROCESS_INFORMATION, 
+*PSYSTEM_PROCESS_INFORMATION;
+
+NTSYSAPI 
+NTSTATUS 
+NTAPI 
+ZwQuerySystemInformation(
+    SYSTEM_INFORMATION_CLASS SystemInformationClass,
+    PVOID SystemInformation,
+    ULONG SystemInformationLength,
+    PULONG ReturnLength
+);

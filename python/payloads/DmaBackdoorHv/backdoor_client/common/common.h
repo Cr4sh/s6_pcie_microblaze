@@ -2,12 +2,15 @@
 #define PAGE_SHIFT 12
 #define PAGE_SIZE 0x1000
 
+#define KUSER_SHARED_DATA 0xfffff78000000000
 
 #define RVATOVA(_addr_, _x_) ((uint8_t *)(_addr_) + (_x_))
 
 #define _ALIGN_DOWN(_x_, _align_) ((_x_) & ~((_align_) - 1))
-
 #define _ALIGN_UP(_x_, _align_) (((_x_) & ((_align_) - 1)) ? _ALIGN_DOWN((_x_), (_align_)) + (_align_) : (_x_))
+
+#define M_ALLOC(_size_) LocalAlloc(LMEM_FIXED | LMEM_ZEROINIT, (_size_))
+#define M_FREE(_addr_) LocalFree((_addr_))
 
 
 #define IFMT32 "0x%.8x"

