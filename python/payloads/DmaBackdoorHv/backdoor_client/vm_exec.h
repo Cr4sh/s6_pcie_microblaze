@@ -1,4 +1,7 @@
 
+// VM exec user export ordinals
+#define VM_EXEC_USER_ORD_STRUCT 1
+
 // name of the process to inject DLL into
 #define VM_EXEC_PROCESS L"svchost.exe"
 
@@ -18,6 +21,8 @@
 #define VM_EXEC_CTL_ERROR   3   // error while executing command
 #define VM_EXEC_CTL_TIMEOUT 4   // timeout while executing command
 
+#pragma pack(1)
+
 typedef struct _VM_EXEC_STRUCT
 {
     uint32_t control;
@@ -36,3 +41,5 @@ typedef struct _VM_EXEC_INFO
 
 } VM_EXEC_INFO,
 *PVM_EXEC_INFO;
+
+#pragma pack()

