@@ -535,6 +535,8 @@ int _tmain(int argc, _TCHAR* argv[])
         return 0;
     }
 
+    m_quiet = false;
+
     // run current thread only on 1-st CPU
     SetThreadAffinityMask(GetCurrentThread(), 1);
 

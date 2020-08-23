@@ -31,7 +31,7 @@
 #define EPT_WRITEABLE_SET(_e_) ((_e_) | ((uint64_t)1 << 1))
 #define EPT_WRITEABLE_UNSET(_e_) ((_e_) & ~((uint64_t)1 << 1))
 
-bool m_quiet = false;
+bool m_quiet = true;
 //--------------------------------------------------------------------------------------
 int backdoor_invalidate_caches(void)
 {
