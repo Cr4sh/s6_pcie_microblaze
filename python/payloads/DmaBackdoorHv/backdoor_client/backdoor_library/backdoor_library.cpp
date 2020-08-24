@@ -397,39 +397,59 @@ int backdoor_virt_unmap(uint64_t pte_index, uint64_t entry)
     return 0;
 }
 //--------------------------------------------------------------------------------------
-int backdoor_phys_read(uint64_t addr, void *buff, int size)
+int backdoor_phys_read_page(uint64_t addr, void *buff, int size)
 {
-    uint64_t temp_addr = _ALIGN_DOWN(addr, PAGE_SIZE);
-    uint64_t temp_size = _ALIGN_UP(addr - temp_addr + size, PAGE_SIZE);
-    uint64_t entry = 0;
+    if ((addr & ~(PAGE_SIZE - 1)) != ((addr + size - 1) & ~(PAGE_SIZE - 1)))
+    {
+        bd_printf("backdoor_phys_read() ERROR: Crossed page boundary\n");
+        return -1;
+    }
 
-    // allocate temporary qword aligned buffer
-    uint8_t *temp = (uint8_t *)bd_alloc(temp_size);
-    if (temp == NULL)
+    uint64_t page_offs = addr & (PAGE_SIZE - 1);
+    uint64_t page_addr = addr & ~(PAGE_SIZE - 1);        
+    uint64_t entry = 0;
+    
+    // map physical memory page at zero VA
+    backdoor_virt_map(PHYS_MAP_PTE, page_addr, &entry);
+
+    // read page contents from virtual memory
+    if (backdoor_virt_read((PHYS_MAP_PTE * PAGE_SIZE) + page_offs, buff, size) != 0)
     {
         return -1;
     }
 
-    for (int i = 0; i < temp_size; i += PAGE_SIZE)
-    {
-        // map physical memory page at zero VA
-        backdoor_virt_map(PHYS_MAP_PTE, temp_addr + i, &entry);
+    // unmap physical memory page
+    backdoor_virt_unmap(PHYS_MAP_PTE, entry);
 
-        // read page contents from virtual memory
-        if (backdoor_virt_read(PHYS_MAP_PTE * PAGE_SIZE, temp + i, PAGE_SIZE) != 0)
+    return 0;
+}
+
+int backdoor_phys_read(uint64_t addr, void *buff, int size)
+{
+    int ptr = 0;
+
+    while (ptr < size)
+    {
+        int chunk_size = PAGE_SIZE;
+        uint64_t chunk_addr = addr + ptr;
+
+        if ((chunk_addr & (PAGE_SIZE - 1)) != 0)
         {
-            bd_free(temp);
-            return -1;            
+            // memory read request should reside to the single memory page
+            chunk_size = (int)(_ALIGN_UP(chunk_addr, PAGE_SIZE) - chunk_addr);
         }
-        
-        // unmap physical memory page
-        backdoor_virt_unmap(PHYS_MAP_PTE, entry);
+
+        chunk_size = min(size - ptr, chunk_size);
+
+        // read single chunk
+        if (backdoor_phys_read_page(chunk_addr, (uint8_t *)buff + ptr, chunk_size) != 0)
+        {
+            return -1;
+        }
+
+        ptr += chunk_size;
     }
 
-    // copy readed data to calee buffer
-    memcpy(buff, temp + (addr - temp_addr), size);
-
-    bd_free(temp);
     return 0;
 }
 //--------------------------------------------------------------------------------------
@@ -453,55 +473,59 @@ int backdoor_phys_read_8(uint64_t addr, uint8_t *val)
     return backdoor_phys_read(addr, (void *)val, sizeof(uint8_t));
 }
 //--------------------------------------------------------------------------------------
-int backdoor_phys_write(uint64_t addr, void *buff, int size)
+int backdoor_phys_write_page(uint64_t addr, void *buff, int size)
 {
-    uint64_t temp_addr = _ALIGN_DOWN(addr, PAGE_SIZE);
-    uint64_t temp_size = _ALIGN_UP(addr - temp_addr + size, PAGE_SIZE);
+    if ((addr & ~(PAGE_SIZE - 1)) != ((addr + size - 1) & ~(PAGE_SIZE - 1)))
+    {
+        bd_printf("backdoor_phys_write() ERROR: Crossed page boundary\n");
+        return -1;
+    }
+
+    uint64_t page_offs = addr & (PAGE_SIZE - 1);
+    uint64_t page_addr = addr & ~(PAGE_SIZE - 1);
     uint64_t entry = 0;
 
-    // allocate temporary qword aligned buffer
-    uint8_t *temp = (uint8_t *)bd_alloc(temp_size);
-    if (temp == NULL)
+    // map physical memory page at zero VA
+    backdoor_virt_map(PHYS_MAP_PTE, page_addr, &entry);
+
+    // read page contents from virtual memory
+    if (backdoor_virt_write((PHYS_MAP_PTE * PAGE_SIZE) + page_offs, buff, size) != 0)
     {
         return -1;
     }
 
-    for (int i = 0; i < temp_size; i += PAGE_SIZE)
-    {
-        // map physical memory page at zero VA
-        backdoor_virt_map(PHYS_MAP_PTE, temp_addr + i, &entry);
+    // unmap physical memory page
+    backdoor_virt_unmap(PHYS_MAP_PTE, entry);
 
-        // read page contents from virtual memory
-        if (backdoor_virt_read(PHYS_MAP_PTE * PAGE_SIZE, temp + i, PAGE_SIZE) != 0)
+    return 0;
+}
+
+int backdoor_phys_write(uint64_t addr, void *buff, int size)
+{
+    int ptr = 0;
+
+    while (ptr < size)
+    {
+        int chunk_size = PAGE_SIZE;
+        uint64_t chunk_addr = addr + ptr;
+
+        if ((chunk_addr & (PAGE_SIZE - 1)) != 0)
         {
-            bd_free(temp);
-            return -1;            
+            // memory write request should reside to the single memory page
+            chunk_size = (int)(_ALIGN_UP(chunk_addr, PAGE_SIZE) - chunk_addr);
         }
-        
-        // unmap physical memory page
-        backdoor_virt_unmap(PHYS_MAP_PTE, entry);
+
+        chunk_size = min(size - ptr, chunk_size);
+
+        // write single chunk
+        if (backdoor_phys_write_page(chunk_addr, (uint8_t *)buff + ptr, chunk_size) != 0)
+        {
+            return -1;
+        }
+
+        ptr += chunk_size;
     }
 
-    // copy new data to the buffer
-    memcpy(temp + (addr - temp_addr), buff, size);
-
-    for (int i = 0; i < temp_size; i += PAGE_SIZE)
-    {
-        // map physical memory page at zero VA
-        backdoor_virt_map(PHYS_MAP_PTE, temp_addr + i, &entry);
-
-        // write page contents into virtual memory
-        if (backdoor_virt_write(PHYS_MAP_PTE * PAGE_SIZE, temp + i, PAGE_SIZE) != 0)
-        {
-            bd_free(temp);
-            return -1;            
-        }
-        
-        // unmap physical memory page
-        backdoor_virt_unmap(PHYS_MAP_PTE, entry);
-    }
-
-    bd_free(temp);
     return 0;
 }
 //--------------------------------------------------------------------------------------
@@ -2127,18 +2151,18 @@ int backdoor_pte_addr(uint64_t addr, uint64_t *pte_addr, HVBD_PTE_SIZE *pte_size
     if (backdoor_phys_read_64(phys_addr, &PDPT_entry.Uint64) != 0)
     {
         return -1;
-    }
-
-    if (PDPT_entry.Bits.Present == 0)
-    {
-        bd_printf("ERROR: PDPTE for 0x%llx is not present\n", addr);
-        return -1;
     }    
 
     // check for page size flag
     if ((PDPT_entry.Uint64 & PDPTE_PDE_PS) == 0)
     {
         X64_PAGE_DIRECTORY_ENTRY_4K PD_entry;
+
+        if (PDPT_entry.Bits.Present == 0)
+        {
+            bd_printf("ERROR: PDPTE for 0x%llx is not present\n", addr);
+            return -1;
+        }
 
         phys_addr = PFN_TO_PAGE(PDPT_entry.Bits.PageTableBaseAddress) + PDE_INDEX(addr) * sizeof(uint64_t);
 
@@ -2153,18 +2177,16 @@ int backdoor_pte_addr(uint64_t addr, uint64_t *pte_addr, HVBD_PTE_SIZE *pte_size
         if (backdoor_phys_read_64(phys_addr, &PD_entry.Uint64) != 0)
         {
             return -1;
-        }
-
-        if (PD_entry.Bits.Present == 0)
-        {
-            bd_printf("ERROR: PDE for 0x%llx is not present\n", addr);
-            return -1;
         }        
 
         // check for page size flag
         if ((PD_entry.Uint64 & PDPTE_PDE_PS) == 0)
         {
-            X64_PAGE_TABLE_ENTRY_4K PT_entry;
+            if (PD_entry.Bits.Present == 0)
+            {
+                bd_printf("ERROR: PDE for 0x%llx is not present\n", addr);
+                return -1;
+            }
 
             phys_addr = PFN_TO_PAGE(PD_entry.Bits.PageTableBaseAddress) + PTE_INDEX(addr) * sizeof(uint64_t);
 
@@ -2175,24 +2197,12 @@ int backdoor_pte_addr(uint64_t addr, uint64_t *pte_addr, HVBD_PTE_SIZE *pte_size
                     return -1;
                 }
             }
+                         
+            // 4K page
+            *pte_addr = phys_addr;
+            *pte_size = HVBD_PTE_SIZE_4K;
 
-            if (backdoor_phys_read_64(phys_addr, &PT_entry.Uint64) != 0)
-            {
-                return -1;
-            }
-
-            if (PT_entry.Bits.Present)
-            {                
-                // 4K page
-                *pte_addr = phys_addr;
-                *pte_size = HVBD_PTE_SIZE_4K;
-
-                return 0;
-            }
-            else
-            {
-                bd_printf("ERROR: PTE for 0x%llx is not present\n", addr);
-            }
+            return 0;
         }
         else
         {

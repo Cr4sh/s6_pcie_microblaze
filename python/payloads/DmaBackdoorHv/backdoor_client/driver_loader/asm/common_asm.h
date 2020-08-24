@@ -6,8 +6,10 @@ extern "C"
 
 #endif
 
-void NTAPI lock_aquire(ULONG_PTR addr);
-void NTAPI lock_release(ULONG_PTR addr);
+void NTAPI lock_aquire(void);
+void NTAPI lock_release(void);
+
+ULONG_PTR NTAPI cr3_get(void);
 
 #ifdef __cplusplus
 
