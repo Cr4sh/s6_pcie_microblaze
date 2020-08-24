@@ -636,8 +636,8 @@ _nt_found:
     }
 
     driver_m_Params = LdrGetProcAddress(loader_mem, LDR_ORDINAL(DRIVER_ORD_PARAMS));
-    driver_new_NtReadFile = LdrGetProcAddress(loader_mem, LDR_ORDINAL(DRIVER_ORD_HANDLER_1));
-    driver_old_NtReadFile = LdrGetProcAddress(loader_mem, LDR_ORDINAL(DRIVER_ORD_CALLGATE_1));
+    driver_new_NtReadFile = LdrGetProcAddress(loader_mem, LDR_ORDINAL(DRIVER_ORD_HANDLER));
+    driver_old_NtReadFile = LdrGetProcAddress(loader_mem, LDR_ORDINAL(DRIVER_ORD_CALLGATE));
 
     if (driver_m_Params == 0 || driver_new_NtReadFile == 0 || driver_old_NtReadFile == 0)
     {

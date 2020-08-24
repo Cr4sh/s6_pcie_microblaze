@@ -1,10 +1,8 @@
 
 // export ordinals
-#define DRIVER_ORD_PARAMS     1
-#define DRIVER_ORD_HANDLER_1  2
-#define DRIVER_ORD_CALLGATE_1 3
-#define DRIVER_ORD_HANDLER_2  4
-#define DRIVER_ORD_CALLGATE_2 5
+#define DRIVER_ORD_PARAMS   1
+#define DRIVER_ORD_HANDLER  2
+#define DRIVER_ORD_CALLGATE 3
 
 // offsets of the driver status variables 
 #define DRIVER_INFO_COUNT   (0 * sizeof(ULONG64))

@@ -401,7 +401,7 @@ int backdoor_phys_read_page(uint64_t addr, void *buff, int size)
 {
     if ((addr & ~(PAGE_SIZE - 1)) != ((addr + size - 1) & ~(PAGE_SIZE - 1)))
     {
-        bd_printf("backdoor_phys_read() ERROR: Crossed page boundary\n");
+        bd_printf(__FUNCTION__"() ERROR: Crossed page boundary\n");
         return -1;
     }
 
@@ -477,7 +477,7 @@ int backdoor_phys_write_page(uint64_t addr, void *buff, int size)
 {
     if ((addr & ~(PAGE_SIZE - 1)) != ((addr + size - 1) & ~(PAGE_SIZE - 1)))
     {
-        bd_printf("backdoor_phys_write() ERROR: Crossed page boundary\n");
+        bd_printf(__FUNCTION__"() ERROR: Crossed page boundary\n");
         return -1;
     }
 
