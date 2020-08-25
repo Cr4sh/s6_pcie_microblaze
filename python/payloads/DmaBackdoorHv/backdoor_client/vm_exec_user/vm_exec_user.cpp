@@ -244,7 +244,9 @@ DWORD WINAPI main_thread(void *param)
             {
                 // free previous command output
                 VirtualFree(m_vm_exec.output, 0, MEM_RELEASE);
+                
                 m_vm_exec.output = NULL;
+                m_vm_exec.output_size = 0;
             }
 
             // execute command command
