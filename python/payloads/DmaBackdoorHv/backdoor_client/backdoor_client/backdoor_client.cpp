@@ -90,6 +90,63 @@ int check_loader_image(uint8_t *loader, int loader_size)
     return 0;
 }
 //--------------------------------------------------------------------------------------
+bool ept_is_host_vtl0(uint64_t ept_addr)
+{
+    uint64_t pte_addr = 0, pte_val = 0;
+    HVBD_PTE_SIZE pte_size;
+
+    // get EPT paget table entry address
+    if (backdoor_pte_ept_addr(0x1000, &pte_addr, &pte_size, ept_addr) != 0)
+    {
+        return false;
+    }
+
+    // read page table entry contents
+    if (backdoor_phys_read_64(pte_addr, &pte_val) != 0)
+    {
+        return false;
+    }
+
+    // entry usually is not executable in VTL0
+    return EPT_X(pte_val) == 0;
+}
+
+bool ept_is_host_vtl1(uint64_t ept_addr)
+{
+    uint64_t pte_addr = 0, pte_val = 0;
+    HVBD_PTE_SIZE pte_size;
+
+    // get EPT paget table entry address
+    if (backdoor_pte_ept_addr(0x1000, &pte_addr, &pte_size, ept_addr) != 0)
+    {
+        return false;
+    }
+
+    // read page table entry contents
+    if (backdoor_phys_read_64(pte_addr, &pte_val) != 0)
+    {
+        return false;
+    }
+
+    // entry usually is executable in VTL1
+    return EPT_X(pte_val) != 0;
+}
+
+bool ept_is_guest(uint64_t ept_addr)
+{
+    uint64_t phys_addr = 0;
+
+    m_quiet = true;
+
+    // get zero page host physical address
+    backdoor_phys_translate(0, &phys_addr, ept_addr);
+
+    m_quiet = false;
+
+    // in VM host physical address is different than guest physical address
+    return phys_addr != 0;
+}
+//--------------------------------------------------------------------------------------
 int backdoor_vm_inject(uint64_t ept_addr, uint64_t *payload_addr, uint8_t *payload, int payload_size, bool report_error)
 {
     int ret = -1;
@@ -2861,19 +2918,80 @@ int _tmain(int argc, _TCHAR* argv[])
 
             if (backdoor_ept_list(ept_list) == 0)
             {
+                bool has_vtl0 = false, has_vtl1 = false;
+
                 printf("\n");
 
+                // check if we have VTLs support
                 for (int i = 0; i < EPT_MAX_COUNT; i += 1)
                 {
                     if (ept_list[i].Addr != EPT_NONE)
                     {
-                        printf(
-                            "  #%.2d: VPID = 0x%.4x, EPT = 0x%.16llx %s\n", 
-                            i, ept_list[i].Vpid, ept_list[i].Addr,
-                            (ept_list[i].Addr == ept_current) ? "[current]" : ""
-                        );
+                        uint64_t ept_addr = ept_list[i].Addr;
+
+                        if (!ept_is_guest(ept_addr))
+                        {
+                            // check for the VTL0/VTL1 host EPT
+                            if (ept_is_host_vtl0(ept_addr))
+                            {
+                                has_vtl0 = true;
+                            }
+                            else if (ept_is_host_vtl1(ept_addr))
+                            {
+                                has_vtl1 = true;
+                            }
+                        }
+                    }
+                }
+
+                // print EPT list
+                for (int i = 0; i < EPT_MAX_COUNT; i += 1)
+                {
+                    if (ept_list[i].Addr != EPT_NONE)
+                    {
+                        char note[0x20];
+                        uint64_t ept_addr = ept_list[i].Addr, ept_vpid = ept_list[i].Vpid;
+                        
+                        if (has_vtl0 && has_vtl1)
+                        {
+                            // check for the guest/host EPT
+                            if (ept_is_guest(ept_addr))
+                            {
+                                strcpy(note, "[GUEST] ");
+                            }
+                            else if (ept_is_host_vtl0(ept_addr))
+                            {
+                                strcpy(note, "[HOST VTL0] ");
+                            }
+                            else if (ept_is_host_vtl1(ept_addr))
+                            {
+                                strcpy(note, "[HOST VTL1] ");
+                            }
+                        }
+                        else
+                        {
+                            // check for the guest/host EPT
+                            if (ept_is_guest(ept_addr))
+                            {
+                                strcpy(note, "[GUEST] ");
+                            }
+                            else
+                            {
+                                strcpy(note, "[HOST] ");
+                            }
+                        }
+
+                        // check for the current EPT
+                        if (ept_addr == ept_current)
+                        {
+                            strcat(note, "[CURRENT]");
+                        }
+
+                        printf("  #%.2d: VPID = 0x%.4x, EPT = 0x%.16llx %s\n", i, ept_vpid, ept_addr, note);
                     }        
                 }
+
+                printf("\n");
             }
         }        
         else if (!strcmp(command, "--ept-dump") && argc >= 4)

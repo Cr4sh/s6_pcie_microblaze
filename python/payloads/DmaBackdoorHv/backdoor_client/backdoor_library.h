@@ -123,5 +123,6 @@ int backdoor_modify_ept(uint32_t flags, uint64_t addr, uint64_t pml4_addr);
 int backdoor_modify_pt(uint32_t flags, uint64_t addr, uint64_t pml4_addr, uint64_t ept_addr);
 
 int backdoor_pte_addr(uint64_t addr, uint64_t *pte_addr, HVBD_PTE_SIZE *pte_size, uint64_t pml4_addr, uint64_t ept_addr);
+int backdoor_pte_ept_addr(uint64_t addr, uint64_t *pte_addr, HVBD_PTE_SIZE *pte_size, uint64_t pml4_addr);
 
 int backdoor_ept_addr(uint64_t *addr);
