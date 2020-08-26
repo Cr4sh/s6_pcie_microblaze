@@ -4,3 +4,10 @@
 
 // DbgPrintEx() debug level
 #define DBG_LEVEL 3
+
+#ifndef DBG
+
+#undef DbgPrintEx
+#define DbgPrintEx
+
+#endif

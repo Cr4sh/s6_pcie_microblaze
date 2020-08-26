@@ -1,5 +1,5 @@
 NAME loader.sys
 EXPORTS
-m_Params                        @1 NONAME
-new_SkobReferenceObjectByHandle @2 NONAME
-old_SkobReferenceObjectByHandle @3 NONAME
+m_Params       @1 NONAME
+new_SkmmMapMdl @2 NONAME
+old_SkmmMapMdl @3 NONAME

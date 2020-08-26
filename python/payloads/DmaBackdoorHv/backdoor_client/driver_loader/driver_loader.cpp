@@ -47,7 +47,7 @@ void bd_sleep(int msec)
 
 void bd_yeld(void)
 {
-    // switch execution to toher thread
+    // switch execution to other thread
     I_ZwYieldExecution();
 }
 
@@ -140,6 +140,8 @@ BOOLEAN PayloadMakeExecutable(uint64_t EptAddr, PVOID Mem, ULONG MemSize)
             return FALSE;
         }
     }
+
+    bd_yeld();
 
     return TRUE;
 }

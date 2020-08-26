@@ -44,6 +44,9 @@
     <ClCompile Include="..\common\loader.cpp">
       <Filter>Source Files\common</Filter>
     </ClCompile>
+    <ClCompile Include="runtime\std.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="stdafx.h">
@@ -53,9 +56,6 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="debug.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="stdint.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="runtime\import.h">
@@ -71,6 +71,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\driver_loader_sk.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="runtime\std.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

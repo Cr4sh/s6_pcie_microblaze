@@ -1,4 +1,12 @@
 #include "stdafx.h"
+
+extern "C"
+{
+
+// securekernel exported functions
+NTSTATUS NTAPI SkIsSecureKernel(void);
+
+}
 //--------------------------------------------------------------------------------------
 NTSTATUS DriverEntry(
     PDRIVER_OBJECT  DriverObject,
@@ -6,7 +14,8 @@ NTSTATUS DriverEntry(
 {
     DbgPrintEx(DBG_ID, DBG_LEVEL,__FUNCTION__"()\n");
 
-    return STATUS_SUCCESS;
+    // supposed to retun STATUS_SUCCESS
+    return SkIsSecureKernel();
 }
 //--------------------------------------------------------------------------------------
 // EoF
