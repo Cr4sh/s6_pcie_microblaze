@@ -37,7 +37,7 @@ typedef struct _VM_EXEC_INFO
 {
     uint64_t signature;
     uint64_t page_dir;
-    PVM_EXEC_STRUCT struct_addr;
+    uint64_t struct_addr;
 
 } VM_EXEC_INFO,
 *PVM_EXEC_INFO;

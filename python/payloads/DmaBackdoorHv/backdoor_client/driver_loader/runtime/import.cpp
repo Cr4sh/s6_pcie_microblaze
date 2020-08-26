@@ -7,7 +7,7 @@ extern DRIVER_PARAMS m_Params;
 //--------------------------------------------------------------------------------------
 PVOID NTAPI GetKernelBase(void)
 {
-    return m_Params.KernelBase;
+    return m_Params.kernel_base;
 }
 //--------------------------------------------------------------------------------------
 ULONG NTAPI ImportHash(char *Str)

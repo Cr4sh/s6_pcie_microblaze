@@ -1,13 +1,5 @@
 #include "stdafx.h"
 
-/*
-    This flag allows secure processes, that run in the Virtualization-Based
-    Security environment, to launch.
-*/
-#ifndef CREATE_SECURE_PROCESS
-#define CREATE_SECURE_PROCESS 0x00400000
-#endif
-
 // disassembly flags
 #define F_QUEUED        0x01    // location is queued for disassembly
 #define F_PROCESSED     0x02    // location was already disassembled

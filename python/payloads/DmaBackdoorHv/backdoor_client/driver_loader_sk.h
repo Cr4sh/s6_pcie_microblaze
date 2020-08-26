@@ -12,12 +12,12 @@
 
 typedef struct _DRIVER_SK_PARAMS
 {
-    PVOID KernelBase;
-    PVOID DriverBase;
-    PVOID PayloadBase;
-    ULONG PayloadPagesCount;
-    ULONG64 PayloadEpt;
-    ULONG64 PayloadCr3;
+    PVOID kernel_base;
+    PVOID driver_base;
+    PVOID payload_base;
+    ULONG payload_pages_count;
+    ULONG64 payload_ept;
+    ULONG64 payload_pml4;
 
 } DRIVER_SK_PARAMS,
 *PDRIVER_SK_PARAMS;

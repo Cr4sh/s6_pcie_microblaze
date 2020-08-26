@@ -17,3 +17,7 @@ extern "C"
 
 #include "../vm_exec.h"
 #include "../common/loader.h"
+
+#include "../vmx.h"
+#include "../backdoor_client.h"
+#include "../backdoor_library.h"

