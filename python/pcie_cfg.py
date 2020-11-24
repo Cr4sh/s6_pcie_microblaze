@@ -19,7 +19,7 @@ def main():
     options, _ = parser.parse_args()
     
     # open device
-    dev = TransactionLayer()    
+    dev = TransactionLayer()
 
     assert dev_id_encode(*dev.bus_id) != 0
 
@@ -31,15 +31,15 @@ def main():
         try:
 
             # get register address by name
-            cfg_addr = getattr(dev, 'CFG_' + options.reg)
+            cfg_addr = globals()['CFG_' + options.reg]
 
-        except AttributeError:
+        except KeyError:
 
             print('ERROR: Unknown configuration space register')
             return -1
 
         # get register name and size
-        cfg_size, cfg_name = dev.cfg_regs[cfg_addr]
+        cfg_size, cfg_name = cfg_regs[cfg_addr]
 
         print('%s = 0x%x' % (cfg_name, dev.cfg_read(cfg_addr, cfg_size = cfg_size)))
 
@@ -64,10 +64,10 @@ def main():
         print('')
 
         # print PCI configuration space registers
-        for cfg_addr in dev.cfg_regs.keys():
+        for cfg_addr in cfg_regs.keys():
 
             # get register name and size
-            cfg_size, cfg_name = dev.cfg_regs[cfg_addr]
+            cfg_size, cfg_name = cfg_regs[cfg_addr]
 
             print('%20s = 0x%x' % (cfg_name, dev.cfg_read(cfg_addr, cfg_size = cfg_size)))    
 

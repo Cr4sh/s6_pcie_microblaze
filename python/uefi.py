@@ -235,12 +235,12 @@ def dxe_inject(payload = None, payload_data = None, system_table = None, status_
 
             break
 
-        except LinkLayer.ErrorNotReady as e: 
+        except Endpoint.ErrorNotReady as e: 
 
             # link not redy
             print('[!] ' + str(e))
 
-        except LinkLayer.ErrorTimeout as e:
+        except Endpoint.ErrorTimeout as e:
 
             # TLP reply timeout
             print('[!] ' + str(e))

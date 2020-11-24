@@ -37,14 +37,14 @@ def main():
 
     print('[+] Enabling resident mode...')
 
-    dev.set_resident(True)    
+    dev.ep.set_resident(True)    
 
     if options.load is not None or options.erase:
 
         print('[+] Erasing ROM...')
 
         # erase ROM contents
-        dev.rom_erase()
+        dev.ep.rom_erase()
 
     if options.load is not None:
 
@@ -54,7 +54,7 @@ def main():
             data = fd.read()
 
         # query max rom size
-        max_size = dev.rom_size()
+        max_size = dev.ep.rom_size()
 
         print('[+] Maximum ROM size for this device is %d bytes' % max_size)
 
@@ -71,7 +71,7 @@ def main():
             sys.stdout.write('\r[+] %d%% completed' % percent)
 
         # write ROM to the device
-        dev.rom_load(data, progress_cb = progress_cb)
+        dev.ep.rom_load(data, progress_cb = progress_cb)
 
         sys.stdout.write('\n')
 
@@ -79,13 +79,13 @@ def main():
 
         print('[+] Enabling ROM access log...')
 
-        dev.set_rom_log(True)
+        dev.ep.set_rom_log(True)
 
     elif options.log_off:
 
         print('[+] Disabling ROM access log...')
 
-        dev.set_rom_log(False)
+        dev.ep.set_rom_log(False)
 
     print('[+] Done')
 

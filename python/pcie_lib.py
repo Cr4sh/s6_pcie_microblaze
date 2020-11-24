@@ -6,21 +6,125 @@ from threading import Thread
 from multiprocessing.dummy import Pool as ThreadPool
 from abc import ABCMeta, abstractmethod
 
-from pcie_lib_config import Conf, DEVICE_TYPE_TCP, DEVICE_TYPE_SERIAL
+from pcie_lib_config import *
+
+from linux_uio import *
+from linux_axi_dma import *
 
 PAGE_SIZE = 0x1000
 
 align_up = lambda x, a: ((x + a - 1) // a) * a
 align_down = lambda x, a: (x // a) * a
 
+#
+# configuration space registers
+#
+CFG_VENDOR_ID           = 0x00
+CFG_DEVICE_ID           = 0x02
+CFG_COMMAND             = 0x04
+CFG_STATUS              = 0x06
+CFG_REVISION            = 0x08
+CFG_CLASS_PROG          = 0x09
+CFG_CLASS_DEVICE        = 0x0a
+CFG_CACHE_LINE_SIZE     = 0x0c
+CFG_LATENCY_TIMER       = 0x0d
+CFG_HEADER_TYPE         = 0x0e
+CFG_BIST                = 0x0f
+CFG_BASE_ADDRESS_0      = 0x10
+CFG_BASE_ADDRESS_1      = 0x14
+CFG_BASE_ADDRESS_2      = 0x18
+CFG_BASE_ADDRESS_3      = 0x1c
+CFG_BASE_ADDRESS_4      = 0x20
+CFG_BASE_ADDRESS_5      = 0x24
+CFG_CARDBUS_CIS         = 0x28
+CFG_SUBSYSTEM_VENDOR_ID = 0x2c
+CFG_SUBSYSTEM_ID        = 0x2e
+CFG_ROM_ADDRESS         = 0x30
+CFG_INTERRUPT_LINE      = 0x3c
+CFG_INTERRUPT_PIN       = 0x3d
+CFG_MIN_GNT             = 0x3e
+CFG_MAX_LAT             = 0x3f
+
+cfg_regs = {
+
+            CFG_VENDOR_ID: ( 2, 'VENDOR_ID'           ),
+            CFG_DEVICE_ID: ( 2, 'DEVICE_ID'           ),
+              CFG_COMMAND: ( 2, 'COMMAND'             ),
+               CFG_STATUS: ( 2, 'STATUS'              ),
+             CFG_REVISION: ( 1, 'REVISION'            ),
+           CFG_CLASS_PROG: ( 1, 'CLASS_PROG'          ),
+         CFG_CLASS_DEVICE: ( 2, 'CLASS_DEVICE'        ),
+      CFG_CACHE_LINE_SIZE: ( 1, 'CACHE_LINE_SIZE'     ),
+        CFG_LATENCY_TIMER: ( 1, 'LATENCY_TIMER'       ),
+          CFG_HEADER_TYPE: ( 1, 'HEADER_TYPE'         ),
+                 CFG_BIST: ( 1, 'BIST'                ),
+       CFG_BASE_ADDRESS_0: ( 4, 'BASE_ADDRESS_0'      ),
+       CFG_BASE_ADDRESS_1: ( 4, 'BASE_ADDRESS_1'      ),
+       CFG_BASE_ADDRESS_2: ( 4, 'BASE_ADDRESS_2'      ),
+       CFG_BASE_ADDRESS_3: ( 4, 'BASE_ADDRESS_3'      ),
+       CFG_BASE_ADDRESS_4: ( 4, 'BASE_ADDRESS_4'      ),
+       CFG_BASE_ADDRESS_5: ( 4, 'BASE_ADDRESS_5'      ),
+          CFG_CARDBUS_CIS: ( 4, 'CARDBUS_CIS'         ),
+  CFG_SUBSYSTEM_VENDOR_ID: ( 2, 'SUBSYSTEM_VENDOR_ID' ),
+         CFG_SUBSYSTEM_ID: ( 2, 'SUBSYSTEM_ID'        ),
+          CFG_ROM_ADDRESS: ( 4, 'ROM_ADDRESS'         ),
+       CFG_INTERRUPT_LINE: ( 1, 'INTERRUPT_LINE'      ),
+        CFG_INTERRUPT_PIN: ( 1, 'INTERRUPT_PIN'       ),
+              CFG_MIN_GNT: ( 1, 'MIN_GNT'             ),
+              CFG_MAX_LAT: ( 1, 'MAX_LAT'             ) }
+
 FMT_3_NO_DATA = 0
 FMT_4_NO_DATA = 1
 FMT_3_DATA    = 2
 FMT_4_DATA    = 3 
 
+tlp_types = { 0x00: 'MRd32',   0x20: 'MRd64',
+              0x01: 'MRdLk32', 0x21: 'MRdLk64', 
+              0x40: 'MWr32',   0x60: 'MWr64',
+              0x02: 'IORd',    0x42: 'IOWr',
+              0x04: 'CfgRd0',  0x44: 'CfgWr0',
+              0x05: 'CfgRd1',  0x45: 'CfgWr1',
+              0x0A: 'Cpl',     0x4A: 'CplD',
+              0x0B: 'CplLk',   0x4B: 'CplLkD' }
+
+
 dev_id_decode = lambda val: ((val >> 8) & 0xff, (val >> 3) & 0x1f, (val >> 0) & 0x07)
 dev_id_encode = lambda bus, dev, func: ((bus << 8) | (dev << 3) | (func << 0))
 dev_id_str    = lambda bus, dev, func: '%.2x:%.2x.%x' % (bus, dev, func)
+
+
+def tlp_type_name(dw0): 
+
+    return tlp_types[(dw0 >> 24) & 0xff]
+
+
+def tlp_type_from_name(name):
+
+    for key, val in tlp_types.items():
+
+        if val == name:
+
+            return ((key >> 5) & 0x3), ((key >> 0) & 0x1f)
+
+
+def endpoint_init(device = None, bus_id = None, verbose = False, force = False, timeout = None):
+
+    if Conf.device_type == DEVICE_TYPE_TCP or Conf.device_type == DEVICE_TYPE_SERIAL:
+
+        # serial or TCP-IP transport
+        return EndpointTcpSerial(device = device, bus_id = bus_id, verbose = verbose, 
+                                 force = force, timeout = timeout)
+
+    elif Conf.device_type == DEVICE_TYPE_UIO:
+
+        # UIO transport for Zynq based design
+        return EndpointUIO(bus_id = bus_id, verbose = verbose, 
+                           force = force, timeout = timeout)
+
+    else:
+
+        raise(Exception('Unknown device type'))
+
 
 def hexdump(data, width = 16, addr = 0):
 
@@ -191,7 +295,110 @@ class Serial(Device):
             self.device = None
 
 
-class LinkLayer(object):
+class Endpoint(object):    
+
+    RECV_TIMEOUT = 3
+
+    ROM_CHUNK_LEN = 0x80
+
+    status_bus_id = lambda self, s: s & 0xffff
+
+    class ErrorNotReady(Exception): 
+
+        pass
+
+    class ErrorTimeout(Exception): 
+
+        pass
+
+    def get_bus_id(self):
+
+        return self.status_bus_id(self.get_status()) 
+
+    def set_timeout(self, timeout):
+
+        self.timeout = timeout
+
+    def cfg_reg(self, cfg_reg):
+
+        try:
+
+            # get register name and size
+            cfg_size, cfg_name = cfg_regs[cfg_reg]
+
+        except KeyError:
+
+            raise(Exception('Unknown configuration space register'))
+
+        # read register value
+        return self.cfg_read(cfg_reg, cfg_size = cfg_size)
+
+    def cfg_read_1(self, cfg_addr): 
+
+        return self.cfg_read(cfg_addr, cfg_size = 1)
+
+    def cfg_read_2(self, cfg_addr): 
+
+        return self.cfg_read(cfg_addr, cfg_size = 2)
+
+    def cfg_read_4(self, cfg_addr): 
+
+        return self.cfg_read(cfg_addr, cfg_size = 4)
+
+    def cfg_read(self, cfg_addr, cfg_size = 4):
+
+        raise(NotImplementedError())
+
+    def set_resident(self, on):
+
+        raise(NotImplementedError())
+
+    def set_rom_log(self, on):
+
+        raise(NotImplementedError())
+
+    def test(self, test_size):
+
+        raise(NotImplementedError())
+
+    def ping(self):
+
+        raise(NotImplementedError())
+
+    def reset(self):
+
+        raise(NotImplementedError())
+
+    def get_status(self):
+
+        raise(NotImplementedError())
+
+    def read(self):
+
+        raise(NotImplementedError())
+
+    def write(self, data):
+
+        raise(NotImplementedError())    
+
+    def rom_load(self, data, progress_cb = None):
+
+        raise(NotImplementedError())
+
+    def rom_erase(self):
+
+        raise(NotImplementedError())
+
+    def rom_size(self):
+
+        raise(NotImplementedError())
+
+    def close(self):
+
+        raise(NotImplementedError())
+
+    
+class EndpointTcpSerial(Endpoint):
 
     ENV_DEVICE = 'DEVICE'
 
@@ -215,73 +422,6 @@ class LinkLayer(object):
     CTL_ROM_LOG_ON          = 14
     CTL_ROM_LOG_OFF         = 15
     CTL_ROM_SIZE            = 16
-
-    #
-    # configuration space registers
-    #
-    CFG_VENDOR_ID           = 0x00
-    CFG_DEVICE_ID           = 0x02
-    CFG_COMMAND             = 0x04
-    CFG_STATUS              = 0x06
-    CFG_REVISION            = 0x08
-    CFG_CLASS_PROG          = 0x09
-    CFG_CLASS_DEVICE        = 0x0a
-    CFG_CACHE_LINE_SIZE     = 0x0c
-    CFG_LATENCY_TIMER       = 0x0d
-    CFG_HEADER_TYPE         = 0x0e
-    CFG_BIST                = 0x0f
-    CFG_BASE_ADDRESS_0      = 0x10
-    CFG_BASE_ADDRESS_1      = 0x14
-    CFG_BASE_ADDRESS_2      = 0x18
-    CFG_BASE_ADDRESS_3      = 0x1c
-    CFG_BASE_ADDRESS_4      = 0x20
-    CFG_BASE_ADDRESS_5      = 0x24
-    CFG_CARDBUS_CIS         = 0x28
-    CFG_SUBSYSTEM_VENDOR_ID = 0x2c
-    CFG_SUBSYSTEM_ID        = 0x2e
-    CFG_ROM_ADDRESS         = 0x30
-    CFG_INTERRUPT_LINE      = 0x3c
-    CFG_INTERRUPT_PIN       = 0x3d
-    CFG_MIN_GNT             = 0x3e
-    CFG_MAX_LAT             = 0x3f
-
-    cfg_regs = {
-
-                CFG_VENDOR_ID: ( 2, 'VENDOR_ID'           ),
-                CFG_DEVICE_ID: ( 2, 'DEVICE_ID'           ),
-                  CFG_COMMAND: ( 2, 'COMMAND'             ),
-                   CFG_STATUS: ( 2, 'STATUS'              ),
-                 CFG_REVISION: ( 1, 'REVISION'            ),
-               CFG_CLASS_PROG: ( 1, 'CLASS_PROG'          ),
-             CFG_CLASS_DEVICE: ( 2, 'CLASS_DEVICE'        ),
-          CFG_CACHE_LINE_SIZE: ( 1, 'CACHE_LINE_SIZE'     ),
-            CFG_LATENCY_TIMER: ( 1, 'LATENCY_TIMER'       ),
-              CFG_HEADER_TYPE: ( 1, 'HEADER_TYPE'         ),
-                     CFG_BIST: ( 1, 'BIST'                ),
-           CFG_BASE_ADDRESS_0: ( 4, 'BASE_ADDRESS_0'      ),
-           CFG_BASE_ADDRESS_1: ( 4, 'BASE_ADDRESS_1'      ),
-           CFG_BASE_ADDRESS_2: ( 4, 'BASE_ADDRESS_2'      ),
-           CFG_BASE_ADDRESS_3: ( 4, 'BASE_ADDRESS_3'      ),
-           CFG_BASE_ADDRESS_4: ( 4, 'BASE_ADDRESS_4'      ),
-           CFG_BASE_ADDRESS_5: ( 4, 'BASE_ADDRESS_5'      ),
-              CFG_CARDBUS_CIS: ( 4, 'CARDBUS_CIS'         ),
-      CFG_SUBSYSTEM_VENDOR_ID: ( 2, 'SUBSYSTEM_VENDOR_ID' ),
-             CFG_SUBSYSTEM_ID: ( 2, 'SUBSYSTEM_ID'        ),
-              CFG_ROM_ADDRESS: ( 4, 'ROM_ADDRESS'         ),
-           CFG_INTERRUPT_LINE: ( 1, 'INTERRUPT_LINE'      ),
-            CFG_INTERRUPT_PIN: ( 1, 'INTERRUPT_PIN'       ),
-                  CFG_MIN_GNT: ( 1, 'MIN_GNT'             ),
-                  CFG_MAX_LAT: ( 1, 'MAX_LAT'             ) }
-
-    RECV_TIMEOUT = 3
-
-    ROM_CHUNK_LEN = 0x80
-
-    status_bus_id = lambda self, s: (s >> 0) & 0xffff
-
-    class ErrorNotReady(Exception): pass
-
-    class ErrorTimeout(Exception): pass
 
     def __init__(self, device = None, bus_id = None, verbose = False, force = False, timeout = None):
 
@@ -351,11 +491,7 @@ class LinkLayer(object):
 
     def _write(self, *args):
 
-        self.device.write(pack('=BB', *args))
-
-    def set_timeout(self, timeout):
-
-        self.timeout = timeout
+        self.device.write(pack('=BB', *args))    
 
     def set_resident(self, on):
 
@@ -417,11 +553,7 @@ class LinkLayer(object):
         assert code == self.CTL_SUCCESS and size == 4
 
         # receive reply data
-        return unpack('<I', self.device.read(size, timeout = self.timeout))[0]
-
-    def get_bus_id(self):
-
-        return self.status_bus_id(self.get_status()) 
+        return unpack('<I', self.device.read(size, timeout = self.timeout))[0]    
 
     def read(self):
 
@@ -472,11 +604,7 @@ class LinkLayer(object):
         # receive reply
         code, size = self._read()
 
-        assert code == self.CTL_SUCCESS and size == 0
-
-    cfg_read_1 = lambda self, cfg_addr: self.cfg_read(cfg_addr, cfg_size = 1)
-    cfg_read_2 = lambda self, cfg_addr: self.cfg_read(cfg_addr, cfg_size = 2)
-    cfg_read_4 = lambda self, cfg_addr: self.cfg_read(cfg_addr, cfg_size = 4)
+        assert code == self.CTL_SUCCESS and size == 0    
 
     def cfg_read(self, cfg_addr, cfg_size = 4):
 
@@ -504,21 +632,7 @@ class LinkLayer(object):
         # get register value from readed data
         data = data[reg_off : reg_off + cfg_size]
 
-        return unpack('<' + { 1: 'B', 2: 'H', 4: 'I' }[cfg_size], data)[0]
-
-    def cfg_reg(self, cfg_reg):
-
-        try:
-
-            # get register name and size
-            cfg_size, cfg_name = self.cfg_regs[cfg_reg]
-
-        except KeyError:
-
-            raise(Exception('Unknown configuration space register'))
-
-        # read register value
-        return self.cfg_read(cfg_reg, cfg_size = cfg_size)
+        return unpack('<' + { 1: 'B', 2: 'H', 4: 'I' }[cfg_size], data)[0]    
 
     def rom_load(self, data, progress_cb = None):
 
@@ -586,13 +700,149 @@ class LinkLayer(object):
         self.device.close()
 
 
-class LinkLayerTest(unittest.TestCase):
+class EndpointUIO(Endpoint):
+
+    MAX_TLP_LEN = PAGE_SIZE / 4
+
+    # Linux UIO device names
+    UIO_NAME_MEM = 'scratch_mem'
+    UIO_NAME_DMA_0 = 'dma_0'
+    UIO_NAME_DMA_1 = 'dma_1'
+    UIO_NAME_GPIO = 'gpio'
+
+    def __init__(self, bus_id = None, verbose = False, force = False, timeout = None):
+
+        self.bus_id, self.verbose = bus_id, verbose
+        self.timeout = self.RECV_TIMEOUT if timeout is None else timeout
+
+        # open AXI DMA engines
+        self.dma_tlp = LinuxAxiDMA(self.UIO_NAME_DMA_0)
+        self.dma_cfg = LinuxAxiDMA(self.UIO_NAME_DMA_1)
+
+        # open I/O memory
+        self.mem = LinuxUIO(self.UIO_NAME_MEM)
+        self.buff = self.mem.as_ndarray(dtype = 'uint32')
+
+        # initialize recv buffer for TLPs
+        self.buff_rx = self.buff[: self.MAX_TLP_LEN]
+
+        # initialize send buffer for TLPs
+        self.buff_tx = self.buff[self.MAX_TLP_LEN : self.MAX_TLP_LEN * 2]
+
+        # open AXI GPIO
+        self.gpio = LinuxUIO(self.UIO_NAME_GPIO)
+
+        if self.bus_id is None:
+
+            # obtain bus id from the device
+            bus_id = self.get_bus_id()
+
+            if bus_id != 0:
+
+                self.bus_id = dev_id_decode(bus_id)
+
+            elif not force:
+
+                raise(self.ErrorNotReady('PCI-E endpoint is not configured by root complex yet')) 
+
+    def get_status(self):
+
+        # read PCI-E device ID from the GPIO
+        return self.gpio.as_ndarray(1, 'uint32')[0]
+
+    def ping(self):
+
+        pass
+
+    def reset(self):
+
+        self.dma_tlp.reset()
+        self.dma_cfg.reset()
+
+    def read(self):
+
+        try:
+
+            # receive data
+            size = self.dma_tlp.recv(self.mem.phys_buff(self.buff_rx), timeout = self.timeout)
+
+        except self.dma_tlp.Timeout:
+
+            raise(self.ErrorTimeout('TLP read timeout occurred'))        
+
+        assert size >= 12
+        assert size % 4 == 0
+
+        return self.buff_rx[: size / 4]
+
+    def write(self, data):
+
+        # copy TLP into the send buffer
+        self.buff_tx[: len(data)] = data
+
+        try:
+
+            # send data
+            self.dma_tlp.send(self.mem.phys_buff(self.buff_tx[: len(data)]), timeout = self.timeout)
+
+        except self.dma_tlp.Timeout:
+
+            raise(self.ErrorTimeout('TLP write timeout occurred'))     
+
+    def cfg_read(self, cfg_addr, cfg_size = 4):
+
+        assert cfg_size in [ 1, 2, 4 ]
+
+        # get register number from register address
+        reg_num = cfg_addr / 4
+        reg_off = cfg_addr % 4
+
+        data = ''
+
+        for i in range(0, 2):
+
+            addr = reg_num + i
+
+            # put address two times to assert cfg_mgmt_rd_en for two clock cycles
+            self.buff_tx[: 2] = [ addr ] * 2
+
+            try:
+
+                # send configuration spcae read request
+                self.dma_cfg.send(self.mem.phys_buff(self.buff_tx[: 2]), timeout = self.timeout)
+
+                # receive data
+                size = self.dma_cfg.recv(self.mem.phys_buff(self.buff_rx), timeout = self.timeout)
+
+            except self.dma_cfg.Timeout:
+
+                raise(self.ErrorTimeout('Config space access timeout occurred'))
+
+            assert size == 4
+
+            data += pack('I', self.buff_rx[0])
+
+        # get register value from readed data
+        data = data[reg_off : reg_off + cfg_size]
+
+        return unpack('<' + { 1: 'B', 2: 'H', 4: 'I' }[cfg_size], data)[0]       
+
+    def close(self):
+
+        self.dma_tlp.close()
+        self.dma_cfg.close()
+
+        self.mem.close()
+        self.gpio.close()
+
+
+class EndpointTest(unittest.TestCase):
 
     TEST_ADDR = 0x1000
 
     def test_link(self):
 
-        dev = LinkLayer()  
+        dev = endpoint_init()  
 
         # MRd TLP        
         tlp_tx = [ 0x20000001,
@@ -611,28 +861,7 @@ class LinkLayerTest(unittest.TestCase):
         print('TLP RX: %s\n' % to_str(tlp_rx))
 
 
-tlp_type_list = { 
-                    0x00: 'MRd32',   0x20: 'MRd64',
-                    0x01: 'MRdLk32', 0x21: 'MRdLk64', 
-                    0x40: 'MWr32',   0x60: 'MWr64',
-                    0x02: 'IORd',    0x42: 'IOWr',
-                    0x04: 'CfgRd0',  0x44: 'CfgWr0',
-                    0x05: 'CfgRd1',  0x45: 'CfgWr1',
-                    0x0A: 'Cpl',     0x4A: 'CplD',
-                    0x0B: 'CplLk',   0x4B: 'CplLkD'
-                }
-
-tlp_type_name = lambda dw0: tlp_type_list[(dw0 >> 24) & 0xff]
-
-def tlp_type_from_name(name):
-
-    for key, val in tlp_type_list.items():
-
-        if val == name:
-
-            return ((key >> 5) & 0x3), ((key >> 0) & 0x1f)
-
-class TransactionLayer(LinkLayer):
+class TransactionLayer(object):
 
     ENV_DEBUG_TLP = 'DEBUG_TLP'
 
@@ -640,10 +869,10 @@ class TransactionLayer(LinkLayer):
     # Maximum bytes of data per each MWr and MRd TLP
     #
     MEM_WR_TLP_LEN = 0x04
-    MEM_RD_TLP_LEN = 0x40
+    MEM_RD_TLP_LEN = 0x80
 
     # align memory reads and writes
-    MEM_ALIGN = 0x40    
+    MEM_ALIGN = 0x4
 
     mem_write_1 = lambda self, addr, v: self.mem_write(addr, pack('B', v))
     mem_write_2 = lambda self, addr, v: self.mem_write(addr, pack('H', v))
@@ -655,7 +884,17 @@ class TransactionLayer(LinkLayer):
     mem_read_4 = lambda self, addr: unpack('I', self.mem_read(addr, 4))[0]
     mem_read_8 = lambda self, addr: unpack('Q', self.mem_read(addr, 8))[0]
 
-    class ErrorBadCompletion(Exception): pass
+    cfg_read_1 = lambda self, cfg_addr: self.ep.cfg_read_1(cfg_addr)
+    cfg_read_2 = lambda self, cfg_addr: self.ep.cfg_read_2(cfg_addr)
+    cfg_read_4 = lambda self, cfg_addr: self.ep.cfg_read_4(cfg_addr)    
+
+    cfg_read = lambda self, cfg_addr, cfg_size: self.ep.cfg_read(cfg_addr, cfg_size)
+
+    cfg_reg = lambda self, cfg_reg: self.ep.cfg_reg(cfg_reg)
+
+    class ErrorBadCompletion(Exception): 
+
+        pass
 
     class Packet(object): 
 
@@ -757,7 +996,7 @@ class TransactionLayer(LinkLayer):
 
         def encode(self):
 
-            assert self.tlp_type in tlp_type_list.values()            
+            assert self.tlp_type in tlp_types.values()            
 
             self.h_prefix = 0;
             self.h_format, self.h_type = tlp_type_from_name(self.tlp_type)            
@@ -1018,6 +1257,14 @@ class TransactionLayer(LinkLayer):
                    (self.h_tag, self.h_byte_count, dev_id_str(*self.h_requester), \
                                                    dev_id_str(*self.h_completer))    
 
+    def __init__(self, device = None, bus_id = None, verbose = False, force = False, timeout = None):
+
+        # initialize link layer
+        self.ep = endpoint_init(device = device, bus_id = bus_id, verbose = verbose, 
+                                force = force, timeout = timeout)
+
+        self.bus_id = self.ep.bus_id        
+
     def log_all(self): 
 
         try:
@@ -1032,7 +1279,7 @@ class TransactionLayer(LinkLayer):
 
     def read(self, raw = False):
 
-        data = super(TransactionLayer, self).read()
+        data = self.ep.read()
 
         # return not decoded TLP data if needed
         if raw: return data
@@ -1058,7 +1305,7 @@ class TransactionLayer(LinkLayer):
         # get raw data in case when Packet instance was passed
         data = data.tlp if isinstance(data, self.Packet) else data
 
-        super(TransactionLayer, self).write(data)    
+        self.ep.write(data)    
 
     def bridge(self, log = False, handler = None):        
 
@@ -1177,6 +1424,10 @@ class TransactionLayer(LinkLayer):
         
         # align memory write request by MEM_ALIGN byte boundary
         self._mem_write(write_addr, write_data[: ptr] + data + write_data[ptr + size :])
+
+    def close(self):
+
+        self.ep.close()
 
 
 class TransactionLayerTest(unittest.TestCase):
