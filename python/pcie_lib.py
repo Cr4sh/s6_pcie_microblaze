@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-import sys, os, time, socket, select, signal, unittest
+import sys, os, time, random, socket, select, signal, unittest
 from struct import pack, unpack
 from threading import Thread
 from multiprocessing.dummy import Pool as ThreadPool
@@ -869,7 +869,7 @@ class TransactionLayer(object):
     # Maximum bytes of data per each MWr and MRd TLP
     #
     MEM_WR_TLP_LEN = 0x04
-    MEM_RD_TLP_LEN = 0x80
+    MEM_RD_TLP_LEN = 0x40
 
     # align memory reads and writes
     MEM_ALIGN = 0x4
@@ -1095,13 +1095,15 @@ class TransactionLayer(object):
 
         tlp_type = 'MRd32'
 
-        def __init__(self, req = None, addr = None, bytes_read = None, tlp = None):
+        def __init__(self, req = None, addr = None, bytes_read = None, tag = None, tlp = None):
 
             TransactionLayer.Packet.__init__(self, tlp = tlp)
 
             if tlp is None:
 
-                self.h_tag, self.data = 0, None
+                self.data = None
+
+                self.h_tag = 0 if tag is None else tag
                 self.h_req_id, self.addr, self.bytes_read = req, addr, bytes_read
 
                 # create raw TLP from specified arguments
@@ -1343,7 +1345,8 @@ class TransactionLayer(object):
             cur_chunk_size = min(chunk_size, max_chunk_size)
 
             # create 64-bit memory read TLP
-            tlp = self.PacketMRd64(self.bus_id, chunk_addr, cur_chunk_size)
+            tag = random.randrange(0, 0xff)
+            tlp = self.PacketMRd64(self.bus_id, chunk_addr, cur_chunk_size, tag)
 
             # send TLP to the system
             self.write(tlp)            
@@ -1358,6 +1361,8 @@ class TransactionLayer(object):
                 if not isinstance(tlp, self.PacketCplD):
 
                     raise(self.ErrorBadCompletion('Bad MRd TLP completion received'))
+
+                assert tlp.h_tag == tag
                 
                 # decode data
                 data += tlp.get_data()
