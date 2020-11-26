@@ -15,7 +15,7 @@ To deploy the backdoor you can use one of the following methods:
 
  * UEFI bootkit based on the infection of the platform firmware stored in [SPI flash chip on the motherboard](https://raw.githubusercontent.com/Cr4sh/blog/master/uefi-boot-script-expl/spi-flash-chips.jpg), which is suitable for supply chain attacks.
 
-Backdoor supports 64-bit versions of Windows 10 1709, 1803, 1809, 1903, 1909 and 2004 running on Intel systems.
+Backdoor supports 64-bit versions of Windows 10 1709, 1803, 1809, 1903, 1909, 2004 and 20H2 running on Intel systems.
 
 
 ## Contents
