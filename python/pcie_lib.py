@@ -1103,7 +1103,7 @@ class TransactionLayer(object):
 
                 self.data = None
 
-                self.h_tag = 0 if tag is None else tag
+                self.h_tag = random.randrange(0, 0xff) if tag is None else tag
                 self.h_req_id, self.addr, self.bytes_read = req, addr, bytes_read
 
                 # create raw TLP from specified arguments
@@ -1141,16 +1141,15 @@ class TransactionLayer(object):
 
         tlp_type = 'MWr32'
 
-        def __init__(self, req = None, addr = None, data = None, tlp = None):
+        def __init__(self, req = None, addr = None, data = None, tag = None, tlp = None):
 
             TransactionLayer.Packet.__init__(self, tlp = tlp)
 
             if tlp is None:
 
-                assert data is not None
                 self.data = data if isinstance(data, list) else [ data ]
 
-                self.h_tag = 0
+                self.h_tag = random.randrange(0, 0xff) if tag is None else tag
                 self.h_req_id, self.addr, self.bytes_write = req, addr, len(self.data) * 4
 
                 # create raw TLP from specified arguments
@@ -1344,28 +1343,27 @@ class TransactionLayer(object):
 
             cur_chunk_size = min(chunk_size, max_chunk_size)
 
-            # create 64-bit memory read TLP
-            tag = random.randrange(0, 0xff)
-            tlp = self.PacketMRd64(self.bus_id, chunk_addr, cur_chunk_size, tag)
+            # create 64-bit memory read TLP            
+            tlp_tx = self.PacketMRd64(self.bus_id, chunk_addr, cur_chunk_size)
 
             # send TLP to the system
-            self.write(tlp)            
+            self.write(tlp_tx)
 
             data = ''
 
             while len(data) < cur_chunk_size:
 
                 # read reply
-                tlp = self.read()
+                tlp_rx = self.read()
 
-                if not isinstance(tlp, self.PacketCplD):
+                if not isinstance(tlp_rx, self.PacketCplD):
 
                     raise(self.ErrorBadCompletion('Bad MRd TLP completion received'))
 
-                assert tlp.h_tag == tag
+                assert tlp_tx.h_tag == tlp_rx.h_tag
                 
                 # decode data
-                data += tlp.get_data()
+                data += tlp_rx.get_data()
 
             output += data
             ptr += cur_chunk_size
