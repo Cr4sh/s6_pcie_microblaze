@@ -314,9 +314,9 @@ class Endpoint(object):
 
         pass
 
-    def __init__(self, bus_id = None, verbose = False, force = False, timeout = None):
+    def __init__(self, bus_id = None, force = False, timeout = None):
 
-        self.bus_id, self.verbose = bus_id, verbose
+        self.bus_id = bus_id
         self.timeout = self.RECV_TIMEOUT if timeout is None else timeout
 
         # check connection        
