@@ -109,17 +109,20 @@ def tlp_type_from_name(name):
 
 def endpoint_init(device = None, bus_id = None, verbose = False, force = False, timeout = None):
 
-    if Conf.device_type == DEVICE_TYPE_TCP or Conf.device_type == DEVICE_TYPE_SERIAL:
+    if Conf.device_type == DEVICE_TYPE_TCP:
 
-        # serial or TCP-IP transport
-        return EndpointTcpSerial(device = device, bus_id = bus_id, verbose = verbose, 
-                                 force = force, timeout = timeout)
+        # TCP/IP transport
+        return EndpointTcp(device = device, bus_id = bus_id, verbose = verbose, force = force, timeout = timeout)
+
+    elif Conf.device_type == DEVICE_TYPE_SERIAL:
+
+        # serial port transport
+        return EndpointSerial(device = device, bus_id = bus_id, verbose = verbose, force = force, timeout = timeout)
 
     elif Conf.device_type == DEVICE_TYPE_UIO:
 
         # UIO transport for Zynq based design
-        return EndpointUIO(bus_id = bus_id, verbose = verbose, 
-                           force = force, timeout = timeout)
+        return EndpointUIO(bus_id = bus_id, verbose = verbose, force = force, timeout = timeout)
 
     else:
 
@@ -311,6 +314,27 @@ class Endpoint(object):
 
         pass
 
+    def __init__(self, bus_id = None, verbose = False, force = False, timeout = None):
+
+        self.bus_id, self.verbose = bus_id, verbose
+        self.timeout = self.RECV_TIMEOUT if timeout is None else timeout
+
+        # check connection        
+        self.ping()
+
+        if self.bus_id is None:
+
+            # obtain bus id from the device
+            bus_id = self.get_bus_id()
+
+            if bus_id != 0:
+
+                self.bus_id = dev_id_decode(bus_id)
+
+            elif not force:
+
+                raise(self.ErrorNotReady('PCI-E endpoint is not configured by root complex yet'))  
+
     def get_bus_id(self):
 
         return self.status_bus_id(self.get_status()) 
@@ -345,60 +369,73 @@ class Endpoint(object):
 
         return self.cfg_read(cfg_addr, cfg_size = 4)
 
+    @abstractmethod
     def cfg_read(self, cfg_addr, cfg_size = 4):
 
         raise(NotImplementedError())
 
+    @abstractmethod
     def set_resident(self, on):
 
-        raise(NotImplementedError())
+        pass
 
+    @abstractmethod
     def set_rom_log(self, on):
 
-        raise(NotImplementedError())
+        pass
 
+    @abstractmethod
     def test(self, test_size):
 
-        raise(NotImplementedError())
+        pass
 
+    @abstractmethod
     def ping(self):
 
-        raise(NotImplementedError())
+        pass
 
+    @abstractmethod
     def reset(self):
 
-        raise(NotImplementedError())
+        pass
 
+    @abstractmethod
     def get_status(self):
 
-        raise(NotImplementedError())
+        pass
 
+    @abstractmethod
     def read(self):
 
-        raise(NotImplementedError())
+        pass
 
+    @abstractmethod
     def write(self, data):
 
-        raise(NotImplementedError())    
+        pass
 
+    @abstractmethod
     def rom_load(self, data, progress_cb = None):
 
-        raise(NotImplementedError())
+        pass
 
+    @abstractmethod
     def rom_erase(self):
 
-        raise(NotImplementedError())
+        pass
 
+    @abstractmethod
     def rom_size(self):
 
-        raise(NotImplementedError())
+        pass
 
+    @abstractmethod
     def close(self):
 
-        raise(NotImplementedError())
+        pass
 
     
-class EndpointTcpSerial(Endpoint):
+class EndpointStream(Endpoint):
 
     ENV_DEVICE = 'DEVICE'
 
@@ -422,68 +459,6 @@ class EndpointTcpSerial(Endpoint):
     CTL_ROM_LOG_ON          = 14
     CTL_ROM_LOG_OFF         = 15
     CTL_ROM_SIZE            = 16
-
-    def __init__(self, device = None, bus_id = None, verbose = False, force = False, timeout = None):
-
-        self.bus_id, self.verbose = bus_id, verbose
-        self.timeout = self.RECV_TIMEOUT if timeout is None else timeout
-
-        if Conf.device_type == DEVICE_TYPE_TCP:
-
-            self._init_tcp(device)
-
-        elif Conf.device_type == DEVICE_TYPE_SERIAL:
-
-            self._init_serial(device)
-
-        else:
-
-            raise(Exception('Unknown device type'))
-
-        # check connection        
-        self.ping()
-
-        if self.bus_id is None:
-
-            # obtain bus id from the device
-            bus_id = self.get_bus_id()
-
-            if bus_id != 0:
-
-                self.bus_id = dev_id_decode(bus_id)
-
-            elif not force:
-
-                raise(self.ErrorNotReady('PCI-E endpoint is not configured by root complex yet'))            
-
-    def _init_tcp(self, device):
-
-        if device is None:
-
-            try:
-
-                # obtain device address from environment variable
-                host, port = os.getenv(self.ENV_DEVICE).strip().split(':')
-                device = ( host, int(port) )
-
-            except: pass
-
-        # initialize TCP based device
-        self.device = Socket(addr = Conf.addr if device is None else device)
-
-    def _init_serial(self, device):
-
-        if device is None:
-
-            try:
-
-                # obtain device name from environment variable
-                device = os.getenv(self.ENV_DEVICE).strip()
-
-            except: pass            
-
-        # initialize serial based device
-        self.device = Serial(device = Conf.device if device is None else device, baud = Conf.baud)
         
     def _read(self, no_timeout = False):
 
@@ -693,11 +668,48 @@ class EndpointTcpSerial(Endpoint):
         assert code == self.CTL_SUCCESS and size == 4
 
         # receive reply data
-        return unpack('<I', self.device.read(size, timeout = self.timeout))[0]
+        return unpack('<I', self.device.read(size, timeout = self.timeout))[0]    
 
-    def close(self):
 
-        self.device.close()
+class EndpointTcp(EndpointStream):
+
+    def __init__(self, device = None, bus_id = None, verbose = False, force = False, timeout = None):
+
+        if device is None:
+
+            try:
+
+                # obtain device address from environment variable
+                host, port = os.getenv(self.ENV_DEVICE).strip().split(':')
+                device = ( host, int(port) )
+
+            except: pass
+
+        # initialize TCP/IP based device
+        self.device = Socket(addr = Conf.addr if device is None else device)
+
+        # initialize base class
+        super(EndpointTcp, self).__init__(bus_id = bus_id, verbose = verbose, force = force, timeout = timeout)
+
+
+class EndpointSerial(EndpointStream):
+
+    def __init__(self, device = None, bus_id = None, verbose = False, force = False, timeout = None):
+
+        if device is None:
+
+            try:
+
+                # obtain device name from environment variable
+                device = os.getenv(self.ENV_DEVICE).strip()
+
+            except: pass            
+
+        # initialize serial based device
+        self.device = Serial(device = Conf.device if device is None else device, baud = Conf.baud)
+
+        # initialize base class
+        super(EndpointSerial, self).__init__(bus_id = bus_id, verbose = verbose, force = force, timeout = timeout)
 
 
 class EndpointUIO(Endpoint):
@@ -732,18 +744,8 @@ class EndpointUIO(Endpoint):
         # open AXI GPIO
         self.gpio = LinuxUIO(self.UIO_NAME_GPIO)
 
-        if self.bus_id is None:
-
-            # obtain bus id from the device
-            bus_id = self.get_bus_id()
-
-            if bus_id != 0:
-
-                self.bus_id = dev_id_decode(bus_id)
-
-            elif not force:
-
-                raise(self.ErrorNotReady('PCI-E endpoint is not configured by root complex yet')) 
+        # initialize base class
+        super(EndpointUIO, self).__init__(bus_id = bus_id, verbose = verbose, force = force, timeout = timeout)
 
     def get_status(self):
 
@@ -834,6 +836,30 @@ class EndpointUIO(Endpoint):
 
         self.mem.close()
         self.gpio.close()
+
+    def set_resident(self, on):
+
+        raise(NotImplementedError())
+
+    def set_rom_log(self, on):
+
+        raise(NotImplementedError())
+
+    def test(self, test_size):
+
+        raise(NotImplementedError())    
+
+    def rom_load(self, data, progress_cb = None):
+
+        raise(NotImplementedError())
+
+    def rom_erase(self):
+
+        raise(NotImplementedError())
+
+    def rom_size(self):
+
+        raise(NotImplementedError())
 
 
 class EndpointTest(unittest.TestCase):
