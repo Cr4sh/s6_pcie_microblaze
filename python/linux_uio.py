@@ -7,8 +7,7 @@ try:
 
 except ImportError:
 
-    print('ERROR: numpy is not installed')
-    exit(0)
+    raise(Exception('numpy is not installed'))
 
 class LinuxUIO(object):
 

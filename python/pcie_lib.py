@@ -8,9 +8,6 @@ from abc import ABCMeta, abstractmethod
 
 from pcie_lib_config import *
 
-from linux_uio import *
-from linux_axi_dma import *
-
 PAGE_SIZE = 0x1000
 
 align_up = lambda x, a: ((x + a - 1) // a) * a
@@ -724,12 +721,15 @@ class EndpointUIO(Endpoint):
 
     def __init__(self, device = None, *args, **kvargs):
 
+        import linux_uio
+        import linux_axi_dma
+
         # open AXI DMA engines
-        self.dma_tlp = LinuxAxiDMA(self.UIO_NAME_DMA_0)
-        self.dma_cfg = LinuxAxiDMA(self.UIO_NAME_DMA_1)
+        self.dma_tlp = linux_axi_dma.LinuxAxiDMA(self.UIO_NAME_DMA_0)
+        self.dma_cfg = linux_axi_dma.LinuxAxiDMA(self.UIO_NAME_DMA_1)
 
         # open I/O memory
-        self.mem = LinuxUIO(self.UIO_NAME_MEM)
+        self.mem = linux_uio.LinuxUIO(self.UIO_NAME_MEM)
         self.buff = self.mem.as_ndarray(dtype = 'uint32')
 
         # initialize recv buffer for TLPs
@@ -739,7 +739,7 @@ class EndpointUIO(Endpoint):
         self.buff_tx = self.buff[self.MAX_TLP_LEN : self.MAX_TLP_LEN * 2]
 
         # open AXI GPIO
-        self.gpio = LinuxUIO(self.UIO_NAME_GPIO)
+        self.gpio = linux_uio.LinuxUIO(self.UIO_NAME_GPIO)
 
         # initialize base class
         super(EndpointUIO, self).__init__(*args, **kvargs)
