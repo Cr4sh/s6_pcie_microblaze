@@ -724,9 +724,6 @@ class EndpointUIO(Endpoint):
 
     def __init__(self, bus_id = None, verbose = False, force = False, timeout = None):
 
-        self.bus_id, self.verbose = bus_id, verbose
-        self.timeout = self.RECV_TIMEOUT if timeout is None else timeout
-
         # open AXI DMA engines
         self.dma_tlp = LinuxAxiDMA(self.UIO_NAME_DMA_0)
         self.dma_cfg = LinuxAxiDMA(self.UIO_NAME_DMA_1)
