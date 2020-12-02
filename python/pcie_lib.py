@@ -345,57 +345,70 @@ class Endpoint(object):
 
         return self.cfg_read(cfg_addr, cfg_size = 4)
 
+    @abstractmethod
     def cfg_read(self, cfg_addr, cfg_size = 4):
 
         raise(NotImplementedError())
 
+    @abstractmethod
     def set_resident(self, on):
 
-        raise(NotImplementedError())
+        pass
 
+    @abstractmethod
     def set_rom_log(self, on):
 
-        raise(NotImplementedError())
+        pass
 
+    @abstractmethod
     def test(self, test_size):
 
-        raise(NotImplementedError())
+        pass
 
+    @abstractmethod
     def ping(self):
 
-        raise(NotImplementedError())
+        pass
 
+    @abstractmethod
     def reset(self):
 
-        raise(NotImplementedError())
+        pass
 
+    @abstractmethod
     def get_status(self):
 
-        raise(NotImplementedError())
+        pass
 
+    @abstractmethod
     def read(self):
 
-        raise(NotImplementedError())
+        pass
 
+    @abstractmethod
     def write(self, data):
 
-        raise(NotImplementedError())    
+        pass
 
+    @abstractmethod
     def rom_load(self, data, progress_cb = None):
 
-        raise(NotImplementedError())
+        pass
 
+    @abstractmethod
     def rom_erase(self):
 
-        raise(NotImplementedError())
+        pass
 
+    @abstractmethod
     def rom_size(self):
 
-        raise(NotImplementedError())
+        pass
 
+    @abstractmethod
     def close(self):
 
-        raise(NotImplementedError())
+        pass
 
     
 class EndpointTcpSerial(Endpoint):
@@ -693,11 +706,7 @@ class EndpointTcpSerial(Endpoint):
         assert code == self.CTL_SUCCESS and size == 4
 
         # receive reply data
-        return unpack('<I', self.device.read(size, timeout = self.timeout))[0]
-
-    def close(self):
-
-        self.device.close()
+        return unpack('<I', self.device.read(size, timeout = self.timeout))[0]    
 
 
 class EndpointUIO(Endpoint):
@@ -834,6 +843,30 @@ class EndpointUIO(Endpoint):
 
         self.mem.close()
         self.gpio.close()
+
+    def set_resident(self, on):
+
+        raise(NotImplementedError())
+
+    def set_rom_log(self, on):
+
+        raise(NotImplementedError())
+
+    def test(self, test_size):
+
+        raise(NotImplementedError())    
+
+    def rom_load(self, data, progress_cb = None):
+
+        raise(NotImplementedError())
+
+    def rom_erase(self):
+
+        raise(NotImplementedError())
+
+    def rom_size(self):
+
+        raise(NotImplementedError())
 
 
 class EndpointTest(unittest.TestCase):
