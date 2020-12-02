@@ -673,7 +673,7 @@ class EndpointStream(Endpoint):
 
 class EndpointTcp(EndpointStream):
 
-    def __init__(self, device = None, bus_id = None, verbose = False, force = False, timeout = None):
+    def __init__(self, device = None, *args, **kvargs):
 
         if device is None:
 
@@ -689,12 +689,12 @@ class EndpointTcp(EndpointStream):
         self.device = Socket(addr = Conf.addr if device is None else device)
 
         # initialize base class
-        super(EndpointTcp, self).__init__(bus_id = bus_id, verbose = verbose, force = force, timeout = timeout)
+        super(EndpointTcp, self).__init__(*args, **kvargs)
 
 
 class EndpointSerial(EndpointStream):
 
-    def __init__(self, device = None, bus_id = None, verbose = False, force = False, timeout = None):
+    def __init__(self, device = None, *args, **kvargs):
 
         if device is None:
 
@@ -709,7 +709,7 @@ class EndpointSerial(EndpointStream):
         self.device = Serial(device = Conf.device if device is None else device, baud = Conf.baud)
 
         # initialize base class
-        super(EndpointSerial, self).__init__(bus_id = bus_id, verbose = verbose, force = force, timeout = timeout)
+        super(EndpointSerial, self).__init__(*args, **kvargs)
 
 
 class EndpointUIO(Endpoint):
@@ -722,7 +722,7 @@ class EndpointUIO(Endpoint):
     UIO_NAME_DMA_1 = 'dma_1'
     UIO_NAME_GPIO = 'gpio'
 
-    def __init__(self, device = None, bus_id = None, verbose = False, force = False, timeout = None):
+    def __init__(self, device = None, *args, **kvargs):
 
         # open AXI DMA engines
         self.dma_tlp = LinuxAxiDMA(self.UIO_NAME_DMA_0)
@@ -742,7 +742,7 @@ class EndpointUIO(Endpoint):
         self.gpio = LinuxUIO(self.UIO_NAME_GPIO)
 
         # initialize base class
-        super(EndpointUIO, self).__init__(bus_id = bus_id, verbose = verbose, force = force, timeout = timeout)
+        super(EndpointUIO, self).__init__(*args, **kvargs)
 
     def get_status(self):
 
