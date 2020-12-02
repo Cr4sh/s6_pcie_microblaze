@@ -5,7 +5,7 @@ from optparse import OptionParser
 
 from pcie_lib import *
 
-class BitstreamLoader(EndpointTcpSerial):
+class BitstreamLoader(EndpointSerial):
 
     CTL_BIT_WRITE = 0xfe
     CTL_BIT_ERASE = 0xff
