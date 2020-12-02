@@ -107,22 +107,22 @@ def tlp_type_from_name(name):
             return ((key >> 5) & 0x3), ((key >> 0) & 0x1f)
 
 
-def endpoint_init(device = None, bus_id = None, verbose = False, force = False, timeout = None):
+def endpoint_init(*args, **kvargs):
 
     if Conf.device_type == DEVICE_TYPE_TCP:
 
         # TCP/IP transport
-        return EndpointTcp(device = device, bus_id = bus_id, verbose = verbose, force = force, timeout = timeout)
+        return EndpointTcp(*args, **kvargs)
 
     elif Conf.device_type == DEVICE_TYPE_SERIAL:
 
         # serial port transport
-        return EndpointSerial(device = device, bus_id = bus_id, verbose = verbose, force = force, timeout = timeout)
+        return EndpointSerial(*args, **kvargs)
 
     elif Conf.device_type == DEVICE_TYPE_UIO:
 
         # UIO transport for Zynq based design
-        return EndpointUIO(bus_id = bus_id, verbose = verbose, force = force, timeout = timeout)
+        return EndpointUIO(*args, **kvargs)
 
     else:
 
@@ -722,7 +722,7 @@ class EndpointUIO(Endpoint):
     UIO_NAME_DMA_1 = 'dma_1'
     UIO_NAME_GPIO = 'gpio'
 
-    def __init__(self, bus_id = None, verbose = False, force = False, timeout = None):
+    def __init__(self, device = None, bus_id = None, verbose = False, force = False, timeout = None):
 
         # open AXI DMA engines
         self.dma_tlp = LinuxAxiDMA(self.UIO_NAME_DMA_0)
@@ -1281,11 +1281,10 @@ class TransactionLayer(object):
                    (self.h_tag, self.h_byte_count, dev_id_str(*self.h_requester), \
                                                    dev_id_str(*self.h_completer))    
 
-    def __init__(self, device = None, bus_id = None, verbose = False, force = False, timeout = None):
+    def __init__(self, *args, **kvargs):
 
         # initialize link layer
-        self.ep = endpoint_init(device = device, bus_id = bus_id, verbose = verbose, 
-                                force = force, timeout = timeout)
+        self.ep = endpoint_init(*args, **kvargs)
 
         self.bus_id = self.ep.bus_id        
 
