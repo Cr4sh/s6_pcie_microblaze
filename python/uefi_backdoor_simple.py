@@ -7,11 +7,14 @@ from optparse import OptionParser
 from pcie_lib import *
 from uefi import *
 
+# payload DXE driver
+DRIVER_PATH = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'payloads/DmaBackdoorSimple/DmaBackdoorSimple_X64.efi')
+
 def main():
 
     parser = OptionParser()
 
-    parser.add_option('-p', '--payload', dest = 'payload', default = None,
+    parser.add_option('-p', '--payload', dest = 'payload', default = DRIVER_PATH,
         help = 'payload file path')
 
     parser.add_option('-s', '--system-table', dest = 'system_table', default = None,

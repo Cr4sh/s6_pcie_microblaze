@@ -22,11 +22,14 @@ BACKDOOR_ERR_WINLOAD_HOOK   = -4    # winload hook error
 BACKDOOR_ERR_HYPER_V_IMAGE  = -5    # Hyper-V image not found
 BACKDOOR_ERR_HYPER_V_EXIT   = -6    # Hyper-V VM exit handler not found
 
+# payload DXE driver
+DRIVER_PATH = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'payloads/DmaBackdoorHv/DmaBackdoorHv_X64.efi')
+
 def main():
 
     parser = OptionParser()
 
-    parser.add_option('-p', '--payload', dest = 'payload', default = None,
+    parser.add_option('-p', '--payload', dest = 'payload', default = DRIVER_PATH,
         help = 'payload file path')
 
     parser.add_option('-s', '--system-table', dest = 'system_table', default = None,
