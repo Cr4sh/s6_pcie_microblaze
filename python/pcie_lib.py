@@ -1428,7 +1428,11 @@ class TransactionLayer(object):
         align = self.MEM_ALIGN
 
         read_addr = align_down(addr, align)
-        read_size = align_up(size, align) + align
+        read_size = align_up(size, align)
+
+        if read_addr != addr or read_size != size:
+
+            read_size += align
 
         ptr = addr - read_addr
 
@@ -1440,7 +1444,11 @@ class TransactionLayer(object):
         align, size = self.MEM_ALIGN, len(data)
 
         write_addr = align_down(addr, align)
-        write_size = align_up(size, align) + align
+        write_size = align_up(size, align)
+
+        if write_addr != addr or write_size != size:
+
+            write_size += align
 
         # read the existing data
         write_data = self._mem_read(write_addr, write_size)
