@@ -33,14 +33,22 @@ def main():
         help = 'payload file path')
 
     parser.add_option('-s', '--system-table', dest = 'system_table', default = None,
-        help = 'EFI_SYSTEM_TABLE address')
+        help = 'EFI_SYSTEM_TABLE address')    
+
+    parser.add_option('-e', '--prot-entry', dest = 'prot_entry', default = None,
+        help = 'PROTOCOL_ENTRY address')    
 
     parser.add_option('-d', '--debug-output', dest = 'debug_output', default = False, action = 'store_true',
         help = 'read DXE driver debug output')
 
+    parser.add_option('--inj-prot', dest = 'inj_prot', default = False, action = 'store_true',
+        help = 'use DXE protocol hook injection method')
+
     # parse command line
     options, _ = parser.parse_args()
+
     options.system_table = None if options.system_table is None else int(options.system_table, 16)
+    options.prot_entry = None if options.prot_entry is None else int(options.prot_entry, 16)
 
     if options.debug_output:
 
@@ -69,7 +77,9 @@ def main():
             return -1        
 
     # inject DXE driver into the booting system
-    dev = dxe_inject(payload = options.payload, system_table = options.system_table)
+    dev = dxe_inject(method = DXE_INJECT_PROT if options.inj_prot else DXE_INJECT_ST,
+                     payload = options.payload, system_table = options.system_table,
+                     prot_entry = options.prot_entry)
         
     if options.payload is None: return 0
 
