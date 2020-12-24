@@ -31,6 +31,9 @@
 #define EPT_WRITEABLE_SET(_e_) ((_e_) | ((uint64_t)1 << 1))
 #define EPT_WRITEABLE_UNSET(_e_) ((_e_) & ~((uint64_t)1 << 1))
 
+// make canonical virtual address
+#define SIGN_EXTEND_VA(_addr_) ((_addr_) | ((uint64_t)((((_addr_) & 0x800000000000) != 0) ? 0xffff : 0) << 48))
+
 bool m_quiet = true;
 //--------------------------------------------------------------------------------------
 int backdoor_invalidate_caches(void)
@@ -808,6 +811,246 @@ int backdoor_ept_dump(uint64_t pml4_addr)
                     EPT_R(PDPT_entry->Uint64) ? "R" : "", EPT_W(PDPT_entry->Uint64) ? "W" : "", 
                     EPT_X(PDPT_entry->Uint64) ? "X" : "",
                     host_addr != guest_addr ? "*" : ""
+                );
+            }
+
+            bd_printf("\n");
+
+            PDPT_entry += 1;
+        }
+
+        bd_printf("\n");
+
+        PML4_entry += 1;
+    }
+
+    ret = 0;
+
+_end:
+
+    if (PT_page)
+    {
+        bd_free(PT_page);
+    }
+
+    if (PD_page)
+    {
+        bd_free(PD_page);
+    }
+
+    if (PDPT_page)
+    {
+        bd_free(PDPT_page);
+    }
+
+    if (PML4_page)
+    {
+        bd_free(PML4_page);
+    }
+
+    return ret;
+}
+//--------------------------------------------------------------------------------------
+int backdoor_pt_dump(uint64_t pml4_addr)
+{
+    int ret = -1;
+    X64_PAGE_MAP_AND_DIRECTORY_POINTER_2MB_4K *PML4_page = NULL, *PDPT_page = NULL;
+    X64_PAGE_DIRECTORY_ENTRY_4K *PD_page = NULL;
+    X64_PAGE_TABLE_ENTRY_4K *PT_page = NULL;
+    
+    if ((PML4_page = (X64_PAGE_MAP_AND_DIRECTORY_POINTER_2MB_4K *)bd_alloc(PAGE_SIZE)) == NULL)
+    {
+        goto _end;
+    }
+
+    if ((PDPT_page = (X64_PAGE_MAP_AND_DIRECTORY_POINTER_2MB_4K *)bd_alloc(PAGE_SIZE)) == NULL)
+    {
+        goto _end;
+    }
+
+    if ((PD_page = (X64_PAGE_DIRECTORY_ENTRY_4K *)bd_alloc(PAGE_SIZE)) == NULL)
+    {
+        goto _end;
+    }
+
+    if ((PT_page = (X64_PAGE_TABLE_ENTRY_4K *)bd_alloc(PAGE_SIZE)) == NULL)
+    {
+        goto _end;
+    }    
+
+    // read PML4 memory page
+    if (backdoor_phys_read(PML4_ADDRESS(pml4_addr), PML4_page, PAGE_SIZE) != 0)
+    {
+        goto _end;
+    }
+
+    X64_PAGE_MAP_AND_DIRECTORY_POINTER_2MB_4K *PML4_entry = PML4_page;
+
+    uint64_t phys_addr = 0, virt_addr = 0;
+
+    // enumerate PML4 entries
+    for (uint64_t i_1 = 0; i_1 < PAGE_SIZE / sizeof(uint64_t); i_1 += 1)
+    {
+        X64_PAGE_MAP_AND_DIRECTORY_POINTER_2MB_4K *PDPT_entry = PDPT_page;
+
+        if (PML4_entry->Bits.Present == 0)
+        {
+            PML4_entry += 1;
+            continue;
+        }
+
+        bd_printf("PML4E #%.4x: 0x%.16llx\n", i_1, PML4_entry->Uint64);
+        
+        // read PDPT memory page
+        if (backdoor_phys_read(PFN_TO_PAGE(PML4_entry->Bits.PageTableBaseAddress), 
+                                           PDPT_page, PAGE_SIZE) != 0)
+        {
+            goto _end;
+        }
+
+        // enumerate PDPT entries
+        for (uint64_t i_2 = 0; i_2 < PAGE_SIZE / sizeof(uint64_t); i_2 += 1)
+        {                        
+            if (PDPT_entry->Bits.Present == 0)
+            {
+                PDPT_entry += 1;
+                continue;
+            }
+
+            bd_printf("PDPTE #%.4x: 0x%.16llx\n", i_2, PDPT_entry->Uint64);
+
+            // check for page size flag
+            if ((PDPT_entry->Uint64 & PDPTE_PDE_PS) == 0)
+            {
+                bool skip_pd = true;
+                X64_PAGE_DIRECTORY_ENTRY_4K *PD_entry = PD_page;
+
+                // read PDE memory page
+                if (backdoor_phys_read(PFN_TO_PAGE(PDPT_entry->Bits.PageTableBaseAddress),
+                                                   PD_page, PAGE_SIZE) != 0)
+                {
+                    goto _end;
+                }
+
+                phys_addr = PFN_TO_PAGE(PD_entry->Bits.PageTableBaseAddress);
+
+                // enumerate PDE entries
+                for (uint64_t i = 0; i < PAGE_SIZE / sizeof(uint64_t); i += 1)
+                {
+                    if (PFN_TO_PAGE(PD_entry->Bits.PageTableBaseAddress) != phys_addr)
+                    {
+                        skip_pd = false;
+                        break;
+                    }
+
+                    PD_entry += 1;
+                }
+
+                if (skip_pd)
+                {
+                    continue;
+                }
+
+                PD_entry = PD_page;
+
+                // enumerate PDE entries
+                for (uint64_t i_3 = 0; i_3 < PAGE_SIZE / sizeof(uint64_t); i_3 += 1)
+                {
+                    if (PD_entry->Bits.Present == 0)
+                    {
+                        PD_entry += 1;
+                        continue;
+                    }
+
+                    bd_printf("  PDE #%.4x: 0x%.16llx\n", i_3, PD_entry->Uint64);
+
+                    // check for page size flag
+                    if ((PD_entry->Uint64 & PDPTE_PDE_PS) == 0)
+                    {
+                        bool skip_pt = true;
+                        X64_PAGE_TABLE_ENTRY_4K *PT_entry = PT_page;
+
+                        // read PTE memory page
+                        if (backdoor_phys_read(PFN_TO_PAGE(PD_entry->Bits.PageTableBaseAddress),
+                                                           PT_page, PAGE_SIZE) != 0)
+                        {
+                            goto _end;
+                        }
+
+                        phys_addr = PFN_TO_PAGE(PT_entry->Bits.PageTableBaseAddress);
+
+                        // enumerate PTE entries
+                        for (uint64_t i = 0; i < PAGE_SIZE / sizeof(uint64_t); i += 1)
+                        {
+                            if (PFN_TO_PAGE(PT_entry->Bits.PageTableBaseAddress) != phys_addr)
+                            {
+                                skip_pt = false;
+                                break;
+                            }
+
+                            PT_entry += 1;
+                        }
+
+                        if (skip_pt)
+                        {
+                            continue;
+                        }
+
+                        PT_entry = PT_page;
+                        
+                        // enumerate PTE entries
+                        for (uint64_t i_4 = 0; i_4 < PAGE_SIZE / sizeof(uint64_t); i_4 += 1)
+                        {
+                            if (PT_entry->Bits.Present == 0)
+                            {
+                                PT_entry += 1;
+                                continue;
+                            }                            
+
+                            // 4 Kb page
+                            phys_addr = PFN_TO_PAGE(PT_entry->Bits.PageTableBaseAddress);
+                            virt_addr = PML4_ADDR(i_1) | PDPT_ADDR(i_2) | PDE_ADDR(i_3) | PTE_ADDR(i_4);                            
+                            
+                            bd_printf(
+                                "             0x%.16llx -> 0x%.16llx 4K R%s%s\n",
+                                SIGN_EXTEND_VA(virt_addr), phys_addr,
+                                (PT_entry->Bits.ReadWrite != 0) ? "W" : "",
+                                (PT_entry->Bits.Nx == 0) ? "X" : ""
+                            );
+
+                            PT_entry += 1;
+                        }
+                    }
+                    else
+                    {                        
+                        // 2Mb page
+                        phys_addr = PFN_TO_PAGE(PD_entry->Bits.PageTableBaseAddress);
+                        virt_addr = PML4_ADDR(i_1) | PDPT_ADDR(i_2) | PDE_ADDR(i_3);
+                            
+                        bd_printf(
+                            "             0x%.16llx -> 0x%.16llx 2M R%s%s\n",
+                            SIGN_EXTEND_VA(virt_addr), phys_addr,
+                            (PD_entry->Bits.ReadWrite != 0) ? "W" : "",
+                            (PD_entry->Bits.Nx == 0) ? "X" : ""
+                        );
+                    }
+
+                    bd_printf("\n");
+
+                    PD_entry += 1;
+                }
+            }
+            else
+            {
+                // 1Gb page
+                phys_addr = PFN_TO_PAGE(PDPT_entry->Bits.PageTableBaseAddress);
+                virt_addr = PML4_ADDR(i_1) | PDPT_ADDR(i_2);
+
+                bd_printf(
+                    "             0x%.16llx -> 0x%.16llx 1G R%s%s\n",
+                    SIGN_EXTEND_VA(virt_addr), phys_addr,
+                    (PDPT_entry->Bits.ReadWrite != 0) ? "W" : "",
+                    (PDPT_entry->Bits.Nx == 0) ? "X" : ""
                 );
             }
 

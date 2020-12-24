@@ -780,8 +780,8 @@ _nt_found:
         if (ud_obj.mnemonic == UD_Ijmp  ||
             ud_obj.mnemonic == UD_Iret  ||
             ud_obj.mnemonic == UD_Iretf ||
-            ud_obj.mnemonic == UD_Iiretw   ||
-            ud_obj.mnemonic == UD_Iiretq   ||
+            ud_obj.mnemonic == UD_Iiretw ||
+            ud_obj.mnemonic == UD_Iiretq ||
             ud_obj.mnemonic == UD_Iiretd)
         {
             // end of the function thunk?
@@ -2329,8 +2329,8 @@ int backdoor_sk_inject(SK_INFO *sk_info, uint64_t sk_addr_virt, uint64_t *payloa
         if (ud_obj.mnemonic == UD_Ijmp  ||
             ud_obj.mnemonic == UD_Iret  ||
             ud_obj.mnemonic == UD_Iretf ||
-            ud_obj.mnemonic == UD_Iiretw   ||
-            ud_obj.mnemonic == UD_Iiretq   ||
+            ud_obj.mnemonic == UD_Iiretw ||
+            ud_obj.mnemonic == UD_Iiretq ||
             ud_obj.mnemonic == UD_Iiretd)
         {
             // end of the function thunk?
@@ -2945,6 +2945,21 @@ int _tmain(int argc, _TCHAR* argv[])
             printf("[+] EPT dump with PML4 at 0x%llx:\n\n", addr);
 
             backdoor_ept_dump(addr);
+        }
+        else if (!strcmp(command, "--pt-dump") && argc >= 4)
+        {
+            uint64_t addr = strtoull(argv[3], NULL, 16);
+            uint64_t empty_pt_addr = 0;
+
+            if (errno == EINVAL)
+            {
+                printf("ERROR: Invalid page table address\n");
+                return -1;
+            }
+
+            printf("[+] Page table dump with PML4 at 0x%llx:\n\n", addr);
+
+            backdoor_pt_dump(addr);
         }
         else if (!strcmp(command, "--sk-info"))
         {
