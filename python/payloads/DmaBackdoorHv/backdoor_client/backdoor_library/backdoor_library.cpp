@@ -126,38 +126,24 @@ int backdoor_virt_read(uint64_t addr, void *buff, int size)
         uint64_t arg1 = 0;
         uint64_t arg2 = 0;
         uint64_t arg3 = 0;
-        
-        uint64_t ret = 0;
-        uint32_t retry = 0;
-
-        while (retry < 100)
+                
+        // read single memory qword
+        uint64_t ret = backdoor_call(HVBD_C_VIRT_READ, &arg0, &arg1, &arg2);
+        if (ret == HVBD_E_NO_BACKDOOR)
         {
-            retry += 1;
+            bd_free(temp);
 
-            // read single memory qword
-            if ((ret = backdoor_call(HVBD_C_VIRT_READ, &arg0, &arg1, &arg2)) == HVBD_E_NO_BACKDOOR)
-            {
-                bd_printf(__FUNCTION__"() ERROR: backdoor is not present\n");
-
-                bd_free(temp);
-                return -1;
-            }
-
-            if (ret == HVBD_E_INVALID_PARAM)
-            {
-                continue;
-            }
-
-            break;
-        }    
+            bd_printf(__FUNCTION__"() ERROR: backdoor is not present\n");
+            return -1;
+        }
 
         if (ret != HVBD_E_SUCCESS)
         {
-            bd_printf(__FUNCTION__"() ERROR: backdoor returned error 0x%llx\n", ret);
-
             bd_free(temp);
+
+            bd_printf(__FUNCTION__"() ERROR: backdoor returned error 0x%llx\n", ret);
             return -1;
-        }    
+        }       
 
         *(uint64_t *)(temp + i) = arg1;
     }    
@@ -268,14 +254,18 @@ int backdoor_virt_write(uint64_t addr, void *buff, int size)
         // write single memory qword
         uint64_t ret = backdoor_call(HVBD_C_VIRT_WRITE, &arg0, &arg1, &arg2);
         if (ret == HVBD_E_NO_BACKDOOR)
-        {
+        {           
             bd_free(temp);
+
+            bd_printf(__FUNCTION__"() ERROR: backdoor is not present\n");
             return -1;
         }
 
         if (ret != HVBD_E_SUCCESS)
         {
             bd_free(temp);
+
+            bd_printf(__FUNCTION__"() ERROR: backdoor returned error 0x%llx\n", ret);
             return -1;
         }
     }    
@@ -2440,26 +2430,47 @@ int backdoor_pte_addr(uint64_t addr, uint64_t *pte_addr, HVBD_PTE_SIZE *pte_size
                 }
             }
                          
-            // 4K page
-            *pte_addr = phys_addr;
-            *pte_size = HVBD_PTE_SIZE_4K;
+            if (pte_addr)
+            {
+                // 4K page
+                *pte_addr = phys_addr;
+            }
+
+            if (pte_size)
+            {
+                *pte_size = HVBD_PTE_SIZE_4K;
+            }
 
             return 0;
         }
         else
         {
-            // 2M page
-            *pte_addr = phys_addr;
-            *pte_size = HVBD_PTE_SIZE_2M;
+            if (pte_addr)
+            {
+                // 2M page
+                *pte_addr = phys_addr;
+            }
+            
+            if (pte_size)
+            {
+                *pte_size = HVBD_PTE_SIZE_2M;
+            }            
 
             return 0;
         }                  
     }
     else
     {
-        // 1G page
-        *pte_addr = phys_addr;
-        *pte_size = HVBD_PTE_SIZE_1G;
+        if (pte_addr)
+        {
+            // 1G page
+            *pte_addr = phys_addr;
+        }
+        
+        if (pte_size)
+        {
+            *pte_size = HVBD_PTE_SIZE_1G;
+        }        
 
         return 0;
     }

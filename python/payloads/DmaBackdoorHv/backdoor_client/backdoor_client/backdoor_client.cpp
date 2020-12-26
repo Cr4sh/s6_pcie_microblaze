@@ -2648,8 +2648,12 @@ int _tmain(int argc, _TCHAR* argv[])
 
         if (!strcmp(command, "--virt-read") && argc >= 5)
         {
+            HVBD_INFO info;
+            X64_PAGE_TABLE_ENTRY_4K pte_val;
+
             // read virtual memory at given address
             uint64_t addr = strtoull(argv[3], NULL, 16);
+            uint64_t pte_addr = 0;
 
             if (errno == EINVAL)
             {
@@ -2662,6 +2666,33 @@ int _tmain(int argc, _TCHAR* argv[])
             if (errno == EINVAL)
             {
                 printf("ERROR: Invalid size\n");
+                return -1;
+            }
+            
+            // no command specified, print hypervisor information
+            if (backdoor_info(&info) != 0)
+            {
+                printf("ERROR: Unable to get backdoor info\n");
+                return -1;
+            }
+
+            // get PTE address for given VA
+            if (backdoor_pte_addr(addr, &pte_addr, NULL, info.cr3, NULL) != 0)
+            {
+                printf("ERROR: Unable to get PTE address\n");
+                return -1;
+            }
+
+            // get PTE contents
+            if (backdoor_phys_read_64(pte_addr, &pte_val.Uint64) != 0)
+            {
+                printf("ERROR: Unable to get PTE contents\n");
+                return -1;
+            }
+
+            if (pte_val.Bits.Present == 0)
+            {
+                printf("ERROR: Virtual address is not mapped\n");
                 return -1;
             }
 
