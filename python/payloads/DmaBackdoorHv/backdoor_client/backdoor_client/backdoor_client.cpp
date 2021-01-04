@@ -2669,7 +2669,7 @@ int _tmain(int argc, _TCHAR* argv[])
                 return -1;
             }
             
-            // no command specified, print hypervisor information
+            // get hypervisor information
             if (backdoor_info(&info) != 0)
             {
                 printf("ERROR: Unable to get backdoor info\n");

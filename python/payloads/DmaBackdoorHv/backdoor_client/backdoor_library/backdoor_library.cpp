@@ -110,8 +110,12 @@ int backdoor_info(HVBD_INFO *info)
 }
 //--------------------------------------------------------------------------------------
 int backdoor_virt_read(uint64_t addr, void *buff, int size)
-{
-    int temp_size = _ALIGN_UP(size, sizeof(uint64_t));
+{    
+    uint64_t read_addr = _ALIGN_DOWN(addr, sizeof(uint64_t));    
+
+    // calculate needed temp buffer size
+    int temp_align = (int)(addr - read_addr);
+    int temp_size = _ALIGN_UP(size + temp_align, sizeof(uint64_t));
 
     // allocate temporary qword aligned buffer
     uint8_t *temp = (uint8_t *)bd_alloc(temp_size);
@@ -122,7 +126,7 @@ int backdoor_virt_read(uint64_t addr, void *buff, int size)
 
     for (int i = 0; i < temp_size; i += sizeof(uint64_t))
     {
-        uint64_t arg0 = addr + i;
+        uint64_t arg0 = read_addr + i;
         uint64_t arg1 = 0;
         uint64_t arg2 = 0;
         uint64_t arg3 = 0;
@@ -148,8 +152,8 @@ int backdoor_virt_read(uint64_t addr, void *buff, int size)
         *(uint64_t *)(temp + i) = arg1;
     }    
 
-    // copy readed data to calee buffer
-    memcpy(buff, temp, size);
+    // copy readed data to the callee buffer
+    memcpy(buff, temp + temp_align, size);
 
     bd_free(temp);
     return 0;
