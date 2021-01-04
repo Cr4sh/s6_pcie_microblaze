@@ -113,19 +113,14 @@ int backdoor_virt_read(uint64_t addr, void *buff, int size)
 {    
     uint64_t read_addr = _ALIGN_DOWN(addr, sizeof(uint64_t));    
 
-    // calculate needed temp buffer size
-    int temp_align = (int)(addr - read_addr);
-    int temp_size = _ALIGN_UP(size + temp_align, sizeof(uint64_t));
+    // calculate an actual size of the data to read
+    int read_align = (int)(addr - read_addr);
+    int read_size = _ALIGN_UP(size + read_align, sizeof(uint64_t));
 
-    // allocate temporary qword aligned buffer
-    uint8_t *temp = (uint8_t *)bd_alloc(temp_size);
-    if (temp == NULL)
+    for (int i = 0, ptr = 0; i < read_size; i += sizeof(uint64_t))
     {
-        return -1;
-    }
+        int temp_size = min(size - ptr, sizeof(uint64_t) - read_align);
 
-    for (int i = 0; i < temp_size; i += sizeof(uint64_t))
-    {
         uint64_t arg0 = read_addr + i;
         uint64_t arg1 = 0;
         uint64_t arg2 = 0;
@@ -135,27 +130,23 @@ int backdoor_virt_read(uint64_t addr, void *buff, int size)
         uint64_t ret = backdoor_call(HVBD_C_VIRT_READ, &arg0, &arg1, &arg2);
         if (ret == HVBD_E_NO_BACKDOOR)
         {
-            bd_free(temp);
-
             bd_printf(__FUNCTION__"() ERROR: backdoor is not present\n");
             return -1;
         }
 
         if (ret != HVBD_E_SUCCESS)
         {
-            bd_free(temp);
-
             bd_printf(__FUNCTION__"() ERROR: backdoor returned error 0x%llx\n", ret);
             return -1;
         }       
 
-        *(uint64_t *)(temp + i) = arg1;
+        // copy data into the output buffer
+        memcpy((uint8_t *)buff + ptr, (uint8_t *)&arg1 + read_align, temp_size);
+
+        ptr += temp_size;
+        read_align = 0;
     }    
 
-    // copy readed data to the callee buffer
-    memcpy(buff, temp + temp_align, size);
-
-    bd_free(temp);
     return 0;
 }
 //--------------------------------------------------------------------------------------
