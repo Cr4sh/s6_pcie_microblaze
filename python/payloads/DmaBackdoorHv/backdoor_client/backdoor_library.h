@@ -109,7 +109,7 @@ int backdoor_ept_list(EPT_INFO *ept_list);
 int backdoor_ept_dump(uint64_t pml4_addr);
 int backdoor_ept_info_addr(uint64_t *addr);
 
-int backdoor_pt_dump(uint64_t pml4_addr);
+int backdoor_pt_dump(uint64_t pml4_addr, uint64_t ept_addr);
 
 int backdoor_phys_translate(uint64_t addr, uint64_t *ret, uint64_t pml4_addr);
 int backdoor_phys_update(uint64_t addr, uint64_t entry, uint64_t *old, uint64_t pml4_addr);

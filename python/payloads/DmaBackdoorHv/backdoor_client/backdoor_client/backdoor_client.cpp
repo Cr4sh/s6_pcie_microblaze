@@ -2979,8 +2979,8 @@ int _tmain(int argc, _TCHAR* argv[])
         }
         else if (!strcmp(command, "--pt-dump") && argc >= 4)
         {
+            uint64_t empty_pt_addr = 0, ept_addr = 0;
             uint64_t addr = strtoull(argv[3], NULL, 16);
-            uint64_t empty_pt_addr = 0;
 
             if (errno == EINVAL)
             {
@@ -2988,9 +2988,20 @@ int _tmain(int argc, _TCHAR* argv[])
                 return -1;
             }
 
+            if (argc >= 5)
+            {
+                ept_addr = strtoull(argv[4], NULL, 16);
+
+                if (errno == EINVAL)
+                {
+                    printf("ERROR: Invalid EPT address\n");
+                    return -1;
+                }
+            }
+
             printf("[+] Page table dump with PML4 at 0x%llx:\n\n", addr);
 
-            backdoor_pt_dump(addr);
+            backdoor_pt_dump(addr, ept_addr);
         }
         else if (!strcmp(command, "--sk-info"))
         {
