@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-import sys, os, time, random, socket, select, signal, unittest
+import sys, os, time, array, fcntl, errno, random, socket, select, signal, unittest
 from struct import pack, unpack
 from threading import Thread
 from multiprocessing.dummy import Pool as ThreadPool
@@ -120,6 +120,11 @@ def endpoint_init(*args, **kvargs):
 
         # UIO transport for Zynq based design
         return EndpointUIO(*args, **kvargs)
+
+    elif Conf.device_type == DEVICE_TYPE_DRIVER:
+
+        # zc_dma_mem.ko transport for Zynq based design
+        return EndpointDriver(*args, **kvargs)
 
     else:
 
@@ -369,7 +374,7 @@ class Endpoint(object):
     @abstractmethod
     def cfg_read(self, cfg_addr, cfg_size = 4):
 
-        raise(NotImplementedError())
+        pass
 
     @abstractmethod
     def set_resident(self, on):
@@ -833,6 +838,128 @@ class EndpointUIO(Endpoint):
 
         self.mem.close()
         self.gpio.close()
+
+    def set_resident(self, on):
+
+        raise(NotImplementedError())
+
+    def set_rom_log(self, on):
+
+        raise(NotImplementedError())
+
+    def test(self, test_size):
+
+        raise(NotImplementedError())    
+
+    def rom_load(self, data, progress_cb = None):
+
+        raise(NotImplementedError())
+
+    def rom_erase(self):
+
+        raise(NotImplementedError())
+
+    def rom_size(self):
+
+        raise(NotImplementedError())
+
+
+class EndpointDriver(Endpoint):
+
+    MAX_TLP_LEN = PAGE_SIZE / 4
+
+    # buffer length for tlp_recv()
+    RECV_BUFF_LEN = 0x1000
+
+    # zc_dma_mem.ko IOCTL codes
+    ZC_DMA_MEM_IOCTL_RESET = 0x0000cc00   
+    ZC_DMA_MEM_IOCTL_GET_DEVICE_ID = 0x8004cc01    
+
+    # zc_dma_mem.ko device path
+    DEVICE_PATH = '/dev/zc_dma_mem_1'
+
+    def __init__(self, device = None, *args, **kvargs):
+
+        # open device
+        self.fd = os.open(self.DEVICE_PATH, os.O_RDWR)
+
+        # initialize base class
+        super(EndpointDriver, self).__init__(*args, **kvargs)
+
+    def get_status(self):
+
+        buff = array.array('I', [0])
+
+        # send IOCTL request to the driver to read PCI-E device ID
+        fcntl.ioctl(self.fd, self.ZC_DMA_MEM_IOCTL_GET_DEVICE_ID, buff, 1)
+
+        return buff[0]
+
+    def ping(self):
+
+        pass
+
+    def reset(self):
+
+        # send IOCTL request to the driver
+        fcntl.ioctl(self.fd, self.ZC_DMA_MEM_IOCTL_RESET)
+
+    def read(self):
+
+        ret = []
+
+        try:
+
+            # receive TLP
+            data = os.read(self.fd, self.RECV_BUFF_LEN)
+
+        except OSError, why:
+
+            # check for the timeout error returned by read() syscall
+            if why.errno == errno.ETIME:
+
+                raise(self.ErrorTimeout('TLP read timeout occurred'))     
+
+            else:
+
+                raise                
+
+        assert len(data) >= 12
+        assert len(data) % 4 == 0
+
+        for i in range(0, len(data) / 4):
+
+            ret.append(unpack('I', data[i * 4 : (i + 1) * 4])[0])        
+
+        return ret
+
+    def write(self, data):
+
+        data = ''.join(map(lambda dw: pack('I', dw), data))
+
+        try:
+
+            # send TLP
+            os.write(self.fd, data)
+
+        except OSError, why:
+
+            # check for the timeout error returned by write() syscall
+            if why.errno == errno.ETIME:
+
+                raise(self.ErrorTimeout('TLP write timeout occurred'))     
+
+            else:
+
+                raise                
+
+    def cfg_read(self, cfg_addr, cfg_size = 4):
+
+        raise(NotImplementedError())
+
+    def close(self):
+
+        os.close(self.fd)        
 
     def set_resident(self, on):
 
