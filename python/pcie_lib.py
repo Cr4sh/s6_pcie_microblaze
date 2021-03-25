@@ -872,8 +872,9 @@ class EndpointDriver(Endpoint):
     RECV_BUFF_LEN = 0x1000
 
     # zc_dma_mem.ko IOCTL codes
-    ZC_DMA_MEM_IOCTL_RESET = 0x0000cc00   
-    ZC_DMA_MEM_IOCTL_GET_DEVICE_ID = 0x8004cc01    
+    ZC_DMA_MEM_IOCTL_RESET          = 0x0000cc00
+    ZC_DMA_MEM_IOCTL_GET_DEVICE_ID  = 0x8004cc01
+    ZC_DMA_MEM_IOCTL_CONFIG_READ    = 0xc004cc02  
 
     # zc_dma_mem.ko device path
     DEVICE_PATH = '/dev/zc_dma_mem_1'
@@ -888,7 +889,7 @@ class EndpointDriver(Endpoint):
 
     def get_status(self):
 
-        buff = array.array('I', [0])
+        buff = array.array('I', [ 0 ])
 
         # send IOCTL request to the driver to read PCI-E device ID
         fcntl.ioctl(self.fd, self.ZC_DMA_MEM_IOCTL_GET_DEVICE_ID, buff, 1)
@@ -955,7 +956,29 @@ class EndpointDriver(Endpoint):
 
     def cfg_read(self, cfg_addr, cfg_size = 4):
 
-        raise(NotImplementedError())
+        assert cfg_size in [ 1, 2, 4 ]
+
+        # get register number from register address
+        reg_num = cfg_addr / 4
+        reg_off = cfg_addr % 4
+
+        data = ''
+
+        for i in range(0, 2):
+
+            addr = reg_num + i
+
+            buff = array.array('I', [ addr ])
+
+            # send IOCTL request to the driver
+            fcntl.ioctl(self.fd, self.ZC_DMA_MEM_IOCTL_CONFIG_READ, buff, 1)
+
+            data += pack('I', buff[0])
+
+        # get register value from readed data
+        data = data[reg_off : reg_off + cfg_size]
+
+        return unpack('<' + { 1: 'B', 2: 'H', 4: 'I' }[cfg_size], data)[0] 
 
     def close(self):
 
