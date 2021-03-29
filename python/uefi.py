@@ -61,6 +61,17 @@ DXE_INJECT_PROT = 1
 
 valid_dxe_addr = lambda addr: addr > 0x1000 and addr < 0xffffffff
 
+def _env_arg(name, def_val):
+
+    val = os.getenv(name)
+    if val is None:
+
+        # use default value
+        return def_val
+
+    # use environmet value
+    return int(val, 16)
+
 def _infector_config_offset(pe):
         
     for section in pe.sections:
@@ -156,7 +167,9 @@ def find_sys_table_from_image(dev, addr):
 
 def find_sys_table(dev):
 
-    base, ptr = ST_SCAN_FROM, 0
+    base = _env_arg('SCAN_FROM', ST_SCAN_FROM)
+    step = _env_arg('SCAN_STEP', ST_SCAN_STEP)
+    ptr = 0
 
     print('[+] Looking for DXE driver PE image...')
 
@@ -177,7 +190,7 @@ def find_sys_table(dev):
 
                     return addr
 
-            ptr += ST_SCAN_STEP
+            ptr += step
 
         except dev.ErrorBadCompletion:            
 
@@ -243,12 +256,15 @@ def find_prot_entry_from_image(dev, addr, pe, known_locations):
 
 def find_prot_entry(dev):
 
-    image, known_locations = PROT_SCAN_FROM, []
+    image = _env_arg('SCAN_FROM', PROT_SCAN_FROM)
+    step = _env_arg('SCAN_STEP', PROT_SCAN_STEP)
+    end = _env_arg('SCAN_TO', PROT_SCAN_TO)
+    known_locations = []
 
     print('[+] Looking for DXE driver PE image...')
 
     # try to find usable UEFI image at the middle of the first 4GB
-    while image < PROT_SCAN_TO:
+    while image < end:
         
         try:
 
@@ -275,7 +291,7 @@ def find_prot_entry(dev):
 
             print('[!] Error while probing image at 0x%.8x' % image)        
 
-        image += PROT_SCAN_STEP
+        image += step
 
     raise(Exception('Unable to find PROTOCOL_ENTRY'))
 
