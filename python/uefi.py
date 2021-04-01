@@ -53,8 +53,17 @@ PROT_HOOK_FUNC = 2
 PROTOCOL_ENTRY_SIGNATURE = 'prte'
 PROTOCOL_INTERFACE_SIGNATURE = 'pifc'
 
+# EFI_SYSTEM_TABLE and EFI_BOOT_SERVICES field offsets
 EFI_SYSTEM_TABLE_BootServices = 0x60
+EFI_SYSTEM_TABLE_NumberOfTableEntries = 0x68
+EFI_SYSTEM_TABLE_ConfigurationTable = 0x70
 EFI_BOOT_SERVICES_LocateProtocol = 0x140
+
+EFI_ACPI_TABLE_GUID = '8868e871-e4f1-11d3-bc22-0080c73c8881'
+
+# ACPI tables signatures
+ACPI_RSDP_SIG = 'RSD PTR '
+ACPI_RSDT_SIG = 'RSDT'
 
 DXE_INJECT_ST   = 0
 DXE_INJECT_PROT = 1
@@ -309,10 +318,11 @@ def prot_get(dev, entry_addr, guid, param):
 def prot_print_load_guids():
 
     ret = {}
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), GUIDS_FILE_PATH)
 
-    if os.path.isfile(GUIDS_FILE_PATH):
+    if os.path.isfile(path):
 
-        with open(GUIDS_FILE_PATH) as fd:
+        with open(path) as fd:
 
             # enumerate known UEFI GUIDs
             for name, guid in json.load(fd).items():
@@ -683,6 +693,8 @@ def main():
     intf_list = prot_enum(dev, prot_entry, handler = prot_get, \
                                           param = uuid.UUID(EFI_LOADED_IMAGE_PROTOCOL_GUID))
 
+    system_table = None
+
     if intf_list is not None and len(intf_list) > 0:
 
         print('[+] Loaded UEFI images:\n')
@@ -719,7 +731,88 @@ def main():
             print(' * 0x%.8x: addr = 0x%.8x, size = 0x%.8x %s' % 
                       (loaded_image, image_addr, image_size, image_path_string))
 
-        print('')    
+            if system_table is None:
+
+                system_table = find_sys_table_from_image(dev, image_addr)
+
+        print('')  
+
+    if system_table is not None:
+
+        print('[+] EFI system table is at 0x%x' % system_table)
+
+        # read EFI_CONFIGUrATION_TABLE address and size
+        config_size = dev.mem_read_8(system_table + EFI_SYSTEM_TABLE_NumberOfTableEntries)
+        config_addr = dev.mem_read_8(system_table + EFI_SYSTEM_TABLE_ConfigurationTable)
+
+        print('[+] EFI configuration table is at 0x%x, %d entries:\n' % (config_addr, config_size))
+
+        assert config_size > 0 and config_size < 0xff
+        assert valid_dxe_addr(config_addr)
+
+        rsdp_addr = None
+
+        # print configuration table entries
+        for i in range(0, config_size):
+            
+            table_guid, table_addr = unpack('16sQ', dev.mem_read(config_addr, 0x18))
+            table_guid = uuid.UUID(bytes_le = table_guid)
+            table_name = table_guid
+
+            assert valid_dxe_addr(table_addr)
+
+            if guids is not None and guids.has_key(table_guid):
+
+                # get table name by GUID
+                table_name = guids[table_guid]
+
+            print(' * 0x%.8x: addr = 0x%x %s' % (config_addr, table_addr, table_name))
+
+            # check for ACPI 2.0 table
+            if str(table_guid) == EFI_ACPI_TABLE_GUID:
+
+                # check for ACPI RSDP table
+                if dev.mem_read(table_addr, 8) == ACPI_RSDP_SIG:
+                    
+                    # get ACPI RSDP address
+                    rsdp_addr = table_addr
+
+            config_addr += 0x18
+
+        print('')
+
+        if rsdp_addr is not None:
+
+            print('[+] ACPI RSDP is at 0x%x' % rsdp_addr)
+
+            # get RSDT address
+            _, _, _, _, rsdt_addr = unpack('<8sB6sBI', dev.mem_read(rsdp_addr, 0x14))
+
+            print('[+] ACPI RSDT is at 0x%x:\n' % rsdt_addr)    
+
+            assert valid_dxe_addr(rsdt_addr)
+
+            # read RSDT header
+            rsdt_sign, rsdt_size, _, _, _, _, _, _, _ = unpack('=4sIBB6s8sI4sI', dev.mem_read(rsdt_addr, 0x24))
+
+            assert rsdt_sign == ACPI_RSDT_SIG
+
+            ptr = rsdt_addr + 0x24
+
+            # print ACPI tables
+            for i in range(0, (rsdt_size - 0x24) / 4):
+
+                # read table address and signature
+                table_addr = dev.mem_read_4(ptr)
+                table_sign = dev.mem_read(table_addr, 4)
+
+                assert valid_dxe_addr(table_addr)
+
+                print(' * addr = 0x%x, type = %s' % (table_addr, table_sign))
+
+                ptr += 4
+
+            print('')
 
     return 0
 

