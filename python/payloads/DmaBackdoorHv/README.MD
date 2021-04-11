@@ -1,16 +1,16 @@
 
 # Hyper-V backdoor
 
-(General Information)[#general-information]  
-(Contents)[#contents]  
-(Deploying the Backdoor Using Signed Kaspersky Bootloader)[#deploying-the-backdoor-using-signed-kaspersky-bootloader]  
-(Troubleshooting)[#troubleshooting]  
-(Deploying the Backdoor Using Firmware Flash Infection)[#deploying-the-backdoor-using-firmware-flash-infection]  
-(Deploying the Backdoor Using Windows Boot Manager Infection)[#deploying-the-backdoor-using-windows-boot-manager-infection]  
-(Basic Use)[#basic-use]  
-(VM Escape Related Commands)[#vm-escape-related-commands]  
-(Secure Kernel Related Commands)[#secure-kernel-related-commands]  
-(Building From the Source Code)[#building-from-the-source-code]  
+[General Information](#general-information)  
+[Contents](#contents)  
+[Deploying the Backdoor Using Signed Kaspersky Bootloader](#deploying-the-backdoor-using-signed-kaspersky-bootloader)  
+[Troubleshooting](#troubleshooting)  
+[Deploying the Backdoor Using Firmware Flash Infection](#deploying-the-backdoor-using-firmware-flash-infection)  
+[Deploying the Backdoor Using Windows Boot Manager Infection](#deploying-the-backdoor-using-windows-boot-manager-infection)  
+[Basic Use](#basic-use)  
+[VM Escape Related Commands](#vm-escape-related-commands)  
+[Secure Kernel Related Commands](#secure-kernel-related-commands)  
+[Building From the Source Code](#building-from-the-source-code)  
 
 ## General Information
 
