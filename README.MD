@@ -7,6 +7,8 @@ This repository contains a set of tools and proof of concepts related to PCI-E b
 
 **Hyper-V backdoor part of this project has many other features and deployment options than described in this document, you can use it separately from DMA attack tools even without any special hardware: [check its documentation](https://github.com/Cr4sh/s6_pcie_microblaze/tree/master/python/payloads/DmaBackdoorHv)**
 
+**Python tools and payloads from this project, including Hyper-V backdoor, also can be used with Xilinx Zynq-7000 SoC based boards. There's [a separate project](https://github.com/Cr4sh/zc_pcie_dma) of DMA attacks design for Xilinx ZC706 evaluation kit.**
+
 
 ## Contents
 

@@ -9,11 +9,13 @@ Also, backdoor allows to inspect Secure Kernel and run 3-rd party trustlets in t
 
 To deploy the backdoor you can use one of the following methods:
 
- * DMA attack over the PCI Express bus using [DMA attack toolkit](https://github.com/Cr4sh/s6_pcie_microblaze)
+ * DMA attack over the PCI Express bus using [DMA attack toolkit](https://github.com/Cr4sh/s6_pcie_microblaze), also compatible with my other [Xilinx Zynq-7000 based design](https://github.com/Cr4sh/zc_pcie_dma) for DMA attacks.
 
  * UEFI bootkit based on [signed insecure bootloader](https://support.microsoft.com/en-us/help/4524244/security-update-for-windows-10-february-11-2020) from Kaspersky products that [was discovered](https://habr.com/en/post/446238/) by [@ValdikSS](https://twitter.com/valdikss).
 
  * UEFI bootkit based on the infection of the platform firmware stored in [SPI flash chip on the motherboard](https://raw.githubusercontent.com/Cr4sh/blog/master/uefi-boot-script-expl/spi-flash-chips.jpg), which is suitable for supply chain attacks.
+
+ * Windows boot manager image file infection with emulation of enabled UEFI secure boot.
 
 Backdoor supports 64-bit versions of Windows 10 1709, 1803, 1809, 1903, 1909, 2004 and 20H2 running on Intel systems.
 
