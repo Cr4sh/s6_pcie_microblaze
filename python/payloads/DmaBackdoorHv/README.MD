@@ -1,7 +1,18 @@
 
 # Hyper-V backdoor
 
-## General information
+(General Information)[#general-information]  
+(Contents)[#contents]  
+(Deploying the Backdoor Using Signed Kaspersky Bootloader)[#deploying-the-backdoor-using-signed-kaspersky-bootloader]  
+(Troubleshooting)[#troubleshooting]  
+(Deploying the Backdoor Using Firmware Flash Infection)[#deploying-the-backdoor-using-firmware-flash-infection]  
+(Deploying the Backdoor Using Windows Boot Manager Infection)[#deploying-the-backdoor-using-windows-boot-manager-infection]  
+(Basic Use)[#basic-use]  
+(VM Escape Related Commands)[#vm-escape-related-commands]  
+(Secure Kernel Related Commands)[#secure-kernel-related-commands]  
+(Building From the Source Code)[#building-from-the-source-code]  
+
+## General Information
 
 This repository contains Hyper-V backdoor that might be useful for reverse engineering and exploit development purposes, it [provides an interface](https://github.com/Cr4sh/s6_pcie_microblaze/blob/master/python/payloads/DmaBackdoorHv/backdoor_client/backdoor_library/backdoor_library.cpp) for inspecting of hypervisor state (VMCS, physical/virtual memory, registers, etc.) from guest or host partition and perform the VM escape attacks. 
 
@@ -51,7 +62,7 @@ Backdoor supports 64-bit versions of Windows 10 1709, 1803, 1809, 1903, 1909, 20
 * `grub-2.02_chainloader.patch` &minus; GRUB2 patch used to compile malicious chain-loader module needed for Secure Boot bypass with the help of the signed Kaspersky bootloader.
 
 
-## Deploying the backdoor using signed Kaspersky bootloader
+## Deploying the Backdoor Using Signed Kaspersky bootloader
 
 [Windows Virtualization-based Security (VBS)](https://docs.microsoft.com/en-us/windows-hardware/design/device-experiences/oem-vbs) uses hardware virtualization features and Hyper-V to host a number of security solutions, providing them with greatly increased protection from vulnerabilities in the operating system, and preventing the use of malicious exploits which attempt to defeat protections. One of the examples of such services is [Hypervisor-Enforced Code Integrity](https://docs.microsoft.com/en-us/windows/security/threat-protection/device-guard/enable-virtualization-based-protection-of-code-integrity) which uses VBS to significantly strengthen code integrity policy enforcement.
 
@@ -85,7 +96,7 @@ Also, starting from Windows 10 2004 (build 19041) dbx variable is being updated 
 
 By default `bootkit_installer.ps1` is placing 1-st stage Kaspersky bootloader as `\EFI\Microsoft\Boot\bootmgfw.efi` (Windows EFI bootloader) and `\EFI\Boot\bootx64.efi` (default EFI bootloader) files on EFI System Parition, if after the backdoor install your system boots as usual but you don't see Hyper-V backdoor red splash screen &minus; ensure that firmware is configured to use proper bootloader.
 
-## Deploying the backdoor using firmware flash infection
+## Deploying the Backdoor Using Firmware Flash Infection
 
 To infect platform firmware stored in flash chip on the motherboard you will need some SPI flash programmer, I prefer to use cheap and widely available [FT2232H Mini Module](https://www.ftdichip.com/Support/Documents/DataSheets/Modules/DS_FT2232H_Mini_Module.pdf) from FTDI. In addition to the programmer you also will need the following tools:
 
@@ -125,7 +136,7 @@ After that you have to replace original driver image with `Bds_infected.efi` one
 > flashrom -p ft2232_spi:type=2232H,port=A –w firmware_infected.bin
 ```
 
-## Deploying the backdoor using Windows Boot Manager infection
+## Deploying the Backdoor Using Windows Boot Manager Infection
 
 In case when you don't have any specialized hardware and also when you don't have ability to run signed Kaspersky bootloader on your system with Secure Boot enabled you can disable Secure Boot and deploy Hyper-V backdoor using Windows Boot Manager image file infection. In this case Hyper-V backdoor driver will emulate enabled Secure Boot by hooking of UEFI runtime functions so infected system will able to load all virtualization-based security features just as usual.
 
@@ -175,7 +186,7 @@ After that you can restart your system, disable Secure Boot in setup menu and bo
 Please pay attention that passing of `--patch-integrity-checks` command line option to the `infector.py` program is mandatory to disable self check of Windows Boot Manager image integrity, in other case it will not able to boot.
 
 
-## Basic usage
+## Basic Use
 
 Client program `backdoor_client.exe` is used to interact with the backdoor from Hyper-V guest or host partition. 
 
@@ -383,7 +394,7 @@ EPT PDPTE 0x145f9000[0x0]: 0x14612007
 0xfffff8017d1d5000 -> 0x00000000033d5000
 ```
 
-## VM escape related commands
+## VM Escape Related Commands
 
 Execute arbitrary console commands in Hyper-V root partition from the guest operating system:
 
@@ -481,7 +492,7 @@ Loading arbitrary kernel drivers into the specified hypervisor partition from an
 
 This functionality also can be used for [Hypervisor-Protected Code Integrity](https://docs.microsoft.com/en-us/windows-hardware/drivers/bringup/device-guard-and-credential-guard) (HVCI) bypass to load arbitrary kernel drivers.
 
-## Secure kernel related commands
+## Secure Kernel Related Commands
 
 Show basic information about secure kernel running in VTL1:
 
@@ -702,7 +713,7 @@ ntdll!DbgBreakPoint:
 0:002>
 ```
 
-## Building from the source code
+## Building From the Source Code
 
 To build Hyper-V backdoor UEFI DXE driver you have to perform the following steps:
 

@@ -1,7 +1,18 @@
 
 # PCI Express DIY hacking toolkit
 
-## What
+(General Information)[#general-information]  
+(Contents)[#contents]  
+(SP605 Board Configuration)[#sp605-board-configuration]  
+(Software Configuration)[#software-configuration]  
+(Examples)[#examples]  
+(Using Python API)[#using-python-api]  
+(Practical DMA Attacks)[#practical-dma-attacks]  
+(Option ROM Attacks)[#option-rom-attacks]  
+(Troubleshooting)[#troubleshooting]  
+(Building Project From the Source Code)[#building-project-from-the-source-code]  
+
+## General Information
 
 This repository contains a set of tools and proof of concepts related to PCI-E bus and [DMA attacks](https://en.wikipedia.org/wiki/DMA_attack). It includes HDL design which implements software controllable PCI-E gen 1.1 endpoint device for [Xilinx SP605 Evaluation Kit](https://www.xilinx.com/products/boards-and-kits/ek-s6-sp605-g.html) with Spartan-6 FPGA. In comparison with popular [USB3380EVB](http://www.hwtools.net/Adapter/USB3380EVB.html) this design allows to operate with raw Transaction Level Packets (TLP) of PCI-E bus and perform full 64-bit memory read/write operations. To demonstrate applied use cases of the design, [there's a tool](https://github.com/Cr4sh/s6_pcie_microblaze/blob/master/python/uefi_backdoor_simple.py) for pre-boot DMA attacks on UEFI based machines which allows executing arbitrary UEFI DXE drivers during platform init. [Another example](https://github.com/Cr4sh/s6_pcie_microblaze/blob/master/python/uefi_backdoor_hv.py) shows how to use pre-boot DMA attacks to inject [Hyper-V VM exit handler backdoor](https://github.com/Cr4sh/s6_pcie_microblaze/blob/master/python/payloads/DmaBackdoorHv/src/DmaBackdoorHv.c) into the [virtualization-based security](https://docs.microsoft.com/en-us/windows-hardware/design/device-experiences/oem-vbs) enabled Windows 10 Enterprise running on UEFI Secure Boot enabled platform. Provided Hyper-V backdoor PoC might be useful for reverse engineering and exploit development purposes, it [provides an interface](https://github.com/Cr4sh/s6_pcie_microblaze/blob/master/python/payloads/DmaBackdoorHv/backdoor_client/backdoor_library/backdoor_library.cpp) for inspecting of hypervisor state (VMCS, physical/virtual memory, registers, etc.) from guest partition and perform the guest to host VM escape attacks. 
 
@@ -35,7 +46,7 @@ This repository contains a set of tools and proof of concepts related to PCI-E b
 * `python/payloads/DmaBackdoorHv` &minus; UEFI DXE driver which implements Hyper-V backdoor and backdoor client. 
 
 
-## SP605 board configuration
+## SP605 Board Configuration
 
 <img src="https://raw.githubusercontent.com/Cr4sh/s6_pcie_microblaze/master/docs/images/board.jpg" width="800" height="415">
 
@@ -137,7 +148,7 @@ Xilinx SP605 board is also can be connected to the Thunderbolt 2/3 external port
 <img src="https://raw.githubusercontent.com/Cr4sh/s6_pcie_microblaze/master/docs/images/mbp_thunderbolt.jpg" width="666" height="516">
 
 
-## Software configuration
+## Software Configuration
 
 Python tools to interact with the board and tiny implementation of PCI-E link layer are located in `python` folder. Because main MicroBlaze program uses TCP to transfer TLP packets no any drivers or 3rd party dependencies needed, you can use provided Python code on any operating system. 
 
@@ -390,7 +401,7 @@ print('%.2x' % dev.mem_read_1(0x1000))
 ```
 
 
-## Practical DMA attacks
+## Practical DMA Attacks
 
 Python program `uefi_backdoor_simple.py` injects dummy UEFI DXE driver located in `payloads/DmaBackdoorSimple` into the target using preboot DMA attack. It's usage:
 
@@ -466,7 +477,7 @@ Hooking LocateProtocol(): 0x7a3987b4 -> 0x000c0bd4
 To get more information about Hyper-V backdoor usage check its [README](https://github.com/Cr4sh/s6_pcie_microblaze/blob/master/python/payloads/DmaBackdoorHv/README.MD) file.
 
 
-## Option ROM attacks
+## Option ROM Attacks
 
 Provided bitstream can emulate PCI-E option ROM stored in onboard linear flash memory of SP605. Although modern platforms [mitigates](https://docs.microsoft.com/en-us/windows-hardware/manufacture/desktop/uefi-validation-option-rom-validation-guidance) option ROM [attacks](https://trmm.net/Thunderstrike), this feature still could be useful for security audit or prototyping purposes.
 
@@ -508,7 +519,7 @@ PCI Express is very complicated high speed bus so there's a lot of things that c
 * If software receiving inconsistent or invalid TLPs from root complex in reply to memory read requests you might try to set a smaller value of `MEM_RD_TLP_LEN` constant in `pcie_lib.py` to split reply data into more smaller chunks. Also it's useful to run the program with `DEBUG_TLP=1` environment variable and check raw TX/RX TLP dump.
 
 
-## Building project from the source code
+## Building Project From the Source Code
 
 1) Install Xilinx ISE 13.4 which comes with your SP605 board and open `s6_pcie_microblaze.xise` project file.
 
