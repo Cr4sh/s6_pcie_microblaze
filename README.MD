@@ -500,11 +500,6 @@ DmaBackdoorHv.c(794) : Protocol notify handler is at 0x79daf364
 DmaBackdoorHv.c(819) : BackdoorEntryResident()
 DmaBackdoorHv.c(830) : OpenProtocol() hook was set, handler = 0x79db1477
 DmaBackdoorHv.c(835) : ExitBootServices() hook was set, handler = 0x79db1487
-DmaBackdoorHv.c(850) : GetVariable() hook was set, handler = 0x79dafa9c
-DmaBackdoorHv.c(855) : SetVirtualAddressMap() hook was set, handler = 0x79dafbc4
-DmaBackdoorHv.c(667) : new_GetVariable(): Returning fake value for "SecureBoot" EFI variable
-DmaBackdoorHv.c(667) : new_GetVariable(): Returning fake value for "SecureBoot" EFI variable
-DmaBackdoorHv.c(667) : new_GetVariable(): Returning fake value for "SecureBoot" EFI variable
 DmaBackdoorHv.c(447) : winload.dll is at 0x8ee000
 DmaBackdoorHv.c(448) : winload!BlLdrLoadImage() is at 0x984a10
 DmaBackdoorHv.c(477) : 535 free bytes found at the end of the code section at 0xa4ade9
