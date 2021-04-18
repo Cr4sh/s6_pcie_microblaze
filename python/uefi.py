@@ -728,7 +728,7 @@ def main():
     intf_list = prot_enum(dev, prot_entry, handler = prot_get, \
                                           param = uuid.UUID(EFI_LOADED_IMAGE_PROTOCOL_GUID))
 
-    system_table = None
+    system_table, system_table_skip = None, False
 
     if intf_list is not None and len(intf_list) > 0:
 
@@ -766,9 +766,16 @@ def main():
             print(' * 0x%.8x: addr = 0x%.8x, size = 0x%.8x %s' % 
                       (loaded_image, image_addr, image_size, image_path_string))
 
-            if system_table is None:
+            try:
 
-                system_table = find_sys_table_from_image(dev, image_addr)
+                if system_table is None and not system_table_skip:
+
+                    system_table = find_sys_table_from_image(dev, image_addr)
+
+            except dev.ErrorBadCompletion:
+
+                # don't check for the EFI system table anymore
+                system_table_skip = True                
 
         print('')  
 
