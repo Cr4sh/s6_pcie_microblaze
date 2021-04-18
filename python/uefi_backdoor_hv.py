@@ -51,7 +51,7 @@ def inject(driver = None, test = False, method = None, system_table = None, prot
             time.sleep(1)
             continue
 
-        print('[+] DXE driver was executed, you can read its debug messages by running this program with -d option')
+        print('[+] DXE driver was executed, you can read its debug messages by running this program with --debug-output option')
 
         break
 
