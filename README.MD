@@ -403,7 +403,11 @@ print('%.2x' % dev.mem_read_1(0x1000))
 
 ## Practical DMA Attacks
 
-One of the main goals of this project is providing flexible and convenient set of tools to perform so called pre-boot DMA attacks, in comparison with regular DMA attacks they are targeting pre-boot environment of UEFI DXE phase of the platform initialization rather than operating system itself. Such attacks allows to run malicious code at relatively early stages when [IOMMU](https://en.wikipedia.org/wiki/Input%E2%80%93output_memory_management_unit) and other security features of the operating system are not initialized yet. Also, pre-boot DMA attacks allows to effectively bypass such security features of the platform firmware as UEFI secure boot and [Intel Boot Guard](https://edk2-docs.gitbook.io/understanding-the-uefi-secure-boot-chain/secure_boot_chain_in_uefi/intel_boot_guard).
+One of the main goals of this project is providing flexible and convenient set of tools to perform so called pre-boot DMA attacks, in comparison with regular DMA attacks they are targeting pre-boot environment of UEFI DXE phase of the platform initialization rather than operating system itself. Such attacks allows to run malicious code at relatively early stages when [IOMMU](https://en.wikipedia.org/wiki/Input%E2%80%93output_memory_management_unit) and other security features of the operating system are not initialized yet. 
+
+<img src="https://raw.githubusercontent.com/Cr4sh/s6_pcie_microblaze/master/docs/images/boot_phases.jpg" style="border: 0px;" height="430" width="610"></img>
+
+Pre-boot DMA attacks allows to effectively bypass such security features of the platform firmware as UEFI secure boot and [Intel Boot Guard](https://edk2-docs.gitbook.io/understanding-the-uefi-secure-boot-chain/secure_boot_chain_in_uefi/intel_boot_guard).
 
 Python program `uefi_backdoor_simple.py` injects dummy UEFI DXE driver located in `payloads/DmaBackdoorSimple` folder into the target system boot sequence using pre-boot DMA attack described above. To use this program you have to perform the following steps:
 
