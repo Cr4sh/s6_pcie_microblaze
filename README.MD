@@ -504,7 +504,6 @@ DmaBackdoorHv.c(447) : winload.dll is at 0x8ee000
 DmaBackdoorHv.c(448) : winload!BlLdrLoadImage() is at 0x984a10
 DmaBackdoorHv.c(477) : 535 free bytes found at the end of the code section at 0xa4ade9
 DmaBackdoorHv.c(527) : winload!BlLdrLoadImage() hook was set, handler is at 0x79daf50c
-DmaBackdoorHv.c(667) : new_GetVariable(): Returning fake value for "SecureBoot" EFI variable
 DmaBackdoorHv.c(350) : new_BlLdrLoadImage(): Path = "\WINDOWS\system32\mcupdate_GenuineIntel.dll"
 DmaBackdoorHv.c(350) : new_BlLdrLoadImage(): Path = "\WINDOWS\system32\hvix64.exe"
 HyperV.c(369) : HyperVHook(): Hyper-V image is at 0xfffff80144e0d000
