@@ -569,7 +569,7 @@ typedef struct _VARIABLE_DEF
 VARIABLE_DEF m_EmulatedVariables[] =
 {
     { "SecureBoot",     "\x01",     1 },
-    { NULL,             NULL,       0 },
+    { NULL,             NULL,       0 }
 };
 
 // original address of hooked functions
@@ -913,7 +913,7 @@ EFI_SYSTEM_TABLE *BackdoorFindSystemTable(void)
 {
     UINTN Ptr = 0;
 
-    for (Ptr = SYSTEM_TABLE_START; Ptr < SYSTEM_TABLE_END; Ptr += PAGE_SIZE)
+    for (Ptr = SYSTEM_TABLE_START; Ptr < SYSTEM_TABLE_END; Ptr += sizeof(UINT64))
     {
         EFI_SYSTEM_TABLE *SystemTable = (EFI_SYSTEM_TABLE *)Ptr;
 
