@@ -514,8 +514,6 @@ HyperV.c(605) : HyperVHook(): Backdoor code size is 684 bytes
 DmaBackdoorHv.c(350) : new_BlLdrLoadImage(): Path = "\WINDOWS\system32\kdstub.dll"
 DmaBackdoorHv.c(350) : new_BlLdrLoadImage(): Path = "\WINDOWS\system32\hv.exe"
 DmaBackdoorHv.c(560) : new_ExitBootServices() called
-DmaBackdoorHv.c(711) : new_SetVirtualAddressMap()
-DmaBackdoorHv.c(752) : New address of the resident image is 0xfffff8014bbfc000
 ```
 
 To get more information about Hyper-V backdoor use cases and features [check its README file](https://github.com/Cr4sh/s6_pcie_microblaze/blob/master/python/payloads/DmaBackdoorHv/README.MD) with detailed information.
