@@ -8,7 +8,8 @@ from pcie_lib import *
 from uefi import *
 
 # payload DXE driver
-DRIVER_PATH = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'payloads/DmaBackdoorSimple/DmaBackdoorSimple_X64.efi')
+DRIVER_PATH = os.path.join(os.path.dirname(os.path.realpath(__file__)), \
+              'payloads/DmaBackdoorSimple/DmaBackdoorSimple_X64.efi')
 
 def inject(driver = None, test = False, method = None, system_table = None, prot_entry = None):
 

