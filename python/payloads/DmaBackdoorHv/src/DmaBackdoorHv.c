@@ -38,6 +38,7 @@
 #pragma warning(disable: 4054)
 #pragma warning(disable: 4055)
 #pragma warning(disable: 4305)
+#pragma warning(disable: 4550)
 
 #pragma section(".conf", read, write)
 
