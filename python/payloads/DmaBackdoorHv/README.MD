@@ -3,7 +3,7 @@
 
 [General Information](#general-information)  
 [Contents](#contents)  
-[Deploying the Backdoor Using Pre-Boot DMA Attack](#deploying-the-backdoor-using-pre-boot-dma-attack)
+[Deploying the Backdoor Using Pre-Boot DMA Attack](#deploying-the-backdoor-using-pre-boot-dma-attack)  
 [Deploying the Backdoor Using Signed Kaspersky Bootloader](#deploying-the-backdoor-using-signed-kaspersky-bootloader)  
 [Troubleshooting](#troubleshooting)  
 [Deploying the Backdoor Using Firmware Flash Infection](#deploying-the-backdoor-using-firmware-flash-infection)  
