@@ -418,7 +418,7 @@ Python program `uefi_backdoor_simple.py` injects dummy UEFI DXE driver located i
 4) Run the following command to start pre-boot DMA attack: 
 
 ```
-$ ./uefi_backdoor_simple.py -d payloads/DmaBackdoorSimple/DmaBackdoorSimple_X64.efi
+$ ./uefi_backdoor_simple.py --driver payloads/DmaBackdoorSimple/DmaBackdoorSimple_X64.efi
 ```
 
 5) Power on the target computer, in case of successful attack after the couple of seconds you will see red debug messages screen of injected UEFI DXE driver:
@@ -538,7 +538,7 @@ During development of malicious code for pre-boot DMA attacks it's important to 
 
 Provided bitstream can emulate PCI-E option ROM stored in onboard linear flash memory of SP605. Although modern platforms [mitigates](https://docs.microsoft.com/en-us/windows-hardware/manufacture/desktop/uefi-validation-option-rom-validation-guidance) option ROM [attacks](https://trmm.net/Thunderstrike), this feature still could be useful for security audit or prototyping purposes.
 
-You can manage option ROM images using `pcie_rom_ctl.py` Python program.
+You can manage option ROM images using `pcie_rom_ctl.py` Python program.  
 Erasing option ROM contents:
 
 ```
@@ -560,8 +560,69 @@ $ ./pcie_rom_ctl.py --load payloads/DmaBackdoorSimple/DmaBackdoorSimple_X64_10ee
 [+] Done
 ```
 
-Also, there's an option to log option ROM memory access into the debug UART of SP605, to enable or disable it use `--log-on` and `--log-off` parameters of `./pcie_rom_ctl.py` program.
+Also, there's an option to log option ROM memory access into the debug UART of SP605 board, to enable or disable this option use `--log-on` and `--log-off` parameters of `./pcie_rom_ctl.py` program.
 
+To verify correct operation of the option ROM support under the Linux you can do the following.  
+First, find bus-device-function address of SP605 PCI-E device:
+
+```
+# lspci | grep Xilinx
+01:00.0 Ethernet controller: Xilinx Corporation Device 1337
+```
+
+Then, set enabled bit of the command register so target system will pass to the PCI-E device all of the memory access attempts to the option ROM physical memory rages:
+
+```
+# echo 1 > /sys/bus/pci/devices/0000\:01\:00.0/enable
+# echo 1 > /sys/bus/pci/devices/0000\:01\:00.0/rom
+```
+
+Now you can dump contents of the previously loaded option ROM with the help of `dd` command and appropriate pseudo-file of sysfs:
+
+```
+# dd if=/sys/bus/pci/devices/0000\:01\:00.0/rom | hexdump -Cv
+00000000  55 aa 0b 00 f1 0e 00 00  0b 00 64 86 00 00 00 00  |U.........d.....|
+00000010  00 00 00 00 00 00 60 00  1c 00 00 00 50 43 49 52  |......`.....PCIR|
+00000020  ee 10 37 13 00 00 1c 00  03 00 00 00 0b 00 00 00  |..7.............|
+00000030  03 80 00 00 00 00 00 00  ff ff ff ff ff ff ff ff  |................|
+00000040  ff ff ff ff ff ff ff ff  ff ff ff ff ff ff ff ff  |................|
+00000050  ff ff ff ff ff ff ff ff  ff ff ff ff ff ff ff ff  |................|
+00000060  4d 5a 00 00 00 00 00 00  00 00 00 00 00 00 00 00  |MZ..............|
+00000070  00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00  |................|
+00000080  00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00  |................|
+00000090  00 00 00 00 00 00 00 00  00 00 00 00 b8 00 00 00  |................|
+000000a0  00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00  |................|
+000000b0  00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00  |................|
+000000c0  00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00  |................|
+
+...
+
+```
+
+In case when `--log-on` option of `pcie_rom_ctl.py` program was specified during the configuration you will see the following messages in the debug UART console of SP605 board while dumping the option ROM:
+
+```
+ROM read: size = 2, offset = 0x0
+ROM read: size = 2, offset = 0x18
+ROM read: size = 4, offset = 0x1C
+ROM read: size = 1, offset = 0x31
+ROM read: size = 2, offset = 0x2C
+ROM read: size = 1, offset = 0x0
+ROM read: size = 2, offset = 0x0
+ROM read: size = 2, offset = 0x18
+ROM read: size = 4, offset = 0x1C
+ROM read: size = 1, offset = 0x31
+ROM read: size = 2, offset = 0x2C
+ROM read: size = 1, offset = 0x1
+ROM read: size = 2, offset = 0x0
+ROM read: size = 2, offset = 0x18
+ROM read: size = 4, offset = 0x1C
+ROM read: size = 1, offset = 0x31
+ROM read: size = 2, offset = 0x2C
+
+...
+
+```
 
 ## Troubleshooting
 

