@@ -120,14 +120,14 @@
     </MASM>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="..\common\loader.cpp" />
+    <ClCompile Include="..\common\peimage.cpp" />
     <ClCompile Include="driver_loader_sk.cpp" />
     <ClCompile Include="runtime\import.cpp" />
     <ClCompile Include="runtime\runtime.cpp" />
     <ClCompile Include="runtime\std.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\common\loader.h" />
+    <ClInclude Include="..\common\peimage.h" />
     <ClInclude Include="..\driver_loader_sk.h" />
     <ClInclude Include="asm\common_asm.h" />
     <ClInclude Include="common.h" />

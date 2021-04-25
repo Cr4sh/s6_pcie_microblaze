@@ -17,7 +17,7 @@
 #include <TlHelp32.h>
 
 #include "../common/common.h"
-#include "../common/loader.h"
+#include "../common/peimage.h"
 #include "../common/image_policy.h"
 
 #include "../vmx.h"

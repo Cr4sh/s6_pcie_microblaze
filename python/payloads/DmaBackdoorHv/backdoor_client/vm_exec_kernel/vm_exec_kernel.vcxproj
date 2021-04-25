@@ -122,14 +122,14 @@
     </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="..\common\loader.cpp" />
+    <ClCompile Include="..\common\peimage.cpp" />
     <ClCompile Include="common.cpp" />
     <ClCompile Include="debug.cpp" />
     <ClCompile Include="dll_inject_shellcode.cpp" />
     <ClCompile Include="vm_exec_kernel.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\common\loader.h" />
+    <ClInclude Include="..\common\peimage.h" />
     <ClInclude Include="asm\common_asm.h" />
     <ClInclude Include="common.h" />
     <ClInclude Include="debug.h" />

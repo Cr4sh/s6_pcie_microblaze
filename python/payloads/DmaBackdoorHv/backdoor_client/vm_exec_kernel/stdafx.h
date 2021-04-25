@@ -16,7 +16,7 @@ extern "C"
 #include "dll_inject_shellcode.h"
 
 #include "../vm_exec.h"
-#include "../common/loader.h"
+#include "../common/peimage.h"
 
 #include "../vmx.h"
 #include "../backdoor_client.h"

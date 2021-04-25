@@ -1,4 +1,13 @@
 
+/*
+    This flag allows secure processes, that run in the Virtualization-Based
+    Security environment, to launch.
+*/
+#ifndef CREATE_SECURE_PROCESS
+#define CREATE_SECURE_PROCESS 0x00400000
+#endif
+
+
 #define PAGE_SHIFT 12
 #define PAGE_SIZE 0x1000
 

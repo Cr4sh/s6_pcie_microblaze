@@ -13,7 +13,7 @@
 #include <TlHelp32.h>
 
 #include "../common/common.h"
-#include "../common/loader.h"
+#include "../common/peimage.h"
 
 #include "../backdoor_client.h"
 #include "../backdoor_library.h"

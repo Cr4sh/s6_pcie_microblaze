@@ -1,20 +1,17 @@
 
-/* 
-    This flag tells to the custom PE loaders that image sections are 
-    already mapped acording to their memory layout.
-*/
-#define LDR_FLAG_SECTIONS_MAPPED 0x80000000
-
 #define LDR_MAX_ORDINAL 0x7fff
 
+#if defined(_NTIFS_INCLUDED_) || defined(_NTDDK_INCLUDED_)
 
-#define LDR_IS_SECTIONS_MAPPED(_hdr_)                                                   \
-                                                                                        \
-    (((_hdr_)->OptionalHeader.LoaderFlags & LDR_FLAG_SECTIONS_MAPPED) ? TRUE : FALSE)
+#define LdrAlloc(_len_) ExAllocatePool(NonPagedPool, (_len_))
+#define LdrFree(_addr_) ExFreePool((_addr_))
 
-#define LDR_SET_SECTIONS_MAPPED(_hdr_)                                                  \
-                                                                                        \
-    ((_hdr_)->OptionalHeader.LoaderFlags |= LDR_FLAG_SECTIONS_MAPPED)
+#else 
+
+#define LdrAlloc(_len_) VirtualAlloc(NULL, (_len_), MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE)
+#define LdrFree(_addr_) VirtualFree((_addr_), 0, MEM_RELESE)
+
+#endif
 
 
 #define LDR_UPDATE_RELOCS(_addr_, _old_, _new_)                                                      \
@@ -35,9 +32,3 @@
 ULONG NTAPI LdrGetProcAddress(PVOID Image, char *FunctionName);
 BOOLEAN NTAPI LdrProcessRelocs(PVOID Image, PVOID NewBase);
 BOOLEAN LdrImageFromData(PVOID Data, ULONG dwDataSize, PVOID *Image, PULONG pdwImageSize);
-
-
-#define INVALID_OFFSET ((ULONG)-1)
-#define FROM_RVA(_addr_, _offs_) RVATOVA((_addr_), LdrRvaToRaw((_addr_), (_offs_)))
-
-ULONG LdrRvaToRaw(PVOID Image, ULONG dwRva);

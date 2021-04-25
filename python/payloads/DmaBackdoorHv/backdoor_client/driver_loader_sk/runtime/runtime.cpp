@@ -22,20 +22,14 @@ PVOID RuntimeGetProcAddress(PVOID Image, char *lpszFunctionName)
 {
     PVOID Ret = NULL;
 
-    PIMAGE_NT_HEADERS pHeaders = (PIMAGE_NT_HEADERS)
-        ((PUCHAR)Image + ((PIMAGE_DOS_HEADER)Image)->e_lfanew);
+    PIMAGE_NT_HEADERS pHeaders = (PIMAGE_NT_HEADERS)RVATOVA(
+        Image, ((PIMAGE_DOS_HEADER)Image)->e_lfanew);
     
     ULONG ExportsAddr = pHeaders->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_EXPORT].VirtualAddress;
     ULONG ExportsSize = pHeaders->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_EXPORT].Size;    
     
-    BOOLEAN bByOrdinal = FALSE;
-    ULONG_PTR Ordinal = (ULONG_PTR)lpszFunctionName;
-
-    if (Ordinal < RUNTIME_MAX_ORDINAL)
-    {
-        // lpszFunctionName param is ordinal
-        bByOrdinal = TRUE;
-    }
+    ULONG FunctionAddr = 0;
+    ULONG_PTR Ordinal = (ULONG_PTR)lpszFunctionName;    
 
     if (ExportsAddr == 0)
     {
@@ -43,8 +37,7 @@ PVOID RuntimeGetProcAddress(PVOID Image, char *lpszFunctionName)
         return NULL;
     }
 
-    PIMAGE_EXPORT_DIRECTORY pImageExportDirectory = (PIMAGE_EXPORT_DIRECTORY)RVATOVA(Image, ExportsAddr);
-    ULONG ExportAddr = 0;
+    PIMAGE_EXPORT_DIRECTORY pImageExportDirectory = (PIMAGE_EXPORT_DIRECTORY)RVATOVA(Image, ExportsAddr);    
 
     if (pImageExportDirectory->AddressOfFunctions == 0)
     {
@@ -54,7 +47,8 @@ PVOID RuntimeGetProcAddress(PVOID Image, char *lpszFunctionName)
 
     PULONG AddrOfFunctions = (PULONG)RVATOVA(Image, pImageExportDirectory->AddressOfFunctions);
 
-    if (bByOrdinal)
+    // check for the export by ordinal
+    if (Ordinal < RUNTIME_MAX_ORDINAL)
     {
         if (pImageExportDirectory->Base > Ordinal)
         {
@@ -71,7 +65,7 @@ PVOID RuntimeGetProcAddress(PVOID Image, char *lpszFunctionName)
         }
 
         // get export address by ordinal 
-        ExportAddr = AddrOfFunctions[Ordinal];
+        FunctionAddr = AddrOfFunctions[Ordinal];
     }
     else if (pImageExportDirectory->AddressOfNames != 0 && pImageExportDirectory->AddressOfNameOrdinals != 0)
     {
@@ -79,30 +73,30 @@ PVOID RuntimeGetProcAddress(PVOID Image, char *lpszFunctionName)
         PULONG AddrOfNames = (PULONG)RVATOVA(Image, pImageExportDirectory->AddressOfNames);
 
         // enumerate export names
-        for (ULONG i = 0; i < pImageExportDirectory->NumberOfNames; i++)
+        for (ULONG i = 0; i < pImageExportDirectory->NumberOfNames; i += 1)
         {
             char *lpszName = (char *)RVATOVA(Image, AddrOfNames[i]);
 
             if (!strcmp(lpszName, lpszFunctionName))
             {
                 // return export address
-                ExportAddr = AddrOfFunctions[AddrOfOrdinals[i]];
+                FunctionAddr = AddrOfFunctions[AddrOfOrdinals[i]];
                 break;
             }
         }
     }
               
-    if (ExportAddr == 0)
+    if (FunctionAddr == 0)
     {
         RtDbgMsg(__FILE__, __LINE__, __FUNCTION__"() ERROR: Export is not found\n");
         return NULL;
     }
 
-    Ret = RVATOVA(Image, ExportAddr);
+    Ret = RVATOVA(Image, FunctionAddr);
 
     // check for the forwarded export
-    if (ExportAddr > ExportsAddr &&
-        ExportAddr < ExportsAddr + ExportsSize)
+    if (FunctionAddr > ExportsAddr &&
+        FunctionAddr < ExportsAddr + ExportsSize)
     {                
         char szModule[IMPORT_MAX_STRING_SIZE], *lpszFunction = NULL;
         
@@ -110,7 +104,7 @@ PVOID RuntimeGetProcAddress(PVOID Image, char *lpszFunctionName)
         strcpy(szModule, (char *)Ret);
 
         // parse forwarded export string
-        for (ULONG i = 0; i < IMPORT_MAX_STRING_SIZE; i++)
+        for (ULONG i = 0; i < IMPORT_MAX_STRING_SIZE; i += 1)
         {
             if (szModule[i] == '.')
             {
@@ -146,22 +140,19 @@ PVOID RuntimeGetProcAddress(PVOID Image, char *lpszFunctionName)
 //--------------------------------------------------------------------------------------
 BOOLEAN RuntimeProcessImports(PVOID Image)
 {
-    PIMAGE_NT_HEADERS pHeaders = (PIMAGE_NT_HEADERS)
-        ((PUCHAR)Image + ((PIMAGE_DOS_HEADER)Image)->e_lfanew);
+    PIMAGE_NT_HEADERS pHeaders = (PIMAGE_NT_HEADERS)RVATOVA(
+        Image, ((PIMAGE_DOS_HEADER)Image)->e_lfanew);
 
-    if (pHeaders->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT].VirtualAddress)
+    ULONG ImportAddr = pHeaders->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT].VirtualAddress;
+    ULONG ImportSize = pHeaders->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT].Size;
+
+    if (ImportAddr != 0)
     {
-        PIMAGE_IMPORT_DESCRIPTOR pImport = (PIMAGE_IMPORT_DESCRIPTOR)RVATOVA(
-            Image,
-            pHeaders->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT].VirtualAddress
-        );
-
-        ULONG ImportSize = pHeaders->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT].Size;
+        PIMAGE_IMPORT_DESCRIPTOR pImport = (PIMAGE_IMPORT_DESCRIPTOR)RVATOVA(Image, ImportAddr);        
 
         RtDbgMsg(
             __FILE__, __LINE__, 
-            "IMAGE_DIRECTORY_ENTRY_IMPORT: "IFMT"; Size: %d\n", 
-            pImport, ImportSize
+            "IMAGE_DIRECTORY_ENTRY_IMPORT: "IFMT"; Size: %d\n", pImport, ImportSize
         );
 
         while (pImport->Name != 0)

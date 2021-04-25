@@ -41,7 +41,7 @@
     <ClCompile Include="runtime\runtime.cpp">
       <Filter>Source Files\runtime</Filter>
     </ClCompile>
-    <ClCompile Include="..\common\loader.cpp">
+    <ClCompile Include="..\common\peimage.cpp">
       <Filter>Source Files\common</Filter>
     </ClCompile>
     <ClCompile Include="runtime\std.cpp">
@@ -64,7 +64,7 @@
     <ClInclude Include="runtime\runtime.h">
       <Filter>Header Files\runtime</Filter>
     </ClInclude>
-    <ClInclude Include="..\common\loader.h">
+    <ClInclude Include="..\common\peimage.h">
       <Filter>Header Files\common</Filter>
     </ClInclude>
     <ClInclude Include="asm\common_asm.h">

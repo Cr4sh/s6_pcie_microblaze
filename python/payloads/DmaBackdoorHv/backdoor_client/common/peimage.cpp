@@ -3,33 +3,16 @@
 // make crt functions inline
 #pragma intrinsic(strcmp)
 
-#ifdef _NTIFS_INCLUDED_
-
-#define LdrAlloc(_len_) ExAllocatePool(NonPagedPool, (_len_))
-
-#else 
-
-#define LdrAlloc(_len_) VirtualAlloc(NULL, (_len_), MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE)
-
-#endif
-
 #define LdrDbgMsg
 //--------------------------------------------------------------------------------------
 ULONG NTAPI LdrGetProcAddress(PVOID Image, char *FunctionName)
 {
-    PIMAGE_NT_HEADERS32 pHeaders32 = (PIMAGE_NT_HEADERS32)
-        ((PUCHAR)Image + ((PIMAGE_DOS_HEADER)Image)->e_lfanew);    
+    PIMAGE_NT_HEADERS32 pHeaders32 = (PIMAGE_NT_HEADERS32)RVATOVA(
+        Image, ((PIMAGE_DOS_HEADER)Image)->e_lfanew);    
 
+    ULONG FunctionAddr = 0;
     ULONG ExportsAddr = 0, ExportsSize = 0;
-
-    BOOLEAN bByOrdinal = FALSE;
     ULONG_PTR Ordinal = (ULONG_PTR)FunctionName;    
-
-    if (Ordinal < LDR_MAX_ORDINAL)
-    {
-        // FunctionName param is ordinal
-        bByOrdinal = TRUE;
-    }
 
     if (pHeaders32->FileHeader.Machine == IMAGE_FILE_MACHINE_I386)
     {
@@ -40,8 +23,8 @@ ULONG NTAPI LdrGetProcAddress(PVOID Image, char *FunctionName)
     else if (pHeaders32->FileHeader.Machine == IMAGE_FILE_MACHINE_AMD64)
     {
         // 64-bit image
-        PIMAGE_NT_HEADERS64 pHeaders64 = (PIMAGE_NT_HEADERS64)
-            ((PUCHAR)Image + ((PIMAGE_DOS_HEADER)Image)->e_lfanew);
+        PIMAGE_NT_HEADERS64 pHeaders64 = (PIMAGE_NT_HEADERS64)RVATOVA(
+            Image, ((PIMAGE_DOS_HEADER)Image)->e_lfanew);
 
         ExportsAddr = pHeaders64->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_EXPORT].VirtualAddress;
         ExportsSize = pHeaders64->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_EXPORT].Size;
@@ -59,14 +42,14 @@ ULONG NTAPI LdrGetProcAddress(PVOID Image, char *FunctionName)
         return 0;
     }
 
-    PIMAGE_EXPORT_DIRECTORY pImageExportDirectory = (PIMAGE_EXPORT_DIRECTORY)RVATOVA(Image, ExportsAddr); 
-    ULONG ExportAddr = 0;
+    PIMAGE_EXPORT_DIRECTORY pImageExportDirectory = (PIMAGE_EXPORT_DIRECTORY)RVATOVA(Image, ExportsAddr);     
 
     if (pImageExportDirectory->AddressOfFunctions != 0)
     {
         PULONG AddrOfFunctions = (PULONG)RVATOVA(Image, pImageExportDirectory->AddressOfFunctions);
 
-        if (bByOrdinal)
+        // check for the export by ordinal
+        if (Ordinal < LDR_MAX_ORDINAL)
         {
             if (pImageExportDirectory->Base > Ordinal)
             {
@@ -83,7 +66,7 @@ ULONG NTAPI LdrGetProcAddress(PVOID Image, char *FunctionName)
             }
 
             // get export address by ordinal 
-            ExportAddr = AddrOfFunctions[Ordinal];
+            FunctionAddr = AddrOfFunctions[Ordinal];
         }
         else if (pImageExportDirectory->AddressOfNames != 0 && pImageExportDirectory->AddressOfNameOrdinals != 0)
         {
@@ -91,31 +74,31 @@ ULONG NTAPI LdrGetProcAddress(PVOID Image, char *FunctionName)
             PULONG AddrOfNames = (PULONG)RVATOVA(Image, pImageExportDirectory->AddressOfNames);
 
             // enumerate export names
-            for (ULONG i = 0; i < pImageExportDirectory->NumberOfNames; i++)
+            for (ULONG i = 0; i < pImageExportDirectory->NumberOfNames; i += 1)
             {
                 char *Name = (char *)RVATOVA(Image, AddrOfNames[i]);
 
                 if (!strcmp(Name, FunctionName))
                 {
                     // return export address
-                    ExportAddr = AddrOfFunctions[AddrOfOrdinals[i]];
+                    FunctionAddr = AddrOfFunctions[AddrOfOrdinals[i]];
                     break;
                 }
             }
         }
     }    
 
-    if (ExportAddr != 0)
+    if (FunctionAddr != 0)
     {
         // check for the forwarded export
-        if (ExportAddr > ExportsAddr &&
-            ExportAddr < ExportsAddr + ExportsSize)
+        if (FunctionAddr > ExportsAddr &&
+            FunctionAddr < ExportsAddr + ExportsSize)
         {
             LdrDbgMsg(__FILE__, __LINE__, __FUNCTION__"() ERROR: Forwarded export\n");
-            return NULL;
+            return 0;
         }
 
-        return ExportAddr;
+        return FunctionAddr;
     }
 
     LdrDbgMsg(__FILE__, __LINE__, __FUNCTION__"() ERROR: Export is not found\n");
@@ -125,45 +108,39 @@ ULONG NTAPI LdrGetProcAddress(PVOID Image, char *FunctionName)
 //--------------------------------------------------------------------------------------
 BOOLEAN NTAPI LdrProcessRelocs(PVOID Image, PVOID NewBase)
 {
-    PIMAGE_NT_HEADERS32 pHeaders32 = (PIMAGE_NT_HEADERS32)
-        ((PUCHAR)Image + ((PIMAGE_DOS_HEADER)Image)->e_lfanew);
+    PIMAGE_NT_HEADERS32 pHeaders32 = (PIMAGE_NT_HEADERS32)RVATOVA(
+        Image, ((PIMAGE_DOS_HEADER)Image)->e_lfanew);
 
     PIMAGE_BASE_RELOCATION pRelocation = NULL;
-    ULONG RelocationSize = 0;        
+    ULONG RelocSize = 0, RelocAddr = 0;        
     ULONGLONG OldBase = 0;
 
     if (pHeaders32->FileHeader.Machine == IMAGE_FILE_MACHINE_I386)
     {
         // 32-bit image
-        if (pHeaders32->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_BASERELOC].VirtualAddress)
-        {
-            pRelocation = (PIMAGE_BASE_RELOCATION)RVATOVA(
-                Image,
-                pHeaders32->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_BASERELOC].VirtualAddress
-            );
-
-            RelocationSize = pHeaders32->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_BASERELOC].Size;
-        }
-
         OldBase = pHeaders32->OptionalHeader.ImageBase;
+        RelocAddr = pHeaders32->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_BASERELOC].VirtualAddress;
+        RelocSize = pHeaders32->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_BASERELOC].Size;        
+        
+        if (RelocAddr != 0)
+        {
+            pRelocation = (PIMAGE_BASE_RELOCATION)RVATOVA(Image, RelocAddr);            
+        }        
     }        
     else if (pHeaders32->FileHeader.Machine == IMAGE_FILE_MACHINE_AMD64)
     {
         // 64-bit image
-        PIMAGE_NT_HEADERS64 pHeaders64 = (PIMAGE_NT_HEADERS64)
-            ((PUCHAR)Image + ((PIMAGE_DOS_HEADER)Image)->e_lfanew);
-
-        if (pHeaders64->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_BASERELOC].VirtualAddress)
-        {
-            pRelocation = (PIMAGE_BASE_RELOCATION)RVATOVA(
-                Image,
-                pHeaders64->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_BASERELOC].VirtualAddress
-            );
-
-            RelocationSize = pHeaders64->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_BASERELOC].Size;
-        }
+        PIMAGE_NT_HEADERS64 pHeaders64 = (PIMAGE_NT_HEADERS64)RVATOVA(
+            Image, ((PIMAGE_DOS_HEADER)Image)->e_lfanew);
 
         OldBase = pHeaders64->OptionalHeader.ImageBase;
+        RelocAddr = pHeaders64->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_BASERELOC].VirtualAddress;
+        RelocSize = pHeaders64->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_BASERELOC].Size;
+
+        if (RelocAddr != 0)
+        {
+            pRelocation = (PIMAGE_BASE_RELOCATION)RVATOVA(Image, RelocAddr);
+        }        
     }
     else
     {
@@ -173,24 +150,24 @@ BOOLEAN NTAPI LdrProcessRelocs(PVOID Image, PVOID NewBase)
 
     if (pRelocation)
     {
+        ULONG Size = 0;
+
         LdrDbgMsg(
             __FILE__, __LINE__, 
-            "IMAGE_DIRECTORY_ENTRY_BASERELOC: "IFMT"; Size: %d\n", 
-            pRelocation, RelocationSize
+            "IMAGE_DIRECTORY_ENTRY_BASERELOC: addr = "IFMT", size = %d\n", pRelocation, RelocSize
         );
-
-        ULONG Size = 0;
-        while (RelocationSize > Size && pRelocation->SizeOfBlock)
+        
+        while (RelocSize > Size && pRelocation->SizeOfBlock)
         {            
-            ULONG Number = (pRelocation->SizeOfBlock - 8) / 2;
-            PUSHORT Rel = (PUSHORT)((PUCHAR)pRelocation + 8);            
+            ULONG Num = (pRelocation->SizeOfBlock - sizeof(IMAGE_BASE_RELOCATION)) / sizeof(USHORT);
+            PUSHORT Rel = (PUSHORT)RVATOVA(pRelocation, sizeof(IMAGE_BASE_RELOCATION));
 
             LdrDbgMsg(
-                __FILE__, __LINE__, " VirtualAddress: 0x%.8x; Number of Relocs: %d; Size: %d\n", 
-                pRelocation->VirtualAddress, Number, pRelocation->SizeOfBlock
+                __FILE__, __LINE__, 
+                "addr = 0x%.8x, count = %d, size = %d\n", pRelocation->VirtualAddress, Num, pRelocation->SizeOfBlock
             );
 
-            for (ULONG i = 0; i < Number; i++)
+            for (ULONG i = 0; i < Num; i += 1)
             {
                 if (Rel[i] > 0)
                 {
@@ -223,7 +200,7 @@ BOOLEAN NTAPI LdrProcessRelocs(PVOID Image, PVOID NewBase)
                 }
             }
 
-            pRelocation = (PIMAGE_BASE_RELOCATION)((PUCHAR)pRelocation + pRelocation->SizeOfBlock);
+            pRelocation = (PIMAGE_BASE_RELOCATION)RVATOVA(pRelocation, pRelocation->SizeOfBlock);
             Size += pRelocation->SizeOfBlock;            
         }
     }
@@ -237,8 +214,8 @@ BOOLEAN NTAPI LdrProcessRelocs(PVOID Image, PVOID NewBase)
 //--------------------------------------------------------------------------------------
 BOOLEAN LdrImageFromData(PVOID Data, ULONG dwDataSize, PVOID *Image, PULONG pdwImageSize)
 {    
-    PIMAGE_NT_HEADERS32 pHeaders32 = (PIMAGE_NT_HEADERS32)
-        ((PUCHAR)Data + ((PIMAGE_DOS_HEADER)Data)->e_lfanew);
+    PIMAGE_NT_HEADERS32 pHeaders32 = (PIMAGE_NT_HEADERS32)RVATOVA(
+        Data, ((PIMAGE_DOS_HEADER)Data)->e_lfanew);
 
     BOOLEAN bMapped = FALSE;
     PIMAGE_SECTION_HEADER pSection = NULL;
@@ -251,27 +228,21 @@ BOOLEAN LdrImageFromData(PVOID Data, ULONG dwDataSize, PVOID *Image, PULONG pdwI
         HeadersSize = pHeaders32->OptionalHeader.SizeOfHeaders;
         NumberOfSections = pHeaders32->FileHeader.NumberOfSections;
 
-        pSection = (PIMAGE_SECTION_HEADER)
-            ((PUCHAR)&pHeaders32->OptionalHeader +
-            pHeaders32->FileHeader.SizeOfOptionalHeader);
-
-        bMapped = LDR_IS_SECTIONS_MAPPED(pHeaders32);
+        pSection = (PIMAGE_SECTION_HEADER)RVATOVA(
+            &pHeaders32->OptionalHeader, pHeaders32->FileHeader.SizeOfOptionalHeader);
     }
     else if (pHeaders32->FileHeader.Machine == IMAGE_FILE_MACHINE_AMD64)
     {
-        PIMAGE_NT_HEADERS64 pHeaders64 = (PIMAGE_NT_HEADERS64)
-            ((PUCHAR)Data + ((PIMAGE_DOS_HEADER)Data)->e_lfanew);
+        PIMAGE_NT_HEADERS64 pHeaders64 = (PIMAGE_NT_HEADERS64)RVATOVA(
+            Data, ((PIMAGE_DOS_HEADER)Data)->e_lfanew);
 
         // 64-bit image
         ImageSize = pHeaders64->OptionalHeader.SizeOfImage;
         HeadersSize = pHeaders64->OptionalHeader.SizeOfHeaders;
         NumberOfSections = pHeaders64->FileHeader.NumberOfSections;
 
-        pSection = (PIMAGE_SECTION_HEADER)
-            ((PUCHAR)&pHeaders64->OptionalHeader +
-            pHeaders64->FileHeader.SizeOfOptionalHeader);
-
-        bMapped = LDR_IS_SECTIONS_MAPPED(pHeaders64);
+        pSection = (PIMAGE_SECTION_HEADER)RVATOVA(
+            &pHeaders64->OptionalHeader, pHeaders64->FileHeader.SizeOfOptionalHeader);
     }
     else
     {
@@ -282,29 +253,21 @@ BOOLEAN LdrImageFromData(PVOID Data, ULONG dwDataSize, PVOID *Image, PULONG pdwI
     PVOID Memory = LdrAlloc((SIZE_T)ImageSize);
     if (Memory)
     {          
-        if (bMapped)
-        {
-            // image sections are already mapped acording to their memory layout
-            memcpy(Memory, Data, ImageSize);
-        }
-        else
-        {
-            // copy headers
-            memset(Memory, 0, ImageSize);
-            memcpy(Memory, Data, HeadersSize);
+        // copy headers
+        memset(Memory, 0, ImageSize);
+        memcpy(Memory, Data, HeadersSize);
 
-            // copy sections        
-            for (ULONG i = 0; i < NumberOfSections; i++)
-            {
-                memcpy(
-                    RVATOVA(Memory, pSection->VirtualAddress),
-                    RVATOVA(Data, pSection->PointerToRawData),
-                    min(pSection->SizeOfRawData, pSection->Misc.VirtualSize)
-                );
+        // copy sections        
+        for (ULONG i = 0; i < NumberOfSections; i += 1)
+        {
+            memcpy(
+                RVATOVA(Memory, pSection->VirtualAddress),
+                RVATOVA(Data, pSection->PointerToRawData),
+                min(pSection->SizeOfRawData, pSection->Misc.VirtualSize)
+            );
 
-                pSection += 1;
-            }
-        }        
+            pSection += 1;
+        }    
 
         *Image = Memory;
         *pdwImageSize = ImageSize;
@@ -317,52 +280,6 @@ BOOLEAN LdrImageFromData(PVOID Data, ULONG dwDataSize, PVOID *Image, PULONG pdwI
     }
 
     return FALSE;
-}
-//--------------------------------------------------------------------------------------
-ULONG LdrRvaToRaw(PVOID Image, ULONG dwRva)
-{
-    PIMAGE_NT_HEADERS32 pHeaders32 = (PIMAGE_NT_HEADERS32)
-        ((PUCHAR)Image + ((PIMAGE_DOS_HEADER)Image)->e_lfanew);
-
-    PIMAGE_SECTION_HEADER pSection = NULL;
-    ULONG NumberOfSections = 0;
-
-    if (pHeaders32->FileHeader.Machine == IMAGE_FILE_MACHINE_I386)
-    {
-        // 32-bit image
-        NumberOfSections = pHeaders32->FileHeader.NumberOfSections;
-
-        pSection = (PIMAGE_SECTION_HEADER)
-            ((PUCHAR)&pHeaders32->OptionalHeader +
-            pHeaders32->FileHeader.SizeOfOptionalHeader);
-    }
-    else if (pHeaders32->FileHeader.Machine == IMAGE_FILE_MACHINE_AMD64)
-    {
-        PIMAGE_NT_HEADERS64 pHeaders64 = (PIMAGE_NT_HEADERS64)
-            ((PUCHAR)Image + ((PIMAGE_DOS_HEADER)Image)->e_lfanew);
-
-        // 64-bit image
-        NumberOfSections = pHeaders64->FileHeader.NumberOfSections;
-
-        pSection = (PIMAGE_SECTION_HEADER)
-            ((PUCHAR)&pHeaders64->OptionalHeader +
-            pHeaders64->FileHeader.SizeOfOptionalHeader);
-    }
-    else
-    {
-        return INVALID_OFFSET;
-    }
-
-    for (ULONG i = 0; i < NumberOfSections; i++, pSection++)
-    {
-        if (dwRva >= pSection->VirtualAddress &&
-            dwRva < pSection->VirtualAddress + pSection->Misc.VirtualSize)
-        {
-            return dwRva - pSection->VirtualAddress + pSection->PointerToRawData;
-        }
-    }
-
-    return INVALID_OFFSET;
 }
 //--------------------------------------------------------------------------------------
 // EoF

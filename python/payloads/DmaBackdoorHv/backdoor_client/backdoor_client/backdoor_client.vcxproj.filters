@@ -42,7 +42,7 @@
     <ClInclude Include="..\common\common.h">
       <Filter>Header Files\common</Filter>
     </ClInclude>
-    <ClInclude Include="..\common\loader.h">
+    <ClInclude Include="..\common\peimage.h">
       <Filter>Header Files\common</Filter>
     </ClInclude>
     <ClInclude Include="..\common\image_policy.h">
@@ -74,7 +74,7 @@
     <ClCompile Include="backdoor_client.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\common\loader.cpp">
+    <ClCompile Include="..\common\peimage.cpp">
       <Filter>Source Files\common</Filter>
     </ClCompile>
     <ClCompile Include="..\common\common.cpp">

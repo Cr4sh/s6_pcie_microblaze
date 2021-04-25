@@ -87,7 +87,7 @@
   <ItemGroup>
     <ClInclude Include="..\common\common.h" />
     <ClInclude Include="..\common\common_backdoor.h" />
-    <ClInclude Include="..\common\loader.h" />
+    <ClInclude Include="..\common\peimage.h" />
     <ClInclude Include="..\rpc\params.h" />
     <ClInclude Include="..\rpc\trustlet_debug.h" />
     <ClInclude Include="stdafx.h" />
@@ -96,7 +96,7 @@
   <ItemGroup>
     <ClCompile Include="..\common\common.cpp" />
     <ClCompile Include="..\common\common_backdoor.cpp" />
-    <ClCompile Include="..\common\loader.cpp" />
+    <ClCompile Include="..\common\peimage.cpp" />
     <ClCompile Include="..\rpc\trustlet_debug_c.c" />
     <ClCompile Include="stdafx.cpp" />
     <ClCompile Include="trustlet_loader.cpp" />

@@ -8,7 +8,7 @@
 #include "../backdoor_client/backdoor_client.h"
 
 #include "common.h"
-#include "loader.h"
+#include "peimage.h"
 #include "debug.h"
 #include "std.h"
 
