@@ -27,8 +27,8 @@ ULONG NTAPI ImportHash(char *Str)
 //--------------------------------------------------------------------------------------
 PVOID NTAPI ImportGetProcAddressEx(PVOID Image, ULONG Hash)
 {
-    PIMAGE_NT_HEADERS pHeaders = (PIMAGE_NT_HEADERS)
-        ((PUCHAR)Image + ((PIMAGE_DOS_HEADER)Image)->e_lfanew);
+    PIMAGE_NT_HEADERS pHeaders = (PIMAGE_NT_HEADERS)RVATOVA(
+        Image, ((PIMAGE_DOS_HEADER)Image)->e_lfanew);
 
     ULONG ExportAddr = pHeaders->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_EXPORT].VirtualAddress;
     ULONG ExportSize = pHeaders->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_EXPORT].Size;
@@ -60,18 +60,18 @@ PVOID NTAPI ImportGetProcAddressEx(PVOID Image, ULONG Hash)
                 if (Ret > ExportAddr &&
                     Ret < ExportAddr + ExportSize)
                 {
-                    char *lpszForwarded = (char *)RVATOVA(Image, Ret);
-                    
-                    char szModule[IMPORT_MAX_STRING_SIZE], *lpszFunction = NULL;
+                    char szModule[IMPORT_MAX_STRING_SIZE];
+                    char *lpszForwarded = (char *)RVATOVA(Image, Ret), *lpszFunction = NULL;
+
                     strcpy(szModule, lpszForwarded);
 
                     // extract module name from the string
-                    for (ULONG i_t = 0; i_t < IMPORT_MAX_STRING_SIZE; i_t++)
+                    for (ULONG n = 0; n < IMPORT_MAX_STRING_SIZE; n += 1)
                     {
-                        if (szModule[i_t] == '\0' || szModule[i_t] == '.')
+                        if (szModule[n] == '\0' || szModule[n] == '.')
                         {
-                            lpszFunction = szModule + i_t + 1;
-                            szModule[i_t] = '\0';                            
+                            lpszFunction = szModule + n + 1;
+                            szModule[n] = '\0';                            
                             break;   
                         }
                     }

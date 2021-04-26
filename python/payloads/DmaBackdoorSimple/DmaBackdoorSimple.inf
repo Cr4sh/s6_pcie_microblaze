@@ -6,7 +6,7 @@
 
 [Sources]
   src/debug.c
-  src/loader.c
+  src/peimage.c
   src/printf.c
   src/DmaBackdoorSimple.c
   src/serial.c

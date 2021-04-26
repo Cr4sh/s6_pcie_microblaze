@@ -12,6 +12,10 @@ typedef EFI_IMAGE_NT_HEADERS32 EFI_IMAGE_NT_HEADERS;
 
 #endif
 
+#ifndef EFI_IMAGE_DIRECTORY_ENTRY_IAT
+#define EFI_IMAGE_DIRECTORY_ENTRY_IAT 12
+#endif
+
 #define LDR_UPDATE_RELOCS(_addr_, _old_, _new_)                                                      \
                                                                                                      \
     {                                                                                                \
@@ -25,6 +29,6 @@ typedef EFI_IMAGE_NT_HEADERS32 EFI_IMAGE_NT_HEADERS;
     }
 
 BOOLEAN LdrProcessRelocs(VOID *Image, VOID *NewBase);
-UINT32 LdrGetProcAddress(VOID *Image, char *lpszFunctionName);
+VOID *LdrGetProcAddress(VOID *Image, char *lpszFunctionName);
 
 #endif

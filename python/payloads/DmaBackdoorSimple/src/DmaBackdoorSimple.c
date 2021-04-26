@@ -17,7 +17,7 @@
 #include "printf.h"
 #include "serial.h"
 #include "debug.h"
-#include "loader.h"
+#include "peimage.h"
 #include "ovmf.h"
 #include "DmaBackdoorSimple.h"
 #include "asm/common_asm.h"
