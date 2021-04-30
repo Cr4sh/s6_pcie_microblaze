@@ -27,6 +27,10 @@ Backdoor supports all 64-bit versions of Windows 7, 8, 8.1 and 10 in UEFI boot m
 
 Variety of payloads and deployment methods makes Boot Backdoor suitable for penetration testing (as method of persistence), DMA attacks, supply chain attacks and research purposes.
 
+Here you can see a demo of Boot Backdoor + DMA Shell in action, [Xilinx ZC706 evaluation kit](https://github.com/Cr4sh/zc_pcie_dma) was used as rogue PCI-E device to perform pre-boot DMA attack:
+
+[![asciicast](https://asciinema.org/a/410996.svg)](https://asciinema.org/a/410996)
+
 
 ## Contents
 
