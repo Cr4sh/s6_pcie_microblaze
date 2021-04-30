@@ -1,0 +1,42 @@
+[defines]
+  INF_VERSION = 0x00010005 
+  BASE_NAME = DmaBackdoorBoot
+  FILE_GUID = F02EF822-47B2-4EF0-9B28-02DCFC8A3F75
+  MODULE_TYPE = UEFI_APPLICATION
+
+[Sources]
+  src/debug.c
+  src/peimage.c
+  src/printf.c  
+  src/serial.c
+  src/std.c
+  src/DmaBackdoorBoot.c
+  src/Winload.c
+
+[Sources.X64]
+  src/asm/amd64/common_asm.asm
+
+[Sources.IA32]
+  src/asm/i386/common_asm.asm
+
+[Packages]
+  MdePkg/MdePkg.dec
+  MdeModulePkg/MdeModulePkg.dec
+  IntelFrameworkPkg/IntelFrameworkPkg.dec  
+  IntelFrameworkModulePkg/IntelFrameworkModulePkg.dec  
+  StdLib/StdLib.dec
+
+[LibraryClasses]
+  
+
+[Protocols]
+  gEfiSimpleTextOutProtocolGuid
+  gEfiLoadedImageProtocolGuid
+  gEfiDevicePathProtocolGuid
+  gEfiSerialIoProtocolGuid  
+  gEfiSmmAccess2ProtocolGuid
+  gEfiSmmBase2ProtocolGuid
+  gEfiSmmCommunicationProtocolGuid
+  
+[Depex]
+  TRUE
