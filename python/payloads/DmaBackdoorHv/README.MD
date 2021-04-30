@@ -1,5 +1,5 @@
 
-# Hyper-V backdoor
+# Hyper-V Backdoor
 
 [General Information](#general-information)  
 [Contents](#contents)  
@@ -15,76 +15,80 @@
 
 ## General Information
 
-This repository contains Hyper-V backdoor that might be useful for reverse engineering and exploit development purposes, it [provides an interface](https://github.com/Cr4sh/s6_pcie_microblaze/blob/master/python/payloads/DmaBackdoorHv/backdoor_client/backdoor_library/backdoor_library.cpp) for inspecting of hypervisor state (VMCS, physical/virtual memory, registers, etc.) from guest or host partition and perform the VM escape attacks. 
+This repository contains Hyper-V Backdoor that might be useful for reverse engineering and exploit development purposes, it [provides an interface](https://github.com/Cr4sh/s6_pcie_microblaze/blob/master/python/payloads/DmaBackdoorHv/backdoor_client/backdoor_library/backdoor_library.cpp) for inspecting of hypervisor state (VMCS, physical/virtual memory, registers, etc.) from guest or host partition and perform the VM escape attacks. 
 
 Also, backdoor allows to inspect Secure Kernel and run 3-rd party trustlets in the [Isolated User Mode](https://docs.microsoft.com/en-us/windows/win32/procthread/isolated-user-mode--ium--processes) (a virtualization-based security feature of Windows 10).
 
 To deploy the backdoor you can use one of the following methods:
 
- * DMA attack over the PCI Express bus using [DMA attack toolkit](https://github.com/Cr4sh/s6_pcie_microblaze), also compatible with my other [Xilinx Zynq-7000 based design](https://github.com/Cr4sh/zc_pcie_dma) for DMA attacks.
+ * DMA attack over the PCI Express bus using [DMA attack toolkit](https://github.com/Cr4sh/s6_pcie_microblaze), also compatible with my other [Xilinx Zynq-7000 based design](https://github.com/Cr4sh/zc_pcie_dma) for DMA attacks. This method can be used with enabled UEFI Secure Boot.
 
- * UEFI bootkit based on [signed insecure bootloader](https://support.microsoft.com/en-us/help/4524244/security-update-for-windows-10-february-11-2020) from Kaspersky products that [was discovered](https://habr.com/en/post/446238/) by [@ValdikSS](https://twitter.com/valdikss).
+ * UEFI bootkit based on [signed insecure bootloader](https://support.microsoft.com/en-us/help/4524244/security-update-for-windows-10-february-11-2020) from Kaspersky products that [was discovered](https://habr.com/en/post/446238/) by [@ValdikSS](https://twitter.com/valdikss). This method can be used with enabled UEFI Secure Boot as wll.
 
- * UEFI bootkit based on the infection of the platform firmware stored in [SPI flash chip on the motherboard](https://raw.githubusercontent.com/Cr4sh/blog/master/uefi-boot-script-expl/spi-flash-chips.jpg), which is suitable for supply chain attacks.
+ * UEFI bootkit based on the infection of the platform firmware stored in [SPI flash chip on the motherboard](https://raw.githubusercontent.com/Cr4sh/blog/master/uefi-boot-script-expl/spi-flash-chips.jpg), which is suitable for supply chain attacks. This method can be used with enabled UEFI Secure Boot as well.
 
- * Windows boot manager image file infection with emulation of enabled UEFI secure boot.
+ * Windows boot manager image file infection with emulation of enabled UEFI secure boot. This method requires intially disabled UEFI Secure Boot.
 
 Backdoor supports 64-bit versions of Windows 10 1709, 1803, 1809, 1903, 1909, 2004 and 20H2 running on Intel systems.
 
 
 ## Contents
 
-* `src/DmaBackdoorHv.c` &minus; UEFI DXE driver that hooks Windows Loader and patching Hyper-V executable image on the fly in order to inject malicious VM exit handler. 
+Hyper-V Backdoor code base contains the following files:
 
-* `src/HyperV.c` &minus; Malicious VM exit handler code that implements Hyper-V backdoor functionality.
+ * `src/DmaBackdoorHv.c` &minus; UEFI DXE driver that hooks Windows Loader (winload.efi) to patch Hyper-V executable image on the fly in order to inject malicious VM exit handler. 
 
-* `backdoor_client/backdoor_client.h` &minus; Hyper-V backdoor program interface.
+ * `src/HyperV.c` &minus; Malicious VM exit handler code that implements Hyper-V Backdoor functionality.
 
-* `backdoor_client/backdoor_library` &minus; Static library that implements backdoor client functionality.
+ * `backdoor_client/backdoor_client.h` &minus; Hyper-V Backdoor program interface.
 
-* `backdoor_client/backdoor_library.h` &minus; Hyper-V backdoor client library program interface.
+ * `backdoor_client/backdoor_library` &minus; Static library that implements backdoor client functionality.
 
-* `backdoor_client/backdoor_client` &minus; Command line application that interracts with the backdoor using client library.
+ * `backdoor_client/backdoor_library.h` &minus; Hyper-V Backdoor client library program interface.
 
-* `backdoor_client/trustlet_loader` &minus; Command line application to run 3-rd party trustlets using Hyper-V backdoor.
+ * `backdoor_client/backdoor_client` &minus; Command line application that interracts with the backdoor using client library.
 
-* `backdoor_client/trustlet_demo` &minus; 3-rd party trustlet project that provides an example of communication between normal world and secure world.
+ * `backdoor_client/trustlet_loader/` &minus; Command line application to run 3-rd party trustlets using Hyper-V Backdoor.
 
-* `backdoor_client/vm_exec_kernel` and `backdoor_client/vm_exec_user` &minus; Kernel mode and user mode components used to execute arbitrary console commands in Hyper-V root partition from the guest operating system (embedded into the `backdoor_client.exe` application).
+ * `backdoor_client/trustlet_demo/` &minus; 3-rd party trustlet project that provides an example of communication between normal world and secure world.
 
-* `backdoor_client/driver_loader` &minus; NT kernel reflective drivers loader (embedded into the `backdoor_client.exe` application).
+ * `backdoor_client/vm_exec_kernel/` and `backdoor_client/vm_exec_user` &minus; Kernel mode and user mode components used to execute arbitrary console commands in Hyper-V root partition from the guest operating system (embedded into the `backdoor_client.exe` application).
 
-* `backdoor_client/driver_loader_sk` &minus; Secure kernel reflective drivers loader (embedded into the `backdoor_client.exe` application).
+ * `backdoor_client/driver_loader/` &minus; NT kernel reflective drivers loader (embedded into the `backdoor_client.exe` application).
 
-* `bootkit_installer.ps1` &minus; Program to deploy Hyper-V backdoor as bootkit along with the signed Kaspersky bootloader used for Secure Boot bypass.
+ * `backdoor_client/driver_loader_sk/` &minus; Secure kernel reflective drivers loader (embedded into the `backdoor_client.exe` application).
 
-* `resources` &minus; 3-rd party binaries used to build `bootkit_installer.ps1` program (see "building from the source code" section for more details).
+ * `bootkit_installer.ps1` &minus; Program to deploy Hyper-V Backdoor as bootkit along with the signed Kaspersky bootloader used for Secure Boot bypass.
 
-* `grub-2.02_chainloader.patch` &minus; GRUB2 patch used to compile malicious chain-loader module needed for Secure Boot bypass with the help of the signed Kaspersky bootloader.
+ * `resources/` &minus; 3-rd party binaries used to build `bootkit_installer.ps1` program (see "building from the source code" section for more details).
+
+ * `grub-2.02_chainloader.patch` &minus; GRUB2 patch used to compile malicious chain-loader module needed for Secure Boot bypass with the help of the signed Kaspersky bootloader.
+
+ * `infector.py` &minus; PE files infector used for deployment of Hyper-V Backdoor with UEFI flash image infection and Windows boot manager image file infection.
 
 
 ## Deploying the Backdoor Using Pre-Boot DMA Attack
 
-Python program `uefi_backdoor_hv.py` injects UEFI DXE driver of Hyper-V backdoor located in `payloads/DmaBackdoorHv` folder into the target system boot sequence using pre-boot DMA attack described in "Practical DMA Attacks" part of the [DMA attack toolkit docummentation](https://github.com/Cr4sh/s6_pcie_microblaze#practical-dma-attacks). To use this program you have to perform the following steps:
+Python program `uefi_backdoor_hv.py` injects UEFI DXE driver of Hyper-V Backdoor located in `payloads/DmaBackdoorHv` folder into the target system boot sequence using pre-boot DMA attack described in "Practical DMA Attacks" part of the [DMA attack toolkit documentation](https://github.com/Cr4sh/s6_pcie_microblaze#practical-dma-attacks). To use this program you have to perform the following steps:
 
-1) Power off the target computer.
+ 1) Power off the target computer.
 
-2) Connect SP605 board to the PCI-E (or Mini PCI-E, or M.2) port of the target computer.
+ 2) Connect your FPGA board used for DMA attacks to the PCI-E (or Mini PCI-E, or M.2) port of the target computer.
 
-3) Turn the borad on and ensure that Microblaze firmware was successfully initialized by pinging an IP address that was specified during the board configuration with `bootloader_ctl.py` program. 
+ 3) Turn the board on and ensure that its firmware was successfully initialized. 
 
-4) Run the following command to start pre-boot DMA attack: 
+ 4) Run the following command to start pre-boot DMA attack: 
 
 ```
 $ ./uefi_backdoor_hv.py --driver payloads/DmaBackdoorHv/DmaBackdoorHv_X64.efi
 ```
 
-5) Power on the target computer, in case of successful attack after the couple of seconds you will see red debug messages screen of injected UEFI DXE driver.
+ 5) Power on the target computer, in case of successful attack after the couple of seconds you will see red debug messages screen of injected UEFI DXE driver.
 
 An example of `uefi_backdoor_hv.py` console output after the successful attack:
 
 ```
-$ ./uefi_backdoor_hv.py --driver payloads/DmaBackdoorHv/DmaBackdoorHv_X64.efi
+$ ./uefi_backdoor_hv.py
 [+] Using UEFI system table hook injection method
 [+] Reading DXE phase payload from payloads/DmaBackdoorHv/DmaBackdoorHv_X64.efi
 [+] Waiting for PCI-E link...
@@ -115,31 +119,34 @@ Hooking LocateProtocol(): 0x7a3987b4 -> 0x000c0bd4
 [+] DONE
 ```
 
+You can use `--driver` option of `uefi_backdoor_hv.py` to specify an alternative DXE driver to inject, by default the program uses `payloads/DmaBackdoorHv/DmaBackdoorHv_X64.efi` driver.
+
+
 ## Deploying the Backdoor Using Signed Kaspersky bootloader
 
 [Windows Virtualization-based Security (VBS)](https://docs.microsoft.com/en-us/windows-hardware/design/device-experiences/oem-vbs) uses hardware virtualization features and Hyper-V to host a number of security solutions, providing them with greatly increased protection from vulnerabilities in the operating system, and preventing the use of malicious exploits which attempt to defeat protections. One of the examples of such services is [Hypervisor-Enforced Code Integrity](https://docs.microsoft.com/en-us/windows/security/threat-protection/device-guard/enable-virtualization-based-protection-of-code-integrity) which uses VBS to significantly strengthen code integrity policy enforcement.
 
 Another example of VSB based security feature is [Windows Credential Guard](https://docs.microsoft.com/en-us/windows/security/identity-protection/credential-guard/credential-guard). Hyper-V functionality is employed to logically divide the system into two separate "worlds": the normal world (VTL0) running the NT kernel that we’re all familiar with and a separate secure world (VTL1) running a Secure Kernel (SK). Enabled Credential Guard causes the LSA process (LSASS) to remain in the Host OS running in the normal world, and a special, additional instance of LSA (called LSAIso – which stands for LSA Isolated) to remain as trustlet running in the secure world. Because isolated LSAIso trustlet responsible for protecting domain credentials is running in the secure world, attacker who managed to gain Administrator privileges within normal world is not able to use [Mimikatz](https://github.com/gentilkiwi/mimikatz) like tools to steal credentials from the memory.
 
-Virtualization-based Security is relying on UEFI Secure Boot enabled, so, to load Hyper-V backdoor on VBS enabled machines we should not disrupt the Secure Boot configuration. One of the possible ways to do that is injecting Hyper-V backdoor using pre-boot DMA attack which was described in [DMA attack toolkit](https://github.com/Cr4sh/s6_pcie_microblaze) documentation. Another possible way &minus; use signed 3-rd party bootloader as part of secure boot chain which functionality can be abused to load Hyper-V backdoor UEFI DXE driver whithout digital sugnature verification just before passing the execution to the legitimate Windows Boot Manager. 
+Virtualization-based Security is relying on UEFI Secure Boot enabled, so, to load Hyper-V Backdoor on VBS enabled machines we should not disrupt the Secure Boot configuration. One of the possible ways to do that is injecting Hyper-V Backdoor using pre-boot DMA attack which was described in [DMA attack toolkit](https://github.com/Cr4sh/s6_pcie_microblaze) documentation. Another possible way &minus; use signed 3-rd party bootloader as part of secure boot chain which functionality can be abused to load Hyper-V Backdoor UEFI DXE driver whithout digital sugnature verification just before passing the execution to the legitimate Windows Boot Manager. 
 
 Luckily, such digitally signed 3-rd party bootloader can be taken form [Kaspersky Rescue Disk 18](https://support.kaspersky.com/viruses/krd18). This bootloader is actually just [GRUB 2.02](https://www.gnu.org/software/grub/index.html) that was compiled without disabling some dangerous built-in commands like `rmmod` and `insmod`. This commands can be used by attacker to load malicious [GRUB chain-loader](https://www.gnu.org/software/grub/manual/grub/html_node/Chain_002dloading.html) module and effectively bypass UEFI Secure Boot.
 
 <img src="https://raw.githubusercontent.com/Cr4sh/s6_pcie_microblaze/master/docs/images/backdoor_boot.png" width="694" height="371">
 
-To install Hyper-V backdoor along with the Kaspersky bootloader there's a program called `bootkit_installer.ps1` that embeds all needed executables. Use `-Install` command line key to install Hyper-V backdoor as bootkit or `-Uninstall` to revert original bootloader.
+To install Hyper-V Backdoor along with the Kaspersky bootloader there's a program called `bootkit_installer.ps1` that embeds all needed executables. Use `-Install` command line key to install Hyper-V Backdoor as bootkit or `-Uninstall` to revert original bootloader.
 
 <img src="https://raw.githubusercontent.com/Cr4sh/s6_pcie_microblaze/master/docs/images/backdoor_bootkit.png" width="710" height="420">
 
 To get more information about Virtualization-based Security and Virtual Secure Mode please refer to the following materials:
 
-* [Hyper-V Hypervisor Top-Level Functional Specification](https://docs.microsoft.com/en-us/virtualization/hyper-v-on-windows/reference/tlfs) 
+ * [Hyper-V Hypervisor Top-Level Functional Specification](https://docs.microsoft.com/en-us/virtualization/hyper-v-on-windows/reference/tlfs) 
 
-* [Battle Of The SKM And IUM: How Windows 10 Rewrites OS Architecture](https://www.youtube.com/watch?v=LqaWIn4y26E) by [Alex Ionescu](https://twitter.com/aionescu)
+ * [Battle Of The SKM And IUM: How Windows 10 Rewrites OS Architecture](https://www.youtube.com/watch?v=LqaWIn4y26E) by [Alex Ionescu](https://twitter.com/aionescu)
 
-* [Live forensics on the Windows 10 secure kernel](https://www.semanticscholar.org/paper/Live-forensics-on-the-Windows-10-secure-kernel.-Brendmo/e275cc28c5c8e8e158c45e5e773d0fa3da01e118) by Hans Kristian Brendmo
+ * [Live forensics on the Windows 10 secure kernel](https://www.semanticscholar.org/paper/Live-forensics-on-the-Windows-10-secure-kernel.-Brendmo/e275cc28c5c8e8e158c45e5e773d0fa3da01e118) by Hans Kristian Brendmo
 
-* [Work Package 6: Virtual Secure Mode](https://www.bsi.bund.de/SharedDocs/Downloads/DE/BSI/Cyber-Sicherheit/SiSyPHus/Workpackage6_Virtual_Secure_Mode.pdf?__blob=publicationFile&v=2) by [The BSI](https://www.bsi.bund.de/EN/TheBSI/thebsi_node.html)
+ * [Work Package 6: Virtual Secure Mode](https://www.bsi.bund.de/SharedDocs/Downloads/DE/BSI/Cyber-Sicherheit/SiSyPHus/Workpackage6_Virtual_Secure_Mode.pdf?__blob=publicationFile&v=2) by [The BSI](https://www.bsi.bund.de/EN/TheBSI/thebsi_node.html)
 
 
 ## Troubleshooting
@@ -148,18 +155,18 @@ To add Kaspersky bootloader digital signature to the Secure Boot Forbidden Signa
 
 Also, starting from Windows 10 2004 (build 19041) dbx variable is being updated with banned bootloader hash during operating system setup, so, if after the backdoor install your system becomes unbootable &minus; just disable or reset Secure Boot.
 
-By default `bootkit_installer.ps1` is placing 1-st stage Kaspersky bootloader as `\EFI\Microsoft\Boot\bootmgfw.efi` (Windows EFI bootloader) and `\EFI\Boot\bootx64.efi` (default EFI bootloader) files on EFI System Parition, if after the backdoor install your system boots as usual but you don't see Hyper-V backdoor red splash screen &minus; ensure that firmware is configured to use proper bootloader.
+By default `bootkit_installer.ps1` is placing 1-st stage Kaspersky bootloader as `\EFI\Microsoft\Boot\bootmgfw.efi` (Windows EFI bootloader) and `\EFI\Boot\bootx64.efi` (default EFI bootloader) files on EFI System Parition, if after the backdoor install your system boots as usual but you don't see Hyper-V Backdoor red splash screen &minus; ensure that firmware is configured to use proper bootloader.
 
 
 ## Deploying the Backdoor Using Firmware Flash Infection
 
-To infect platform firmware stored in flash chip on the motherboard you will need some SPI flash programmer, I prefer to use cheap and widely available [FT2232H Mini Module](https://www.ftdichip.com/Support/Documents/DataSheets/Modules/DS_FT2232H_Mini_Module.pdf) from FTDI. Also, there's a [board called Tigrad](https://www.crowdsupply.com/securinghw/tigard) &minus; multi-protocol, multi-voltage tool for hardware hacking that cat work as SPI flash programmer. In addition to the programmer you also will need the following tools:
+To infect platform firmware stored in the flash chip on the motherboard you will need some SPI flash programmer, I prefer to use cheap and widely available [FT2232H Mini Module](https://www.ftdichip.com/Support/Documents/DataSheets/Modules/DS_FT2232H_Mini_Module.pdf) from FTDI. Also, there's a [board called Tigrad](https://www.crowdsupply.com/securinghw/tigard) &minus; multi-protocol, multi-voltage tool for hardware hacking that cat work as SPI flash programmer. In addition to the programmer you also will need the following tools:
 
-* [UEFITool](https://github.com/LongSoft/UEFITool/releases/tag/0.28.0) utility
+ * [UEFITool](https://github.com/LongSoft/UEFITool/releases/tag/0.28.0) utility to parse and edit UEFI flash images. 
 
-* [Flashrom](https://github.com/flashrom/flashrom/releases/tag/v1.2) utility
+ * [Flashrom](https://github.com/flashrom/flashrom/releases/tag/v1.2) utility to work with SPI flash programmer.
 
-* SOIC8 [test clip](https://www.sparkfun.com/products/13153) or [probe hook](https://www.sparkfun.com/products/9741) clips kit
+ * SOIC8 [test clip](https://www.sparkfun.com/products/13153) or [probe hook](https://www.sparkfun.com/products/9741) clips kit to connect programmer to the flash chip without its desoldering.
 
 First of all, you have to disassemble the machine and locate flash chip with platform firmware. Usually, it's [W25Q64](https://www.winbond.com/resource-files/w25q64fv%20revq%2006142016.pdf) or [W25Q128](https://www.winbond.com/resource-files/w25q128fv_revhh1_100913_website1.pdf) Windbond NOR flash in SOIC8 package. Then you have to connect the chip to the FT2232H Mini Module: 
 
@@ -177,9 +184,9 @@ Now you can read flash chip contents using Flashrom:
 
 After that you need to open dunped firmware in UEFITool, locate arbitrary UEFI DXE driver to infect and extract its PE32 image section from the firmware image:
 
-<img src="https://raw.githubusercontent.com/Cr4sh/s6_pcie_microblaze/master/docs/images/uefi_tool.png" width="721" height="484">
+<img src="https://raw.githubusercontent.com/Cr4sh/s6_pcie_microblaze/master/docs/images/uefi_tool.png" width="728" height="467">
 
-For example, I chosed `Bds.efi` DXE driver responsible for boot device selection as pretty much suitable one. Then you can infect extracted driver with Hyper-V backdoor using `infector.py` program:
+For example, I picked `Bds.efi` DXE driver responsible for boot device selection as pretty much suitable one. Then you can infect extracted driver with Hyper-V Backdoor using `infector.py` program:
 
 ```
 > python infector.py --dxe-driver DmaBackdoorHv_X64.efi --infect Bds.efi --output Bds_infected.efi
@@ -193,9 +200,9 @@ After that you have to replace original driver image with `Bds_infected.efi` one
 
 ## Deploying the Backdoor Using Windows Boot Manager Infection
 
-In case when you don't have any specialized hardware and also when you don't have ability to run signed Kaspersky bootloader on your system with Secure Boot enabled you can disable Secure Boot and deploy Hyper-V backdoor using Windows Boot Manager image file infection. In this case Hyper-V backdoor driver will emulate enabled Secure Boot by hooking of UEFI runtime functions so infected system will able to load all virtualization-based security features just as usual.
+In case when you don't have any specialized hardware and also when you don't have ability to run signed Kaspersky bootloader on your system with Secure Boot enabled you can disable Secure Boot and deploy Hyper-V Backdoor using Windows Boot Manager image file infection. In this case Hyper-V Backdoor driver will emulate enabled Secure Boot by hooking of UEFI runtime functions so infected system will able to load all virtualization-based security features just as usual.  
 
-To infect Windows Boot Manager you have to perform the following steps.
+To infect Windows Boot Manager you have to perform the following steps.  
 
 Mount EFI system partition where Windows Boot Manager image file is stored:
 
@@ -209,7 +216,7 @@ Backup original image file:
 C:\> copy S:\EFI\Microsoft\Boot\bootmgfw.efi S:\EFI\Microsoft\Boot\bootmgfw_orig.efi
 ```
 
-Infect original image file with Hyper-V backdoor:
+Infect original image file with Hyper-V Backdoor:
 
 ```
 C:\> python .\infector.py --patch-integrity-checks --dxe-driver .\DmaBackdoorHv_X64.efi ^ 
@@ -230,7 +237,7 @@ New image size is 0x001c20a0
 [+] DONE
 ```
 
-Unmount EFI system partition
+Unmount EFI system partition:
 
 ```
 C:\> mountvol S: /D
@@ -640,7 +647,7 @@ Show list of the running VTL1 trustlets:
 
 ```
 
-On the example above you can see LSAIso trustlet process that belongs to the Windows Credential Guard and demo trustlet that was loaded using the Hyper-V backdoor. In order to execute the trustlet in Isolated User Mode Microsoft introduced `CREATE_SECURE_PROCESS` flag of `CreateProcess` [API function](https://docs.microsoft.com/en-us/windows/win32/procthread/process-creation-flags). Trustlet executable must have valid Microsoft digital signature with the Windows System Component Verification (1.3.6.1.4.311.10.3.6) Enhanced Key Usage property. To bypass this requirement I made `trustlet_loader.exe` tool that utilizes Hyper-V backdoor functionality to perform in-memory patching of `skci.dll` image responsible for VTL1 code integrity used by Secure Kernel.
+On the example above you can see LSAIso trustlet process that belongs to the Windows Credential Guard and demo trustlet that was loaded using the Hyper-V Backdoor. In order to execute the trustlet in Isolated User Mode Microsoft introduced `CREATE_SECURE_PROCESS` flag of `CreateProcess` [API function](https://docs.microsoft.com/en-us/windows/win32/procthread/process-creation-flags). Trustlet executable must have valid Microsoft digital signature with the Windows System Component Verification (1.3.6.1.4.311.10.3.6) Enhanced Key Usage property. To bypass this requirement I made `trustlet_loader.exe` tool that utilizes Hyper-V Backdoor functionality to perform in-memory patching of `skci.dll` image responsible for VTL1 code integrity used by Secure Kernel.
 
 Example of loading 3-rd party VTL1 trustlet:
 
@@ -716,7 +723,7 @@ Debuggee initialization failed, NTSTATUS 0xC0000022
 {Access Denied}  A process has requested access to an object, but has not been granted those access rights.
 ```
 
-Hyper-V backdoor client allows to patch `ImagePolicyIdDebug` property of specified trustlet process to allow its debugging:
+Hyper-V Backdoor client allows to patch `ImagePolicyIdDebug` property of specified trustlet process to allow its debugging:
 
 ```
 > .\backdoor_client.exe 0 --sk-debug-enable 792
@@ -770,25 +777,25 @@ ntdll!DbgBreakPoint:
 
 ## Building From the Source Code
 
-To build Hyper-V backdoor UEFI DXE driver you have to perform the following steps:
+To build Hyper-V Backdoor UEFI DXE driver you have to perform the following steps:
 
-1. Copy `payloads` subdirectory into the [EDK2](https://github.com/tianocore/edk2) source code directory.
+ 1. Copy `payloads` subdirectory into the [EDK2](https://github.com/tianocore/edk2) source code directory.
 
-2. Edit EDK2 `Conf/target.txt` file and set `ACTIVE_PLATFORM` value to `OvmfPkg/OvmfPkgX64.dsc`.
+ 2. Edit EDK2 `Conf/target.txt` file and set `ACTIVE_PLATFORM` value to `OvmfPkg/OvmfPkgX64.dsc`.
 
-3. Edit EDK2 `OvmfPkg/OvmfPkgX64.dsc` and add `payloads/DmaBackdoorHv/DmaBackdoorHv.inf` line at the end of the file.
+ 3. Edit EDK2 `OvmfPkg/OvmfPkgX64.dsc` and add `payloads/DmaBackdoorHv/DmaBackdoorHv.inf` line at the end of the file.
 
-4. Run Visual Studio Command Prompt and cd to the EDK2 directory.
+ 4. Run Visual Studio Command Prompt and cd to the EDK2 directory.
 
-5. Run `Edk2Setup.bat --pull` to configure build environment and download required binaries.
+ 5. Run `Edk2Setup.bat --pull` to configure build environment and download required binaries.
 
-6. Run `cd payloads/DmaBackdoorHv && nmake` to build DXE driver.
+ 6. Run `cd payloads/DmaBackdoorHv && nmake` to build DXE driver.
 
-7. Run `nmake orom` to generate UEFI option ROM.
+ 7. Run `nmake orom` to generate UEFI option ROM.
 
-8. Open [WSL command prompt](https://docs.microsoft.com/en-us/windows/wsl/install-win10) and run `make chainloader` to download GRUB2, apply `grub-2.02_chainloader.patch` and build chain-loader module.
+ 8. Open [WSL command prompt](https://docs.microsoft.com/en-us/windows/wsl/install-win10) and run `make chainloader` to download GRUB2, apply `grub-2.02_chainloader.patch` and build chain-loader module.
 
-9. Run `nmake installer` to generate `bootkit_installer.ps1` program.
+ 9. Run `nmake installer` to generate `bootkit_installer.ps1` program.
 
-10. To build backdoor client you need Python 2.7.x, Visual Studio 2013 or newer and [Windows Driver Kit 7.1.0](https://www.microsoft.com/en-sg/download/details.aspx?id=11800). Edit WDK folders path in `wdk_dirs.props` and `wdk_dirs_amd64.props` files and then just compile solution `backdoor_client.sln` in Visual Studio.
+ 10. To build backdoor client you need Python 2.7.x, Visual Studio 2013 or newer and [Windows Driver Kit 7.1.0](https://www.microsoft.com/en-sg/download/details.aspx?id=11800). Edit WDK folders path in `wdk_dirs.props` and `wdk_dirs_amd64.props` files and then just compile `backdoor_client.sln` solution in Visual Studio.
 
