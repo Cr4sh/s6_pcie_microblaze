@@ -23,11 +23,11 @@ The backdoor can be deployed in various of ways:
 
  * Windows boot manager image file infection with emulation of enabled UEFI secure boot. This method requires initially disabled UEFI Secure Boot.
 
-Backdoor supports all 64-bit versions of Windows 7, 8, 8.1 and 10 in UEFI boot mode. As payload it can run any kernel driver or DLL image file, for example: [Meterpreter](https://docs.rapid7.com/metasploit/working-with-payloads/) along with any others [Metasploit framework](https://www.metasploit.com/) payloads, [Micro Backdoor](https://github.com/Cr4sh/MicroBackdoor) or DMA Shell (part of this repository).
+Backdoor supports all 64-bit versions of Windows 7, 8, 8.1 and 10 in UEFI boot mode. As payload it can run any kernel driver or DLL image file, for example: [Meterpreter](https://docs.rapid7.com/metasploit/working-with-payloads/) along with any others [Metasploit framework](https://www.metasploit.com/) payloads, [Micro Backdoor](https://github.com/Cr4sh/MicroBackdoor) or [DMA Shell](#using-boot-backdoor-with-dma-shell-payload).
 
 Variety of payloads and deployment methods makes Boot Backdoor suitable for penetration testing (as method of persistence), DMA attacks, supply chain attacks and research purposes.
 
-Here you can see a demo of Boot Backdoor + DMA Shell in action, [Xilinx ZC706 evaluation kit](https://github.com/Cr4sh/zc_pcie_dma) was used as rogue PCI-E device to perform pre-boot DMA attack:
+Here you can see some demo of Boot Backdoor + DMA Shell in action, [Xilinx ZC706 evaluation kit](https://github.com/Cr4sh/zc_pcie_dma) was used as rogue PCI-E device to perform pre-boot DMA attack:
 
 [![asciicast](https://asciinema.org/a/410996.svg)](https://asciinema.org/a/410996)
 
