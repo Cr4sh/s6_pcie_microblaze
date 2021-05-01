@@ -21,7 +21,7 @@ The backdoor can be deployed in various of ways:
 
  * UEFI bootkit based on the infection of the platform firmware stored in [SPI flash chip on the motherboard](https://raw.githubusercontent.com/Cr4sh/blog/master/uefi-boot-script-expl/spi-flash-chips.jpg), which is suitable for supply chain attacks. This method can be used with enabled UEFI Secure Boot as well but only on machines without Intel Boot Guard.
 
- * Windows boot manager image file infection with emulation of enabled UEFI secure boot. This method requires initially disabled UEFI Secure Boot.
+ * Windows boot manager image file infection. This method requires initially disabled UEFI Secure Boot but able to work with no physical access to the target machine.
 
 Backdoor supports all 64-bit versions of Windows 7, 8, 8.1 and 10 in UEFI boot mode. As payload it can run any kernel driver or DLL image file, for example: [Meterpreter](https://docs.rapid7.com/metasploit/working-with-payloads/) along with any others [Metasploit framework](https://www.metasploit.com/) payloads, [Micro Backdoor](https://github.com/Cr4sh/MicroBackdoor) or [DMA Shell](#using-boot-backdoor-with-dma-shell-payload).
 
