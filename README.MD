@@ -58,7 +58,7 @@ This repository contains a set of tools and proof of concepts related to PCI-E b
 
 ## SP605 board configuration
 
-<img src="https://raw.githubusercontent.com/Cr4sh/s6_pcie_microblaze/master/docs/images/board.jpg" width="800" height="415">
+<img src="https://raw.githubusercontent.com/Cr4sh/s6_pcie_microblaze/master/docs/images/board.jpg" width="800">
 
 Xilinx UG526 document also known as [SP605 Hardware User Guide](https://www.xilinx.com/support/documentation/boards_and_kits/ug526.pdf) is your best friend if you want to know more details about usage and configuration of this nice board.
 
@@ -197,7 +197,7 @@ $ lspci -vvs 01:00.0
 
 Example of PCI-E device as it shown in Apple macOS hardware information when connected to the Thunderbolt 2 port of MacBook Pro:
 
-<img src="https://raw.githubusercontent.com/Cr4sh/s6_pcie_microblaze/master/docs/images/macos_pcie.png" width="623" height="369">
+<img src="https://raw.githubusercontent.com/Cr4sh/s6_pcie_microblaze/master/docs/images/macos_pcie.png" width="623">
 
 
 On the attacker side you can use `pcie_cfg.py` program to view configuration space registers of PCI-E device:
@@ -413,7 +413,7 @@ print('%.2x' % dev.mem_read_1(0x1000))
 
 One of the main goals of this project is providing flexible and convenient set of tools to perform so called pre-boot DMA attacks, in comparison with regular DMA attacks they are targeting pre-boot environment of UEFI DXE phase of the platform initialization rather than operating system itself. Such attacks allows to run malicious code at relatively early stages when [IOMMU](https://en.wikipedia.org/wiki/Input%E2%80%93output_memory_management_unit) and other security features of the operating system are not initialized yet. 
 
-<img src="https://raw.githubusercontent.com/Cr4sh/s6_pcie_microblaze/master/docs/images/boot_phases.jpg" style="border: 0px;" height="430" width="610"></img>
+<img src="https://raw.githubusercontent.com/Cr4sh/s6_pcie_microblaze/master/docs/images/boot_phases.jpg" width="610">
 
 Pre-boot DMA attacks allows to bypass various security features of the platform firmware like UEFI secure boot or [Intel Boot Guard](https://edk2-docs.gitbook.io/understanding-the-uefi-secure-boot-chain/secure_boot_chain_in_uefi/intel_boot_guard).
 
@@ -433,7 +433,7 @@ $ ./uefi_backdoor_simple.py --driver payloads/DmaBackdoorSimple/DmaBackdoorSimpl
 
 5) Power on the target computer, in case of successful attack after the couple of seconds you will see red debug messages screen of injected UEFI DXE driver:
 
-<img src="https://raw.githubusercontent.com/Cr4sh/s6_pcie_microblaze/master/docs/images/backdoor_simple.png" width="540" height="174">
+<img src="https://raw.githubusercontent.com/Cr4sh/s6_pcie_microblaze/master/docs/images/backdoor_simple.png" width="540">
 
 An example of `uefi_backdoor_simple.py` console output after the successful attack:
 

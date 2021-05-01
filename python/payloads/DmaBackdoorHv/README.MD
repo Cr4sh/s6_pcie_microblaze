@@ -132,11 +132,11 @@ Virtualization-based Security is relying on UEFI Secure Boot enabled, so, to loa
 
 Luckily, such digitally signed 3-rd party bootloader can be taken form [Kaspersky Rescue Disk 18](https://support.kaspersky.com/viruses/krd18). This bootloader is actually just [GRUB 2.02](https://www.gnu.org/software/grub/index.html) that was compiled without disabling some dangerous built-in commands like `rmmod` and `insmod`. This commands can be used by attacker to load malicious [GRUB chain-loader](https://www.gnu.org/software/grub/manual/grub/html_node/Chain_002dloading.html) module and effectively bypass UEFI Secure Boot.
 
-<img src="https://raw.githubusercontent.com/Cr4sh/s6_pcie_microblaze/master/docs/images/backdoor_boot.png" width="694" height="371">
+<img src="https://raw.githubusercontent.com/Cr4sh/s6_pcie_microblaze/master/docs/images/backdoor_boot.png" width="694">
 
 To install Hyper-V Backdoor along with the Kaspersky bootloader there's a program called `bootkit_installer.ps1` that embeds all needed executables. Use `-Install` command line key to install Hyper-V Backdoor as bootkit or `-Uninstall` to revert original bootloader.
 
-<img src="https://raw.githubusercontent.com/Cr4sh/s6_pcie_microblaze/master/docs/images/backdoor_bootkit.png" width="710" height="420">
+<img src="https://raw.githubusercontent.com/Cr4sh/s6_pcie_microblaze/master/docs/images/backdoor_bootkit.png" width="710">
 
 To get more information about Virtualization-based Security and Virtual Secure Mode please refer to the following materials:
 
@@ -170,11 +170,11 @@ To infect platform firmware stored in the flash chip on the motherboard you will
 
 First of all, you have to disassemble the machine and locate SPI flash chip with platform firmware. Usually, it's [W25Q64](https://www.winbond.com/resource-files/w25q64fv%20revq%2006142016.pdf) or [W25Q128](https://www.winbond.com/resource-files/w25q128fv_revhh1_100913_website1.pdf) Windbond NOR flash in SOIC8 package. Then you have to connect the chip to the FT2232H Mini Module: 
 
-<img src="https://raw.githubusercontent.com/Cr4sh/s6_pcie_microblaze/master/docs/images/spi_probe.jpg" width="650" height="449">
+<img src="https://raw.githubusercontent.com/Cr4sh/s6_pcie_microblaze/master/docs/images/spi_probe.jpg" width="650">
 
 It’s more convenient to use SOIC8 test clip than probe hook clips, but very often there’s not enough free space around the chip to place test clip. Flash chip must be connected to the channel A of FT2232 Mini Module by the following scheme:
 
-<img src="https://raw.githubusercontent.com/Cr4sh/s6_pcie_microblaze/master/docs/images/spi_wiring.png" width="542" height="237">
+<img src="https://raw.githubusercontent.com/Cr4sh/s6_pcie_microblaze/master/docs/images/spi_wiring.png" width="542">
 
 Now you can read flash chip contents using Flashrom:
 
@@ -184,7 +184,7 @@ Now you can read flash chip contents using Flashrom:
 
 After that you need to open dumped firmware in UEFITool, locate arbitrary UEFI DXE driver to infect and extract its PE32 image section from the firmware image:
 
-<img src="https://raw.githubusercontent.com/Cr4sh/s6_pcie_microblaze/master/docs/images/uefi_tool.png" width="721" height="484">
+<img src="https://raw.githubusercontent.com/Cr4sh/s6_pcie_microblaze/master/docs/images/uefi_tool.png" width="721">
 
 For example, I picked `Bds.efi` DXE driver responsible for boot device selection as pretty much suitable one. Then you can infect extracted driver with Hyper-V Backdoor using `infector.py` program:
 
@@ -550,7 +550,7 @@ Loading arbitrary kernel drivers into the specified hypervisor partition from an
 [+] DONE
 ```
 
-<img src="https://raw.githubusercontent.com/Cr4sh/s6_pcie_microblaze/master/docs/images/backdoor_vm_inject.png" width="749" height="498">
+<img src="https://raw.githubusercontent.com/Cr4sh/s6_pcie_microblaze/master/docs/images/backdoor_vm_inject.png" width="749">
 
 This functionality also can be used for [Hypervisor-Protected Code Integrity](https://docs.microsoft.com/en-us/windows-hardware/drivers/bringup/device-guard-and-credential-guard) (HVCI) bypass to load arbitrary kernel drivers.
 

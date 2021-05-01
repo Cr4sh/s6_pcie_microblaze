@@ -193,7 +193,7 @@ Now you can read flash chip contents using Flashrom:
 
 After that you need to open dumped firmware in UEFITool, locate arbitrary UEFI DXE driver to infect and extract its PE32 image section from the firmware image:
 
-<img src="https://raw.githubusercontent.com/Cr4sh/s6_pcie_microblaze/master/docs/images/uefi_tool.png" width="721" height="484">
+<img src="https://raw.githubusercontent.com/Cr4sh/s6_pcie_microblaze/master/docs/images/uefi_tool.png" width="721">
 
 For example, I picked `Bds.efi` DXE driver responsible for boot device selection as pretty much suitable one. Then you can infect extracted driver with Boot Backdoor using `infector.py` program:
 
@@ -451,7 +451,7 @@ Hooking LocateProtocol(): 0x7a3987b4 -> 0x000c0908
 
 When operating system startup is complete Boot Backdoor will inject its payload into the system process and you will see new client in the web interface of Micro Backdoor server:
 
-<img src="https://raw.githubusercontent.com/Cr4sh/s6_pcie_microblaze/master/docs/images/micro_backdoor_web.png" width="827" height="420">
+<img src="https://raw.githubusercontent.com/Cr4sh/s6_pcie_microblaze/master/docs/images/micro_backdoor_web.png" width="827">
 
 
 ## Using boot backdoor with Meterpreter payload
