@@ -213,11 +213,11 @@ BOOLEAN InjectIntoStartedProcess(PCLIENT_ID ClientId, PEPROCESS Process, PVOID D
                     memcpy(ImageData, TargetEntry, INJECT_PATCH_SIZE);
 #ifdef _X86_
                     // push Entry
-                    *(PUCHAR)TargetImageEntry = 0x68;
-                    *(PULONG)((PUCHAR)TargetImageEntry + 1) = (ULONG)LibraryImageEntry;
+                    *(PUCHAR)TargetEntry = 0x68;
+                    *(PULONG_PTR)(TargetEntry + 1) = (ULONG_PTR)ImageEntry;
                         
                     // ret
-                    *(PUCHAR)((PUCHAR)TargetImageEntry + 5) = 0xc3;                                                
+                    *(PUCHAR)(TargetEntry + 5) = 0xc3;                                                
 #else _AMD64_
                     // mov  rax, Entry
                     *(PUSHORT)TargetEntry = 0xb848;
