@@ -124,9 +124,9 @@ You can use `--driver` option of `uefi_backdoor_hv.py` to specify an alternative
 
 ## Deploying the backdoor using signed Kaspersky bootloader
 
-[Windows Virtualization-based Security (VBS)](https://docs.microsoft.com/en-us/windows-hardware/design/device-experiences/oem-vbs) uses hardware virtualization features and Hyper-V to host a number of security solutions, providing them with greatly increased protection from vulnerabilities in the operating system, and preventing the use of malicious exploits which attempt to defeat protections. One of the examples of such services is [Hypervisor-Enforced Code Integrity](https://docs.microsoft.com/en-us/windows/security/threat-protection/device-guard/enable-virtualization-based-protection-of-code-integrity) which uses VBS to significantly strengthen code integrity policy enforcement.
+[Windows Virtualization-based Security (VBS)](https://docs.microsoft.com/en-us/windows-hardware/design/device-experiences/oem-vbs) uses hardware virtualization features and Hyper-V to host a number of security solutions, providing them with greatly increased protection from vulnerabilities in the operating system, and preventing the use of malicious exploits which attempt to defeat protections. One of such services is [Hypervisor-Enforced Code Integrity](https://docs.microsoft.com/en-us/windows/security/threat-protection/device-guard/enable-virtualization-based-protection-of-code-integrity) which uses VBS to significantly strengthen code integrity policy enforcement.
 
-Another example of VSB based security feature is [Windows Credential Guard](https://docs.microsoft.com/en-us/windows/security/identity-protection/credential-guard/credential-guard). Hyper-V functionality is employed to logically divide the system into two separate "worlds": the normal world (VTL0) running the NT kernel that we’re all familiar with and a separate secure world (VTL1) running a Secure Kernel (SK). Enabled Credential Guard causes the LSA process (LSASS) to remain in the Host OS running in the normal world, and a special, additional instance of LSA (called LSAIso – which stands for LSA Isolated) to remain as trustlet running in the secure world. Because isolated LSAIso trustlet responsible for protecting domain credentials is running in the secure world, attacker who managed to gain Administrator privileges within normal world is not able to use [Mimikatz](https://github.com/gentilkiwi/mimikatz) like tools to steal credentials from the memory.
+Another example of VSB based security feature is [Windows Credential Guard](https://docs.microsoft.com/en-us/windows/security/identity-protection/credential-guard/credential-guard). Hyper-V functionality is employed to logically divide the system into two separate "worlds": the normal world (VTL0) running a regular NT kernel that we’re all familiar with and a separate secure world (VTL1) running a Secure Kernel. Enabled Credential Guard causes first LSA process `lsass.exe` to remain in the Host OS running in the normal world, and a special, second LSA process (called `LSAIso.exe` – which stands for LSA Isolated) to remain as trustlet running in the Isolated User Mode (IUM) of secure world. And bacause `LSAIso.exe` trustlet responsible for protecting domain credentials is running in the secure world, attacker who managed to gain Administrator privileges within normal world is not able to use [Mimikatz](https://github.com/gentilkiwi/mimikatz) like tools to steal credentials from its memory.
 
 Virtualization-based Security is relying on UEFI Secure Boot enabled, so, to load Hyper-V Backdoor on VBS enabled machines we should not disrupt the Secure Boot configuration. One of the possible ways to do that is injecting Hyper-V Backdoor using pre-boot DMA attack which was described in [PCI Express DIY hacking toolkit](https://github.com/Cr4sh/s6_pcie_microblaze) documentation. Another possible way &minus; use signed 3-rd party bootloader as part of secure boot chain which functionality can be abused to load Hyper-V Backdoor UEFI DXE driver whithout digital sugnature verification just before passing the execution to the legitimate Windows Boot Manager. 
 
@@ -140,13 +140,13 @@ To install Hyper-V Backdoor along with the Kaspersky bootloader there's a progra
 
 To get more information about Virtualization-based Security and Virtual Secure Mode please refer to the following materials:
 
- * [Hyper-V Hypervisor Top-Level Functional Specification](https://docs.microsoft.com/en-us/virtualization/hyper-v-on-windows/reference/tlfs) 
-
- * [Battle Of The SKM And IUM: How Windows 10 Rewrites OS Architecture](https://www.youtube.com/watch?v=LqaWIn4y26E) by [Alex Ionescu](https://twitter.com/aionescu)
-
  * [Live forensics on the Windows 10 secure kernel](https://www.semanticscholar.org/paper/Live-forensics-on-the-Windows-10-secure-kernel.-Brendmo/e275cc28c5c8e8e158c45e5e773d0fa3da01e118) by Hans Kristian Brendmo
 
  * [Work Package 6: Virtual Secure Mode](https://www.bsi.bund.de/SharedDocs/Downloads/DE/BSI/Cyber-Sicherheit/SiSyPHus/Workpackage6_Virtual_Secure_Mode.pdf?__blob=publicationFile&v=2) by [The BSI](https://www.bsi.bund.de/EN/TheBSI/thebsi_node.html)
+
+ * [Battle Of The SKM And IUM: How Windows 10 Rewrites OS Architecture](https://www.youtube.com/watch?v=LqaWIn4y26E) by [Alex Ionescu](https://twitter.com/aionescu)
+
+ * [Breaking VSM by Attacking Secure Kernel](https://i.blackhat.com/USA-20/Thursday/us-20-Amar-Breaking-VSM-By-Attacking-SecureKernal.pdf) by [Saar Amar](https://twitter.com/AmarSaar) and [Daniel King](https://twitter.com/long123king)
 
 
 ## Troubleshooting
