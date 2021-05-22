@@ -2632,6 +2632,7 @@ int _tmain(int argc, _TCHAR* argv[])
         printf("      Hypervisor CR4: 0x%llx\n", bd_info.cr4);
         printf(" Hypervisor IDT base: 0x%llx (limit = 0x%x)\n", bd_info.idt_base, bd_info.idt_limit);
         printf("  Hypervisor GS base: 0x%llx\n", bd_info.gs_base);
+        printf("        VMCS address: 0x%llx\n", bd_info.vmcs_addr);
         printf("     VM exit handler: 0x%llx\n", bd_info.vm_exit_addr);
         printf("       VM exit count: 0x%llx\n", bd_info.vm_exit_count);
         printf("       VM call count: 0x%llx\n\n", bd_info.vm_call_count);

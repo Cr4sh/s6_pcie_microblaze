@@ -15,6 +15,7 @@
 #define HVBD_C_SK_GET_START     0x09    // start collecting secure kernel information
 #define HVBD_C_SK_GET_STOP      0x0a    // stop collecting secure kernel information
 #define HVBD_C_INVL_CACHES      0x0b    // invalidate processpr caches and flush TLB
+#define HVBD_C_GET_VMCS         0x0c    // get current VMCS address
 
 /*
     backdoor_call() return values

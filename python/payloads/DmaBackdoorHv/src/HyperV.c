@@ -126,13 +126,13 @@ VOID HyperVBackdoor(VOID *arg_1, VOID *arg_2, VOID *arg_3, VOID *arg_4)
         }
         else if (Code == HVBD_C_INFO_EX)
         {
-            *Arg0 = *Arg1 = 0;            
+            *Arg0 = *Arg1 = 0;
 
             // return hypervisor IDTR
             __sidt(Arg0);
 
             // return hypervisor GS segment base
-            *Arg2 = __readgsqword(0);            
+            *Arg2 = __readgsqword(0);        
 
             Status = EFI_SUCCESS;
         }
@@ -222,6 +222,15 @@ VOID HyperVBackdoor(VOID *arg_1, VOID *arg_2, VOID *arg_3, VOID *arg_4)
 
             // flush TLB
             __writecr3(__readcr3());
+
+            Status = EFI_SUCCESS;
+        }
+        else if (Code == HVBD_C_GET_VMCS)
+        {
+            *Arg0 = *Arg1 = *Arg2 = 0;
+
+            // read current VMCS address
+            __vmx_vmptrst(Arg0);
 
             Status = EFI_SUCCESS;
         }

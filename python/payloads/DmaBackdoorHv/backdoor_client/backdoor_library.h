@@ -54,6 +54,7 @@ typedef struct _HVBD_INFO
     uint64_t vm_exit_addr;
     uint64_t vm_exit_count;
     uint64_t vm_call_count;
+    uint64_t vmcs_addr;
 
 } HVBD_INFO;
 

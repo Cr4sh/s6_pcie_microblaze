@@ -106,6 +106,16 @@ int backdoor_info(HVBD_INFO *info)
     info->vm_exit_count = arg1;
     info->vm_call_count = arg2;
 
+    // query VMCS address
+    ret = backdoor_call(HVBD_C_GET_VMCS, &arg0, &arg1, &arg2);
+    if (ret != HVBD_E_SUCCESS)
+    {
+        bd_printf(__FUNCTION__"() ERROR: backdoor returned error 0x%llx\n", ret);
+        return -1;
+    }
+
+    info->vmcs_addr = arg0;
+
     return 0;
 }
 //--------------------------------------------------------------------------------------
