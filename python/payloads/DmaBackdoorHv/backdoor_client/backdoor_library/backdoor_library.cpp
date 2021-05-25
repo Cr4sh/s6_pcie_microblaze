@@ -36,22 +36,6 @@
 
 bool m_quiet = true;
 //--------------------------------------------------------------------------------------
-int backdoor_invalidate_caches(void)
-{
-    uint64_t arg0 = 0;
-    uint64_t arg1 = 0;
-    uint64_t arg2 = 0;
-
-    uint64_t ret = backdoor_call(HVBD_C_INVL_CACHES, &arg0, &arg1, &arg2);
-    if (ret != HVBD_E_SUCCESS)
-    {
-        bd_printf(__FUNCTION__"() ERROR: backdoor returned error 0x%llx\n", ret);
-        return -1;
-    }
-
-    return 0;
-}
-//--------------------------------------------------------------------------------------
 int backdoor_info(HVBD_INFO *info)
 {
     uint64_t arg0 = 0;
@@ -115,6 +99,44 @@ int backdoor_info(HVBD_INFO *info)
     }
 
     info->vmcs_addr = arg0;
+
+    return 0;
+}
+//--------------------------------------------------------------------------------------
+int backdoor_invalidate_caches(void)
+{
+    uint64_t arg0 = 0;
+    uint64_t arg1 = 0;
+    uint64_t arg2 = 0;
+
+    uint64_t ret = backdoor_call(HVBD_C_INVL_CACHES, &arg0, &arg1, &arg2);
+    if (ret != HVBD_E_SUCCESS)
+    {
+        bd_printf(__FUNCTION__"() ERROR: backdoor returned error 0x%llx\n", ret);
+        return -1;
+    }
+
+    return 0;
+}
+//--------------------------------------------------------------------------------------
+int backdoor_execute(uint64_t func_addr, uint64_t func_arg0, uint64_t func_arg1, uint64_t *func_ret)
+{
+    uint64_t arg0 = func_arg0;
+    uint64_t arg1 = func_arg1;
+    uint64_t arg2 = func_addr;
+
+    uint64_t ret = backdoor_call(HVBD_C_EXECUTE, &arg0, &arg1, &arg2);
+    if (ret != HVBD_E_SUCCESS)
+    {
+        bd_printf(__FUNCTION__"() ERROR: backdoor returned error 0x%llx\n", ret);
+        return -1;
+    }
+
+    if (func_ret)
+    {
+        // return value of the function
+        *func_ret = arg2;
+    }
 
     return 0;
 }

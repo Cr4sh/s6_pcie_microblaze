@@ -72,9 +72,11 @@ typedef enum _HVBD_PTE_SIZE
 #define HVBD_MEM_EXECUTABLE 1
 #define HVBD_MEM_WRITEABLE  2
 
+int backdoor_info(HVBD_INFO *info);
+
 int backdoor_invalidate_caches(void);
 
-int backdoor_info(HVBD_INFO *info);
+int backdoor_execute(uint64_t func_addr, uint64_t func_arg0, uint64_t func_arg1, uint64_t *func_ret);
 
 int backdoor_virt_read(uint64_t addr, void *buff, int size);
 int backdoor_virt_read_64(uint64_t addr, uint64_t *val);

