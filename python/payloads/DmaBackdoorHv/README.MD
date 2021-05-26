@@ -29,7 +29,7 @@ To deploy the backdoor you can use one of the following methods:
 
  * Windows boot manager image file infection with emulation of enabled UEFI secure boot. This method requires intially disabled UEFI Secure Boot.
 
-Backdoor supports 64-bit versions of Windows 10 1709, 1803, 1809, 1903, 1909, 2004 and 20H2 running on Intel systems.
+Backdoor supports 64-bit versions of Windows 10 1709, 1803, 1809, 1903, 1909, 2004, 20H2 and 21H1 running on Intel systems.
 
 
 ## Contents

@@ -502,6 +502,29 @@ BOOLEAN WinloadHook(VOID *WinloadBase)
             HvlpBelow1MbPageAllocated = (Buff + 0x07 + *(INT32 *)(Buff + 0x03));
         }
 
+        /*
+            ... its variation from Windows 10 21H1:
+
+                cmp     cs:byte_1801AA86A, dil
+                jnz     loc_18002403D
+                mov     rcx, [r14+10h]
+                mov     rdx, cs:qword_1801AA970
+                mov     rax, rcx
+                shl     rax, 0Ch
+                cmp     rax, rdx
+                ja      loc_18002403D
+        */
+        else if (*(UINT32 *)(Buff + 0x0d) == 0x104e8b49 &&
+                 *(UINT32 *)(Buff + 0x1b) == 0x0ce0c148 &&
+                 *(Buff + 0x00) == 0x40 && *(Buff + 0x01) == 0x38 && *(Buff + 0x02) == 0x3d &&
+                 *(Buff + 0x11) == 0x48 && *(Buff + 0x12) == 0x8b && *(Buff + 0x13) == 0x15 &&
+                 *(Buff + 0x1f) == 0x48 && *(Buff + 0x20) == 0x3b && *(Buff + 0x21) == 0xc2)
+        {
+            // get mov and cmp instructions operands
+            HvlpBelow1MbPage = (VOID **)(Buff + 0x18 + *(INT32 *)(Buff + 0x14));
+            HvlpBelow1MbPageAllocated = (Buff + 0x07 + *(INT32 *)(Buff + 0x03));
+        }
+
         if (HvlpBelow1MbPage && HvlpBelow1MbPageAllocated)
         {
             DbgMsg(__FILE__, __LINE__, "winload!HvlpBelow1MbPage is at "FPTR"\n", HvlpBelow1MbPage);

