@@ -611,6 +611,89 @@ VOID *HyperVHook(VOID *Image)
                     HookLen = 5;
                     Version = 2004;                    
                 }
+                /*
+                        Windows 11 21H2:
+
+                        vm_handler_call+0  48 89 4C 24 28                                mov     [rsp+arg_20], rcx
+                        vm_handler_call+5  48 8B 4C 24 20                                mov     rcx, [rsp+arg_18]
+                        vm_handler_call+0A  48 8B 09                                      mov     rcx, [rcx]
+                        vm_handler_call+0D  48 89 01                                      mov     [rcx], rax
+                        vm_handler_call+10  48 89 51 10                                   mov     [rcx+10h], rdx
+                        vm_handler_call+14  48 89 59 18                                   mov     [rcx+18h], rbx
+                        vm_handler_call+18  48 89 69 28                                   mov     [rcx+28h], rbp
+                        vm_handler_call+1C  48 89 71 30                                   mov     [rcx+30h], rsi
+                        vm_handler_call+20  48 89 79 38                                   mov     [rcx+38h], rdi
+                        vm_handler_call+24  4C 89 41 40                                   mov     [rcx+40h], r8
+                        vm_handler_call+28  4C 89 49 48                                   mov     [rcx+48h], r9
+                        vm_handler_call+2C  4C 89 51 50                                   mov     [rcx+50h], r10
+                        vm_handler_call+30  4C 89 59 58                                   mov     [rcx+58h], r11
+                        vm_handler_call+34  4C 89 61 60                                   mov     [rcx+60h], r12
+                        vm_handler_call+38  4C 89 69 68                                   mov     [rcx+68h], r13
+                        vm_handler_call+3C  4C 89 71 70                                   mov     [rcx+70h], r14
+                        vm_handler_call+40  4C 89 79 78                                   mov     [rcx+78h], r15
+                        vm_handler_call+44  48 8B 44 24 28                                mov     rax, [rsp+arg_20]
+                        vm_handler_call+49  48 89 41 08                                   mov     [rcx+8], rax
+                        vm_handler_call+4D  48 8D 41 70                                   lea     rax, [rcx+70h]
+                        vm_handler_call+51  0F 29 40 10                                   movaps  xmmword ptr [rax+10h], xmm0
+                        vm_handler_call+55  0F 29 48 20                                   movaps  xmmword ptr [rax+20h], xmm1
+                        vm_handler_call+59  0F 29 50 30                                   movaps  xmmword ptr [rax+30h], xmm2
+                        vm_handler_call+5D  0F 29 58 40                                   movaps  xmmword ptr [rax+40h], xmm3
+                        vm_handler_call+61  0F 29 60 50                                   movaps  xmmword ptr [rax+50h], xmm4
+                        vm_handler_call+65  0F 29 68 60                                   movaps  xmmword ptr [rax+60h], xmm5
+                        vm_handler_call+69  48 8B 54 24 20                                mov     rdx, [rsp+arg_18]
+                        vm_handler_call+6E
+                        vm_handler_call+6E                                loc_FFFFF8000023E3E0:                   ; DATA XREF: sub_FFFFF8000031679C+CF↓o
+                        vm_handler_call+6E  EB 46                                         jmp     short loc_FFFFF8000023E428
+                        vm_handler_call+6E                                ; ---------------------------------------------------------------------------
+                        vm_handler_call+70  45 33 C0 45 33 C9                             dw 3345h, 45C0h, 0C933h
+                        vm_handler_call+3E8  45 33 D2 45 33 DB 66 0F EF C0+                dq 0F66DB3345D23345h, 0F66C9EF0F66C0EFh, 0F66DBEF0F66D2EFh
+                        vm_handler_call+3E8  66 0F EF C9 66 0F EF D2 66 0F+                dq 0ED33EDEF0F66E4EFh, 3345FF33F633DB33h, 45F63345ED3345E4h
+                        vm_handler_call+3E8  EF DB 66 0F EF E4 66 0F EF ED+                dq 6528245C8948FF33h, 0F900000074252480h
+                        vm_handler_call+428                                ; ---------------------------------------------------------------------------
+                        vm_handler_call+428
+                        vm_handler_call+428                                loc_FFFFF8000023E428:                   ; CODE XREF: vm_handler_call:loc_FFFFF8000023E3E0↑j
+                        vm_handler_call+B6  E8 E3 DA FF FF                                call    sub_FFFFF8000023BF10
+                        vm_handler_call+BB  65 C6 04 25 75 00 00 00 00                    mov     byte ptr gs:75h, 0
+                        vm_handler_call+C4  48 8B 4C 24 20                                mov     rcx, [rsp+arg_18]
+                        vm_handler_call+C9  C6 81 05 F7 FF FF 00                          mov     byte ptr [rcx-8FBh], 0
+                        vm_handler_call+D0  F6 05 8F 29 E0 FF 01                          test    byte ptr cs:dword_FFFFF80000040DD8, 1
+                        vm_handler_call+D7  75 0D                                         jnz     short loc_FFFFF8000023E458
+                        vm_handler_call+D9  B8 02 44 00 00                                mov     eax, 4402h
+                        vm_handler_call+DE  0F 78 C6                                      vmread  rsi, rax
+                        vm_handler_call+E1  0F B7 F6                                      movzx   esi, si
+                        vm_handler_call+E4  EB 10                                         jmp     short loc_FFFFF8000023E468
+                        vm_handler_call+E6                                ; ---------------------------------------------------------------------------
+                        vm_handler_call+E6
+                        vm_handler_call+E6                                loc_FFFFF8000023E458:                   ; CODE XREF: vm_handler_call+449↑j
+                        vm_handler_call+E6  65 48 8B 04 25 10 CD 02 00                    mov     rax, gs:2CD10h
+                        vm_handler_call+EF  0F B7 B0 B4 02 00 00                          movzx   esi, word ptr [rax+2B4h]
+                        vm_handler_call+F6
+                        vm_handler_call+F6                                loc_FFFFF8000023E468:                   ; CODE XREF: vm_handler_call+456↑j
+                        vm_handler_call+F6  66 83 FE 01                                   cmp     si, 1
+                        vm_handler_call+FA  75 0A                                         jnz     short loc_FFFFF8000023E478
+                        vm_handler_call+FC  E8 DD F8 FF FF                                call    sub_FFFFF8000023DD50
+                        vm_handler_call+101  48 8B 4C 24 20                                mov     rcx, [rsp+arg_18]
+                        vm_handler_call+106
+                        vm_handler_call+106                                loc_FFFFF8000023E478:                   ; CODE XREF: vm_handler_call+46C↑j
+                        vm_handler_call+106  FB                                            sti
+                        vm_handler_call+107  8B D6                                         mov     edx, esi
+                        vm_handler_call+109  0B 54 24 30                                   or      edx, [rsp+arg_28]
+                        vm_handler_call+10D  E8 AC 38 FE FF                                call    sub_FFFFF80000221D30
+                        vm_handler_call+112  E9 77 FC FF FF                                jmp     loc_FFFFF8000023E100
+
+                */
+                else if (*(Func + 0x00) == 0x48 && *(Func + 0x01) == 0x89 && *(Func + 0x02) == 0x4c && *(Func + 0x03) == 0x24 &&
+                        *(Func + 0x0d) == 0x48 && *(Func + 0x0e) == 0x89 && *(Func + 0x0f) == 0x01 &&
+                        *(Func + 0x10) == 0x48 && *(Func + 0x11) == 0x89 && *(Func + 0x12) == 0x51 && *(Func + 0x13) == 0x10 &&
+                        *(Func + 0x40) == 0x4c && *(Func + 0x41) == 0x89 && *(Func + 0x42) == 0x79 && *(Func + 0x43) == 0x78 &&
+                        *(Func + 0x10D) == 0xe8)
+                {
+                    DbgMsg(__FILE__, __LINE__, __FUNCTION__"(): VM-exit handler for Windows 11 found\r\n");
+                    
+                    Func = (UINT8 *)JUMP32_ADDR(Func + 0x10D);
+                    HookLen = 5;
+                    Version = 2004;
+                }
                 else
                 {
                     Func = NULL;
