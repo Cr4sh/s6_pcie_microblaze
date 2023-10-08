@@ -749,11 +749,6 @@ PCI Express is very complicated high speed bus so there's a lot of things that c
 7) Run `make bitstream && make srec` from Xilinx ISE command prompt to generate needed output files. 
 
 
-## TODO
-
-* Release [DMA to System Management Mode exploit](https://twitter.com/d_olex/status/877718172366798848) when Intel will fix appropriate vulnerability.
-
-
 ## Developed by
 
 Dmytro Oleksiuk (aka Cr4sh)
