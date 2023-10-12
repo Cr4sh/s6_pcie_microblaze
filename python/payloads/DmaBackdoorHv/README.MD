@@ -23,7 +23,7 @@ To deploy the backdoor you can use one of the following methods:
 
  * Pre-boot DMA attack over the PCI Express bus using [PCI Express DIY hacking toolkit](https://github.com/Cr4sh/s6_pcie_microblaze), also compatible with my other [Xilinx Zynq-7000 based design](https://github.com/Cr4sh/zc_pcie_dma) for DMA attacks. This method can be used with enabled UEFI Secure Boot and Intel Boot Guard.
 
- * To deploy Hyper-V backdoor with pre-boot DMA attack you also can use my [Pico DMA project](https://github.com/Cr4sh/pico_dma) &minus; fully autonomous hardware implant for M.2 slot based on PicoEVB development board that can run arbitrary UEFI DXE drivers payload.
+ * To deploy Hyper-V backdoor with pre-boot DMA attack you also can use my [Pico DMA project](https://github.com/Cr4sh/pico_dma) &minus; fully autonomous hardware implant for M.2 slot based on PicoEVB development board that can run arbitrary UEFI DXE drivers as payload.
 
  * UEFI bootkit based on [signed insecure bootloader](https://support.microsoft.com/en-us/help/4524244/security-update-for-windows-10-february-11-2020) from Kaspersky products that [was discovered](https://habr.com/en/post/446238/) by [@ValdikSS](https://twitter.com/valdikss). This method can be used with enabled UEFI Secure Boot as well.
 

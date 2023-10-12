@@ -28,7 +28,7 @@ This repository contains a set of tools and proof of concepts related to PCI-E b
 
 🛠️ **Python tools and payloads from this project, including Hyper-V Backdoor and Boot Backdoor, also can be used with Xilinx Zynq-7000 SoC based boards. There's [a separate project](https://github.com/Cr4sh/zc_pcie_dma) of DMA attacks design for Xilinx ZC706 evaluation kit.**
 
-🛠️ **Python tools and payloads from this project, including Hyper-V Backdoor, also can be used with PicoEVB development board. There's a separate [Pico DMA project](https://github.com/Cr4sh/pico_dma) &minus; fully autonomous pre-boot DMA attack hardware implant for M.2 slot based on PicoEVB development board that can run arbitrary UEFI DXE drivers payload.** 
+🛠️ **Python tools and payloads from this project, including Hyper-V Backdoor, also can be used with PicoEVB development board. There's a separate [Pico DMA project](https://github.com/Cr4sh/pico_dma) &minus; fully autonomous pre-boot DMA attack hardware implant for M.2 slot based on PicoEVB development board that can run arbitrary UEFI DXE drivers as payload.** 
 
 
 ## Contents
