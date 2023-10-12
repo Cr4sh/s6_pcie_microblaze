@@ -20,13 +20,15 @@ This repository contains a set of tools and proof of concepts related to PCI-E b
 
 [Another program](https://github.com/Cr4sh/s6_pcie_microblaze/blob/master/python/uefi_backdoor_boot.py) shows how to use pre-boot DMA attacks to inject arbitrary user mode or kernel mode code into the Windows operating system by hijacking of its boot process using [Boot Backdoor](https://github.com/Cr4sh/s6_pcie_microblaze/blob/master/python/payloads/DmaBackdoorBoot/src/DmaBackdoorBoot.c). This program is also can work with DMA Shell &minus; it's Boot Backdoor payload that allows to execute console commands over the rogue PCI-E device, transfer files and load 3-rd party executables into the target operating system at the runtime.  
 
-⚠️ **Hyper-V Backdoor part of this project has many other features and deployment options than described in this document, you can use it separately from DMA attack tools even without any special hardware: check [its documentation](https://github.com/Cr4sh/s6_pcie_microblaze/tree/master/python/payloads/DmaBackdoorHv)**  
+💾 **Hyper-V Backdoor part of this project has many other features and deployment options than described in this document, you can use it separately from DMA attack tools even without any special hardware: check [its documentation](https://github.com/Cr4sh/s6_pcie_microblaze/tree/master/python/payloads/DmaBackdoorHv)**  
 
-⚠️ **Boot Backdoor part of this project has many other features and deployment options than described in this document, you can use it separately from DMA attack tools even without any special hardware: check [its documentation](https://github.com/Cr4sh/s6_pcie_microblaze/tree/master/python/payloads/DmaBackdoorBoot)**  
+💾 **Boot Backdoor part of this project has many other features and deployment options than described in this document, you can use it separately from DMA attack tools even without any special hardware: check [its documentation](https://github.com/Cr4sh/s6_pcie_microblaze/tree/master/python/payloads/DmaBackdoorBoot)**  
 
-⚠️ **Python tools and payloads from this project, including Hyper-V Backdoor and Boot Backdoor, also can be used with Xilinx Zynq-7000 SoC based boards. There's [a separate project](https://github.com/Cr4sh/zc_pcie_dma) of DMA attacks design for Xilinx ZC706 evaluation kit.**
+💾 **Python tools from this project and hardware designs for SP605/ZC706 boards also can be used to deploy SMM Backdoor Next Gen with pre-boot DMA attack. Check [its documentation](https://github.com/Cr4sh/SmmBackdoorNg) for more technical details.**
 
-⚠️ **Python tools from this project and hardware designs for SP605/ZC706 boards also can be used to deploy SMM Backdoor Next Gen with pre-boot DMA attack. Check [its documentation](https://github.com/Cr4sh/SmmBackdoorNg) for more technical details.**
+⚙️ **Python tools and payloads from this project, including Hyper-V Backdoor and Boot Backdoor, also can be used with Xilinx Zynq-7000 SoC based boards. There's [a separate project](https://github.com/Cr4sh/zc_pcie_dma) of DMA attacks design for Xilinx ZC706 evaluation kit.**
+
+⚙️ **Python tools and payloads from this project, including Hyper-V Backdoor, also can be used with PicoEVB development board. There's a separate [Pico DMA project](https://github.com/Cr4sh/pico_dma) &minus; fully autonomous pre-boot DMA attack hardware implant for M.2 slot based on PicoEVB development board that can run arbitrary UEFI DXE drivers payload.** 
 
 
 ## Contents
