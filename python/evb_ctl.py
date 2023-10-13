@@ -5,9 +5,6 @@ from optparse import OptionParser
 
 from pcie_lib import *
 
-# struct SCAN_CONF location
-SCAN_CONF_OFFS = 8
-
 # struct SCAN_CONF size
 SCAN_CONF_SIZE = 8 * 4
 
@@ -260,8 +257,13 @@ def main():
             # prepare struct SCAN_CONF data
             scan_conf = pack('QQQQ', SCAN_CONF_SIGN, scan_start, scan_end, scan_step)
 
-            # modify payload image DOS header
-            data = data[: SCAN_CONF_OFFS] + scan_conf + data[SCAN_CONF_OFFS + SCAN_CONF_SIZE :]
+        else:
+
+            # use empty structure
+            scan_conf = '\0' * SCAN_CONF_SIZE
+
+        # add struct SCAN_CONF
+        data = scan_conf + data
 
         # query max rom size
         max_size = dev.rom_size()
