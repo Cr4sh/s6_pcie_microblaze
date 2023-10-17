@@ -357,6 +357,10 @@ UINT64 __stdcall new_BlLdrLoadImage(
 
         DbgMsg(__FILE__, __LINE__, __FUNCTION__"(): Path = \"%s\"\r\n", szModulePath);
     }
+    else
+    {
+        DbgMsg(__FILE__, __LINE__, __FUNCTION__"()\r\n");   
+    }
 
     if (Status == 0)
     {

