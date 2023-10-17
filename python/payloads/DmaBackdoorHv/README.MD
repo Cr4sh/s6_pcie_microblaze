@@ -33,7 +33,7 @@ To deploy the backdoor you can use one of the following methods:
 
  * Deployment [duing runtime phase](https://github.com/Cr4sh/SmmBackdoorNg#using-together-with-hyper-v-backdoor) from already running guest or host Hyper-V partition with the help of [SMM Backdoor Next Gen](https://github.com/Cr4sh/SmmBackdoorNg) project, check its documentation for more technical details about this specific deployment method.
 
-Backdoor supports 64-bit versions of Windows 10 1709, 1803, 1809, 1903, 1909, 2004, 20H2 and 21H1 running on Intel systems.
+Backdoor supports 64-bit versions of Windows 10 1709, 1803, 1809, 1903, 1909, 2004, 20H2, 21H1, 21H2 and 22H2 running on Intel systems.
 
 
 ## Contents
