@@ -1755,7 +1755,7 @@ int backdoor_sk_process_list(SK_INFO *sk_info, uint64_t sk_addr_virt, sk_process
                     matched = true;
                 }
                 /*
-                    Windows 11 21H2 and later variation:
+                    Windows 11 21H2 variation:
 
                         .text:000000014002C39E      lea     r8, SkpsProcessList
                         .text:000000014002C3A5      lea     rcx, [rdi+0D0h]
@@ -1776,7 +1776,7 @@ int backdoor_sk_process_list(SK_INFO *sk_info, uint64_t sk_addr_virt, sk_process
                     matched = true;
                 }
                 /*
-                    Windows 11 22H2 and later variation:
+                    Windows 11 22H2 variation:
 
                         .text:000000014002C39E      lea     r8, SkpsProcessList
                         .text:000000014002C3A5      lea     rcx, [rdi+0E0h]
