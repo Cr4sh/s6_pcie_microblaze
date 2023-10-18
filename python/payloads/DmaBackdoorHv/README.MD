@@ -17,7 +17,7 @@
 
 This repository contains Hyper-V Backdoor that might be useful for reverse engineering and exploit development purposes, it [provides an interface](https://github.com/Cr4sh/s6_pcie_microblaze/blob/master/python/payloads/DmaBackdoorHv/backdoor_client/backdoor_library/backdoor_library.cpp) for inspecting of hypervisor state (VMCS, physical/virtual memory, registers, etc.) from guest or host partition and perform VM escape attacks. 
 
-Also, backdoor allows to inspect Secure Kernel and run 3-rd party trustlets in [Isolated User Mode](https://docs.microsoft.com/en-us/windows/win32/procthread/isolated-user-mode--ium--processes), virtualization-based security feature of Windows 10.
+Also, backdoor allows to inspect Secure Kernel and run 3-rd party trustlets in [Isolated User Mode](https://docs.microsoft.com/en-us/windows/win32/procthread/isolated-user-mode--ium--processes), virtualization-based security feature of Windows.
 
 To deploy the backdoor you can use one of the following methods:
 
@@ -33,11 +33,11 @@ To deploy the backdoor you can use one of the following methods:
 
  * Deployment [duing runtime phase](https://github.com/Cr4sh/SmmBackdoorNg#using-together-with-hyper-v-backdoor) from already running guest or host Hyper-V partition with the help of [SMM Backdoor Next Gen](https://github.com/Cr4sh/SmmBackdoorNg) project, check its documentation for more technical details about this specific deployment method.
 
-Backdoor supports the following 64-bit Windows versions on Intel systems: 
+Backdoor supports the following 64-bit Windows systems running on Intel chips: 
   
- * Windows 10 1709, 1803, 1809, 1903, 1909, 2004, 20H2, 21H1, 21H2 and 22H2 &minus; full support with all features and options available.
+ * Windows 10 version 1709, 1803, 1809, 1903, 1909, 2004, 20H2, 21H1, 21H2 and 22H2 &minus; full support with all features and options available.
 
- * Windows 11 21H2 and 22H2 &minus; limited initial support with `--sk-inject` and `--sk-debug-enable` client program commands not working yet.
+ * Windows 11 version 21H2 and 22H2 &minus; limited initial support with `--sk-inject` and `--sk-debug-enable` client program commands not working yet.
 
 
 ## Contents
