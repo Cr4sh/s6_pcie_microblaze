@@ -19,6 +19,8 @@ The backdoor can be deployed in various of ways:
 
  * DMA attack over the PCI Express bus using [PCI Express DIY hacking toolkit](https://github.com/Cr4sh/s6_pcie_microblaze), also compatible with my other [Xilinx Zynq-7000 based design](https://github.com/Cr4sh/zc_pcie_dma) for DMA attacks. This method can be used with enabled UEFI Secure Boot and Intel Boot Guard.
 
+ * To deploy Boot Backdoor with pre-boot DMA attack you also can use my [Pico DMA project](https://github.com/Cr4sh/pico_dma) &minus; fully autonomous hardware implant for M.2 slot based on PicoEVB development board that can run arbitrary UEFI DXE drivers as payload.
+
  * UEFI bootkit based on the infection of the platform firmware stored in [SPI flash chip on the motherboard](https://raw.githubusercontent.com/Cr4sh/blog/master/uefi-boot-script-expl/spi-flash-chips.jpg), which is suitable for supply chain attacks. This method can be used with enabled UEFI Secure Boot as well but only on machines without Intel Boot Guard.
 
  * Windows boot manager image file infection. This method requires initially disabled UEFI Secure Boot but able to work with no physical access to the target machine.

