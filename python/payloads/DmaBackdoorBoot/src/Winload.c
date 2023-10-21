@@ -416,7 +416,7 @@ BOOLEAN WinloadHook(VOID *WinloadBase)
     EFI_IMAGE_SECTION_HEADER *pSection = (EFI_IMAGE_SECTION_HEADER *)RVATOVA(
         &pHeaders->OptionalHeader, pHeaders->FileHeader.SizeOfOptionalHeader);    
 
-    DbgMsg(__FILE__, __LINE__, __FUNCTION__"(): winload image is at "FPTR"\r\n", WinloadBase);
+    DbgMsg(__FILE__, __LINE__, __FUNCTION__"(): winload image address is "FPTR"\r\n", WinloadBase);
 
     // find code section by name
     for (i = 0; i < pHeaders->FileHeader.NumberOfSections; i += 1, pSection += 1)
@@ -523,6 +523,28 @@ BOOLEAN WinloadHook(VOID *WinloadBase)
             // get mov and cmp instructions operands
             HvlpBelow1MbPage = (VOID **)(Buff + 0x18 + *(INT32 *)(Buff + 0x14));
             HvlpBelow1MbPageAllocated = (Buff + 0x07 + *(INT32 *)(Buff + 0x03));
+        }
+        /*
+            ... its variation from Windows 11 22H2:
+
+                cmp     cs:byte_1801D2F0E, bl
+                jnz     loc_1800157A5
+                mov     rcx, [r14+10h]
+                mov     rdx, cs:qword_1801D3058
+                mov     rax, rcx
+                shl     rax, 0Ch
+                cmp     rax, rdx
+                ja      loc_1800157A5
+        */
+        else if (*(UINT32 *)(Buff + 0x0c) == 0x104e8b49 &&
+                 *(UINT32 *)(Buff + 0x1a) == 0x0ce0c148 &&
+                 *(Buff + 0x00) == 0x38 && *(Buff + 0x01) == 0x1d &&
+                 *(Buff + 0x10) == 0x48 && *(Buff + 0x11) == 0x8b && *(Buff + 0x12) == 0x15 &&
+                 *(Buff + 0x1e) == 0x48 && *(Buff + 0x1f) == 0x3b && *(Buff + 0x20) == 0xc2)
+        {
+            // get mov and cmp instructions operands
+            HvlpBelow1MbPage = (VOID **)(Buff + 0x17 + *(INT32 *)(Buff + 0x13));
+            HvlpBelow1MbPageAllocated = (Buff + 0x06 + *(INT32 *)(Buff + 0x02));
         }
 
         if (HvlpBelow1MbPage && HvlpBelow1MbPageAllocated)
