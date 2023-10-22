@@ -37,7 +37,7 @@ Backdoor supports the following 64-bit Windows systems running on Intel chips:
   
  * Windows 10 version 1709, 1803, 1809, 1903, 1909, 2004, 20H2, 21H1, 21H2 and 22H2 &minus; full support with all features and options available.
 
- * Windows 11 version 21H2 and 22H2 &minus; limited initial support with `--sk-inject` and `--sk-debug-enable` client program commands not working yet.
+ * Windows 11 version 21H2 and 22H2 &minus; partial support, all features except `--sk-inject` client program command which is not working yet.
 
 
 ## Contents
