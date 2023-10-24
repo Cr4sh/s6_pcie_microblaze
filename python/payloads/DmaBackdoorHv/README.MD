@@ -35,9 +35,9 @@ To deploy the backdoor you can use one of the following methods:
 
 Backdoor supports the following 64-bit Windows systems with disabled [Secure Launch](https://learn.microsoft.com/en-us/windows/security/hardware-security/system-guard-secure-launch-and-smm-protection) running on Intel chips: 
   
- * Windows 10 version 1709, 1803, 1809, 1903, 1909, 2004, 20H2, 21H1, 21H2 and 22H2 &minus; full support with all features and options available.
+ * Windows 10 version 1709, 1803, 1809, 1903, 1909, 2004, 20H2, 21H1, 21H2 and 22H2.
 
- * Windows 11 version 21H2 and 22H2 &minus; partial support, all features except `--sk-inject` client program command which is not working yet.
+ * Windows 11 version 21H2 and 22H2.
 
 
 ## Contents

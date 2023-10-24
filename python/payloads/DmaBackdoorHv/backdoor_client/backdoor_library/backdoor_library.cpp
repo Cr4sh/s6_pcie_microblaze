@@ -1924,6 +1924,7 @@ int backdoor_sk_base(SK_INFO *sk_info, uint64_t *sk_addr, uint64_t *skci_addr)
         if (backdoor_phys_read(addr_phys, buff, PAGE_SIZE) == 0)
         {
             IMAGE_DOS_HEADER *dos_hdr = (IMAGE_DOS_HEADER *)buff;
+
             if (dos_hdr->e_lfanew < PAGE_SIZE - sizeof(IMAGE_NT_HEADERS))
             {
                 IMAGE_NT_HEADERS *nt_hdr = (IMAGE_NT_HEADERS *)RVATOVA(buff, dos_hdr->e_lfanew);
@@ -2432,8 +2433,8 @@ int backdoor_modify_pt(uint32_t flags, uint64_t addr, uint64_t pml4_addr, uint64
 //--------------------------------------------------------------------------------------
 int backdoor_pte_addr(uint64_t addr, uint64_t *pte_addr, HVBD_PTE_SIZE *pte_size, uint64_t pml4_addr, uint64_t ept_addr)
 {
-    uint64_t phys_addr = 0;    
-    X64_PAGE_MAP_AND_DIRECTORY_POINTER_2MB_4K PML4_entry;    
+    uint64_t phys_addr = 0;
+    X64_PAGE_MAP_AND_DIRECTORY_POINTER_2MB_4K PML4_entry;
 
     phys_addr = PML4_ADDRESS(pml4_addr) + PML4_INDEX(addr) * sizeof(uint64_t);
 
@@ -2452,9 +2453,13 @@ int backdoor_pte_addr(uint64_t addr, uint64_t *pte_addr, HVBD_PTE_SIZE *pte_size
 
     if (PML4_entry.Bits.Present == 0)
     {
-        bd_printf("ERROR: PML4E for 0x%llx is not present\n", addr);
+        if (!m_quiet)
+        {
+            bd_printf("ERROR: PML4E for 0x%llx is not present\n", addr);
+        }
+
         return -1;
-    }    
+    }
 
     X64_PAGE_MAP_AND_DIRECTORY_POINTER_2MB_4K PDPT_entry;
 
@@ -2471,7 +2476,7 @@ int backdoor_pte_addr(uint64_t addr, uint64_t *pte_addr, HVBD_PTE_SIZE *pte_size
     if (backdoor_phys_read_64(phys_addr, &PDPT_entry.Uint64) != 0)
     {
         return -1;
-    }    
+    }
 
     // check for page size flag
     if ((PDPT_entry.Uint64 & PDPTE_PDE_PS) == 0)
@@ -2480,7 +2485,11 @@ int backdoor_pte_addr(uint64_t addr, uint64_t *pte_addr, HVBD_PTE_SIZE *pte_size
 
         if (PDPT_entry.Bits.Present == 0)
         {
-            bd_printf("ERROR: PDPTE for 0x%llx is not present\n", addr);
+            if (!m_quiet)
+            {
+                bd_printf("ERROR: PDPTE for 0x%llx is not present\n", addr);
+            }
+
             return -1;
         }
 
@@ -2497,14 +2506,18 @@ int backdoor_pte_addr(uint64_t addr, uint64_t *pte_addr, HVBD_PTE_SIZE *pte_size
         if (backdoor_phys_read_64(phys_addr, &PD_entry.Uint64) != 0)
         {
             return -1;
-        }        
+        }
 
         // check for page size flag
         if ((PD_entry.Uint64 & PDPTE_PDE_PS) == 0)
         {
             if (PD_entry.Bits.Present == 0)
             {
-                bd_printf("ERROR: PDE for 0x%llx is not present\n", addr);
+                if (!m_quiet)
+                {
+                    bd_printf("ERROR: PDE for 0x%llx is not present\n", addr);
+                }
+
                 return -1;
             }
 
@@ -2517,7 +2530,7 @@ int backdoor_pte_addr(uint64_t addr, uint64_t *pte_addr, HVBD_PTE_SIZE *pte_size
                     return -1;
                 }
             }
-                         
+
             if (pte_addr)
             {
                 // 4K page
@@ -2538,14 +2551,14 @@ int backdoor_pte_addr(uint64_t addr, uint64_t *pte_addr, HVBD_PTE_SIZE *pte_size
                 // 2M page
                 *pte_addr = phys_addr;
             }
-            
+
             if (pte_size)
             {
                 *pte_size = HVBD_PTE_SIZE_2M;
-            }            
+            }
 
             return 0;
-        }                  
+        }
     }
     else
     {
@@ -2554,11 +2567,11 @@ int backdoor_pte_addr(uint64_t addr, uint64_t *pte_addr, HVBD_PTE_SIZE *pte_size
             // 1G page
             *pte_addr = phys_addr;
         }
-        
+
         if (pte_size)
         {
             *pte_size = HVBD_PTE_SIZE_1G;
-        }        
+        }
 
         return 0;
     }
