@@ -650,41 +650,22 @@ EFI_STATUS EFIAPI new_SetVirtualAddressMap(
     EFI_MEMORY_DESCRIPTOR *VirtualMap)
 {
     UINTN i = 0;
-    EFI_MEMORY_DESCRIPTOR *MapEntry = VirtualMap;        
+    EFI_MEMORY_DESCRIPTOR *MapEntry = VirtualMap;
 
     /*
         Copy old function address from the global variable because
         image relocations might be reparsed in this function.
     */
-    EFI_SET_VIRTUAL_ADDRESS_MAP Func = old_SetVirtualAddressMap;    
+    EFI_SET_VIRTUAL_ADDRESS_MAP Func = old_SetVirtualAddressMap;
 
     m_TextOutput = NULL;
 
-    DbgMsg(__FILE__, __LINE__, __FUNCTION__"()\r\n");    
+    DbgMsg(__FILE__, __LINE__, __FUNCTION__"()\r\n");
 
     #define FIXUP_ADDR(_addr_) ((EFI_PHYSICAL_ADDRESS)(_addr_) - Addr + MapEntry->VirtualStart)
 
     #define CHECK_ADDR(_addr_) ((EFI_PHYSICAL_ADDRESS)(_addr_) >= Addr && \
                                 (EFI_PHYSICAL_ADDRESS)(_addr_) < (EFI_PHYSICAL_ADDRESS)RVATOVA(Addr, Len))
-
-    // enumerate virtual memory mappings
-    for (i = 0; i < MemoryMapSize / DescriptorSize; i += 1)
-    {
-        UINTN Len = MapEntry->NumberOfPages * PAGE_SIZE;
-        EFI_PHYSICAL_ADDRESS Addr = MapEntry->PhysicalStart;
-
-        if (CHECK_ADDR(old_GetVariable))
-        {
-            // calculate new virtual address of GetVariable()
-            old_GetVariable = (EFI_GET_VARIABLE)FIXUP_ADDR(old_GetVariable);
-        }
-
-        if (CHECK_ADDR(old_SetVirtualAddressMap))
-        {
-            // calculate new virtual address of SetVirtualAddressMap()
-            old_SetVirtualAddressMap = (EFI_SET_VIRTUAL_ADDRESS_MAP)FIXUP_ADDR(old_SetVirtualAddressMap);
-        }
-    }
 
     // enumerate virtual memory mappings
     for (i = 0; i < MemoryMapSize / DescriptorSize; i += 1)
