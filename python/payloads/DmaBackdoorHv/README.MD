@@ -715,7 +715,7 @@ Patching location at address skci+4022e (phys: 0x616d22e)
 [+] Done
 ```
 
-Trustlet executable image also contains the structure called [Image Policy Metadata](https://docs.microsoft.com/en-us/windows-hardware/drivers/ddi/wdm/ns-wdm-_image_policy_metadata) that dascribes its capabilities. Among various interesting things it has `ImagePolicyIdDebug` property, it tells the Secure Kernel if it's possible to attach debugger to the trustlet process or not.
+Trustlet executable image also contains the structure called [Image Policy Metadata](https://docs.microsoft.com/en-us/windows-hardware/drivers/ddi/wdm/ns-wdm-_image_policy_metadata) that describes its capabilities. Among various interesting things it has `ImagePolicyIdDebug` property, it tells the Secure Kernel if it's possible to attach debugger to the trustlet process or not.
 
 From the example above you can see that LSAIso trustlet has `ImagePolicyIdDebug` set to zero, it prevents the attacker from attaching debugger to this process and compromising its memory contents:
 
