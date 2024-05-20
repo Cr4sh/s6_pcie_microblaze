@@ -1,10 +1,10 @@
 
 // driver device path
-#define WINIO_DEVICE_PATH "\\\\.\\Global\\EneIo" 
+#define WINIO_DEVICE_PATH "\\\\.\\Global\\WNBIOS" 
 
 // driver file name and serive name
-#define WINIO_DRIVER_NAME "winio.sys"
-#define WINIO_SERVICE_NAME "winio"
+#define WINIO_DRIVER_NAME "wnBios64.sys"
+#define WINIO_SERVICE_NAME "wnBios64"
 
 
 #define FILE_DEVICE_WINIO 0x00008010

@@ -1,7 +1,7 @@
 #include "stdafx.h"
 
 // winio driver binary
-#include "../winio_sys.h"
+#include "../wnBios64_sys.h"
 //--------------------------------------------------------------------------------------
 int backdoor_read_debug_messages(void)
 {    
@@ -36,7 +36,7 @@ int backdoor_read_debug_messages(void)
 
     HANDLE fd = NULL;
     char driver_path[MAX_PATH];
-    char *driver_name = WINIO_DRIVER_NAME, *device_path = WINIO_DEVICE_PATH;
+    char *driver_name = WINIO_DRIVER_NAME, *device_path = WINIO_DEVICE_PATH, *service_name = WINIO_SERVICE_NAME;
 
     GetSystemDirectory(driver_path, MAX_PATH);
     strcat_s(driver_path, "\\drivers\\");
@@ -47,7 +47,7 @@ int backdoor_read_debug_messages(void)
     {
         DWORD written = 0;
 
-        WriteFile(fd, winio_sys, sizeof(winio_sys), &written, NULL);
+        WriteFile(fd, driver, sizeof(driver), &written, NULL);
         CloseHandle(fd);
     }
     else
@@ -59,16 +59,16 @@ int backdoor_read_debug_messages(void)
 
     bool already_started = FALSE, stop = FALSE;
 
-    bd_printf("[+] Loading WinIo driver...\n");
+    bd_printf("[+] Loading %s driver...\n", service_name);
 
     if ((fd = CreateFile(device_path, GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, 0, NULL)) == INVALID_HANDLE_VALUE)
     {
         // create and start service
-        if (service_start(WINIO_SERVICE_NAME, driver_path, &already_started))
+        if (service_start(service_name, driver_path, &already_started))
         {
             stop = !already_started;
 
-            bd_printf("[+] WinIo driver was loaded\n");
+            bd_printf("[+] %s driver was loaded\n", service_name);
 
             // open driver device
             fd = CreateFile(device_path, GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, 0, NULL);
@@ -81,13 +81,13 @@ int backdoor_read_debug_messages(void)
         }
         else
         {
-            bd_printf("ERROR: Unable to load WinIo driver\n");
+            bd_printf("ERROR: Unable to load %s driver\n", service_name);
             goto _end;
         }
     }    
     else
     {
-        bd_printf("[+] WinIo driver is already loaded\n");
+        bd_printf("[+] %s driver is already loaded\n", service_name);
     }
 
     if (fd != INVALID_HANDLE_VALUE)
@@ -123,8 +123,8 @@ _end:
     if (stop)
     {
         // stop and delete service
-        service_stop(WINIO_SERVICE_NAME);
-        service_remove(WINIO_SERVICE_NAME);
+        service_stop(service_name);
+        service_remove(service_name);
     }
 
     DeleteFile(driver_path);
